@@ -346,4 +346,18 @@ check("TEAMS sits left of ADMIN for admins", LV.TeamsButtonX(1920, true) == 1920
 check("TEAMS takes the corner for non-admins", LV.TeamsButtonX(1920, false) == 1920 - 84 - 10)
 check("TEAMS never goes off screen", LV.TeamsButtonX(50, true) == 0)
 
+-- Start checklist boxes.
+do
+	local CL = BALLISTICS.LobbyView.Checklist
+	local data = { hasBox = function(st) return type(st.box) == "table" end }
+	local none = CL({}, data)
+	check("checklist has three boxes in order", #none == 3 and none[1].label == "Good flag" and none[2].label == "Bad flag" and none[3].label == "Firing squad box")
+	check("all missing are red", not none[1].ok and not none[2].ok and not none[3].ok and not BALLISTICS.LobbyView.ChecklistReady(none))
+	local part = CL({ good = { pos = { x = 1, y = 2, z = 3 } } }, data)
+	check("only good placed", part[1].ok and not part[2].ok and not part[3].ok)
+	local all = CL({ good = { pos = { x = 1, y = 2, z = 3 } }, bad = { pos = { x = 4, y = 5, z = 6 } }, box = {} }, data)
+	check("all placed is ready", all[1].ok and all[2].ok and all[3].ok and BALLISTICS.LobbyView.ChecklistReady(all))
+	check("no snapshot is all red", not BALLISTICS.LobbyView.ChecklistReady(CL(nil, nil)))
+end
+
 if failed then os.exit(1) end

@@ -532,3 +532,30 @@ function BALLISTICS.LobbyView.TeamsButtonX(screenW, adminShown)
 	if x < 0 then x = 0 end
 	return x
 end
+
+-- Start checklist under the slots: Good flag, Bad flag, Firing squad box.
+-- snap is the networked spawns snapshot; data is BALLISTICS.SpawnData.
+function BALLISTICS.LobbyView.Checklist(snap, data)
+	local function flagOk(flag)
+		return type(flag) == "table" and type(flag.pos) == "table"
+			and type(flag.pos.x) == "number" and type(flag.pos.y) == "number" and type(flag.pos.z) == "number"
+	end
+	snap = type(snap) == "table" and snap or {}
+	local box = false
+	if type(data) == "table" and type(data.hasBox) == "function" then
+		box = data.hasBox(snap) == true
+	end
+	return {
+		{ key = "good", label = "Good flag", ok = flagOk(snap.good) },
+		{ key = "bad", label = "Bad flag", ok = flagOk(snap.bad) },
+		{ key = "box", label = "Firing squad box", ok = box },
+	}
+end
+
+function BALLISTICS.LobbyView.ChecklistReady(list)
+	for i = 1, #(list or {}) do
+		if not list[i].ok then return false end
+	end
+	return true
+end
+

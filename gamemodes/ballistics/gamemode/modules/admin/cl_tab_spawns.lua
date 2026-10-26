@@ -174,9 +174,8 @@ function BALLISTICS.Admin.BuildSpawns(parent)
 	if BALLISTICS.Spawns and BALLISTICS.Spawns.BoxDraft then
 		draft0 = BALLISTICS.Spawns.BoxDraft() or draft0
 	end
-	addSlider("Box yaw", "yaw", 0, 360, "Yaw of the firing squad box. 0 runs the long sides along world +X.")
-	addSlider("Box length", "sx", data0.BOX_MIN or 128, data0.BOX_MAX or 8192, "Length of the box. Teams line up along the longer side.")
-	addSlider("Box width", "sy", data0.BOX_MIN or 128, data0.BOX_MAX or 8192, "Width of the box. The teams stand on the long sides and face across this.")
+	-- No number fields for box yaw / length / width (owner's call). The box
+	-- keeps its stored size and rotation; placement stays in the editor.
 	mute = true
 	if wangs.yaw and wangs.yaw.SetValue then wangs.yaw:SetValue(draft0.yaw or 0) end
 	if wangs.sx and wangs.sx.SetValue then wangs.sx:SetValue(draft0.sx or 768) end

@@ -182,8 +182,22 @@ function BALLISTICS.Lobby.RequestSlot(teamId, slot)
 	return decision
 end
 
+local checkFlashUntil = 0
+
+local function checklist()
+	local snap = BALLISTICS.Spawns and BALLISTICS.Spawns.Snapshot and BALLISTICS.Spawns.Snapshot()
+	return BALLISTICS.LobbyView.Checklist(snap, BALLISTICS.SpawnData)
+end
+
+function BALLISTICS.Lobby.Checklist()
+	return checklist()
+end
+
 function BALLISTICS.Lobby.RequestStart()
 	local view = BALLISTICS.Lobby.View()
+	if view.start.visible and not BALLISTICS.LobbyView.ChecklistReady(checklist()) then
+		checkFlashUntil = ((CurTime and CurTime()) or 0) + 1.2
+	end
 	if not view.start.visible or not view.start.enabled then return view.start end
 	if net and net.Start then
 		net.Start(msg("start", "bal_match_start"))
@@ -374,7 +388,8 @@ local function applyLayout()
 			widgets.start:SetPos(start.x, start.y + TITLE)
 			widgets.start:SetSize(start.w, start.h)
 			widgets.start:SetVisible(view.start.visible == true)
-			widgets.start:SetEnabled(view.start.enabled == true)
+			widgets.start:SetEnabled(view.start.visible == true and view.start.reason ~= "not lobby")
+			widgets.start.balReady = view.start.enabled == true
 		end
 		if IsValid(widgets.waiting) then
 			widgets.waiting:SetPos(start.x, start.y + TITLE)
@@ -393,10 +408,18 @@ local function applyLayout()
 			text = statusText
 		elseif view.moveNotice then
 			text = view.moveNotice
-		elseif view.start.visible and not view.start.enabled then
+		elseif view.start.visible and not view.start.enabled
+			and view.start.reason ~= "flags" and view.start.reason ~= "box" then
 			text = BALLISTICS.LobbyView.ReasonText(view.start.reason, view.minPerTeam)
 		end
 		widgets.status:SetText(text)
+		if IsValid(widgets.checks) then
+			local showChecks = view.phase == nil or view.phase == "lobby"
+			if view.start and view.start.reason == "not lobby" then showChecks = false end
+			widgets.checks:SetVisible(showChecks and text == "")
+			widgets.checks:SetPos(rect.x, rect.y + TITLE)
+			widgets.checks:SetSize(rect.w, rect.h)
+		end
 	end
 end
 
@@ -478,7 +501,7 @@ local function ensureFrame()
 		BALLISTICS.Lobby.RequestStart()
 	end
 	start.Paint = function(self, w, h)
-		if self:IsEnabled() then
+		if self:IsEnabled() and self.balReady ~= false then
 			surface.SetDrawColor(36, 130, 72, 255)
 		else
 			surface.SetDrawColor(55, 55, 58, 255)
@@ -501,6 +524,46 @@ local function ensureFrame()
 	status:SetContentAlignment(5)
 	if status.SetTextColor then status:SetTextColor(Color(230, 220, 170)) end
 	widgets.status = status
+
+	-- Three live boxes: Good flag, Bad flag, Firing squad box. Green check
+	-- when placed, red X when missing; missing ones flash on a refused Start.
+	local checks = vgui.Create("DPanel", frame)
+	checks:SetMouseInputEnabled(false)
+	checks.Paint = function(_, w, h)
+		local list = checklist()
+		local n = #list
+		local gap = 8
+		local bw = math.floor((w - gap * (n - 1)) / n)
+		local now = (CurTime and CurTime()) or 0
+		local flashing = now < checkFlashUntil and math.floor(now * 8) % 2 == 0
+		for i = 1, n do
+			local item = list[i]
+			local x = (i - 1) * (bw + gap)
+			if item.ok then
+				surface.SetDrawColor(36, 130, 72, 255)
+			elseif flashing then
+				surface.SetDrawColor(255, 90, 90, 255)
+			else
+				surface.SetDrawColor(150, 36, 36, 255)
+			end
+			surface.DrawRect(x, 0, bw, h)
+			-- Check / X drawn with lines (fonts may lack the glyphs).
+			local s = math.max(6, math.floor(h * 0.4))
+			local ix, iy = x + 8, math.floor((h - s) / 2)
+			surface.SetDrawColor(255, 255, 255, 255)
+			for t = 0, 1 do
+				if item.ok then
+					surface.DrawLine(ix + t, iy + s * 0.55, ix + s * 0.4 + t, iy + s)
+					surface.DrawLine(ix + s * 0.4 + t, iy + s, ix + s + t, iy)
+				else
+					surface.DrawLine(ix + t, iy, ix + s + t, iy + s)
+					surface.DrawLine(ix + s + t, iy, ix + t, iy + s)
+				end
+			end
+			draw.SimpleText(item.label, "BallisticsSmall", x + bw / 2 + s / 2 + 4, h / 2, Color(255, 255, 255), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+		end
+	end
+	widgets.checks = checks
 
 	if BALLISTICS.UI then BALLISTICS.UI.Mark("lobby", frame) end
 	return frame
