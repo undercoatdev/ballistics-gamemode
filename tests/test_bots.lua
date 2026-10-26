@@ -395,6 +395,11 @@ local _, pend = BALLISTICS.Money.Get(twin)
 local _, otherPend = BALLISTICS.Money.Get(mirror)
 check("a bot kill pays that bot's pending", paid == true and pend == 500 and otherPend == 0)
 
+-- Handle path runs as a multiplayer server (the stub defaults to singleplayer).
+function game.SinglePlayer()
+	return false
+end
+
 -- Handle path. The humans above are not in the roster, so the cap sees bots we add.
 BALLISTICS.Slots.ClearAll()
 roster = {}
@@ -522,9 +527,13 @@ function game.MaxPlayers()
 	return 1
 end
 roster = { admin }
-ok = inner(admin, { action = "add", team = GOOD })
-check("singleplayer can still add a bot", ok == true and BALLISTICS.Bots.Count() == 1)
-inner(admin, { action = "remove" })
+local spBefore = created
+ok, why = inner(admin, { action = "add", team = GOOD })
+check("singleplayer refuses a bot add with a notice", ok == false and why == "singleplayer" and created == spBefore and BALLISTICS.Bots.Count() == 0)
+ok, why = inner(admin, { action = "fill" })
+check("singleplayer refuses fill without calling CreateNextBot", ok == false and why == "singleplayer" and created == spBefore)
+ok = inner(admin, { action = "remove" })
+check("singleplayer still allows remove", ok == true)
 BALLISTICS.Slots.ClearAll()
 roster = { admin }
 
@@ -540,9 +549,21 @@ check("a dedicated server cap limits the fill", ok == true and removed.added == 
 inner(admin, { action = "remove" })
 BALLISTICS.Slots.ClearAll()
 roster = { admin }
-function game.SinglePlayer()
-	return true
+
+function game.MaxPlayers()
+	return 32
 end
+-- CreateNextBot returning nil (server full) or erroring must not throw or spam.
+local realCreate = player.CreateNextBot
+player.CreateNextBot = function() return nil end
+ok, why = inner(admin, { action = "add", team = GOOD })
+check("a nil CreateNextBot is a friendly refusal", ok == false and why == "create")
+player.CreateNextBot = function() error("Cannot create a player bot in singleplayer!") end
+local okCall, res = pcall(inner, admin, { action = "fill" })
+check("an erroring CreateNextBot does not throw and fill stops", okCall == true and res == true and BALLISTICS.Bots.Count() == 0)
+player.CreateNextBot = realCreate
+BALLISTICS.Slots.ClearAll()
+roster = { admin }
 
 clock = 300
 local burst = created

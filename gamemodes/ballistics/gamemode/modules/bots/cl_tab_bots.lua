@@ -55,8 +55,15 @@ function BALLISTICS.Admin.BuildBots(parent)
 	hint:SetText("Bots stand still. They spawn with everyone else at the next buy.")
 	if hint.SetTextColor then hint:SetTextColor(Color(180, 180, 180)) end
 
+	local sp = game and type(game.SinglePlayer) == "function" and game.SinglePlayer() == true
+	if sp then
+		hint:SetText("Bots need a multiplayer game (11+ slots).")
+		if hint.SetTextColor then hint:SetTextColor(Color(255, 170, 90)) end
+	end
+
 	local function button(text, action, team)
 		local btn = vgui.Create("DButton", parent)
+		if sp and btn.SetEnabled then btn:SetEnabled(false) end
 		btn:Dock(TOP)
 		btn:DockMargin(0, 8, 0, 0)
 		btn:SetTall(32)

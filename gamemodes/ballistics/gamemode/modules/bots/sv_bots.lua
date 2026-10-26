@@ -141,10 +141,17 @@ local function spectate(bot)
 	end
 end
 
+-- The engine errors in singleplayer and returns NULL when the server is full.
+function BALLISTICS.Bots.SinglePlayer()
+	return game ~= nil and type(game.SinglePlayer) == "function" and game.SinglePlayer() == true
+end
+
 local function create(name)
+	if BALLISTICS.Bots.SinglePlayer() then return nil end
 	if not (player and type(player.CreateNextBot) == "function") then return nil end
-	local bot = player.CreateNextBot(name)
-	if bot == nil then return nil end
+	local ok, bot = pcall(player.CreateNextBot, name)
+	if not ok or bot == nil then return nil end
+	if type(bot.IsValid) == "function" and bot:IsValid() ~= true then return nil end
 	return bot
 end
 
@@ -202,6 +209,10 @@ end
 function BALLISTICS.Bots.Handle(ply, payload)
 	payload = type(payload) == "table" and payload or {}
 	local isAdmin = BALLISTICS.IsAdmin and BALLISTICS.IsAdmin(ply) == true
+	if isAdmin and BALLISTICS.Bots.SinglePlayer() and payload.action ~= "remove" then
+		tell(ply, "Ballistics: bots need a multiplayer game (11+ slots).")
+		return false, "singleplayer"
+	end
 	local decision, err = BALLISTICS.Bots.Admit(isAdmin, payload.action, context(payload.team))
 	if not decision then
 		if err == "admin" then
@@ -224,15 +235,23 @@ function BALLISTICS.Bots.Handle(ply, payload)
 		local n = 0
 		local plan = decision.plan or {}
 		for i = 1, #plan do
-			local ok = addOne(plan[i])
-			if ok then n = n + 1 end
+			local ok, why = addOne(plan[i])
+			if ok then
+				n = n + 1
+			elseif why == "create" then
+				-- The engine would not make a bot (server full): stop, do not retry 9 times.
+				tell(ply, "Ballistics: the server could not add more bots (is it full?).")
+				break
+			end
 		end
 		tell(ply, "Ballistics: added " .. tostring(n) .. " bots.")
 		return true, { action = "fill", added = n }
 	end
 	local ok, detail = addOne(decision)
 	if not ok then
-		if detail == "full" then
+		if detail == "create" then
+			tell(ply, "Ballistics: the server could not add a bot (is it full?).")
+		elseif detail == "full" then
 			tell(ply, "Ballistics: that team is full.")
 		elseif detail == "players" then
 			tell(ply, "Ballistics: the server is full.")
