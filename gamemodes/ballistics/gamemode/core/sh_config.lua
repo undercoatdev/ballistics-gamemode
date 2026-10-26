@@ -26,7 +26,7 @@ local DEFAULTS = {
 	CaptureContestedFreeze = true,
 	TickRate = 0.1,
 	BuyAmmoMags = 3,
-	StartMoney = 800,
+	StartMoney = 1000,
 	MaxMoney = 0,
 	Costs = {
 		tacrp_ex_m1911 = 100,
@@ -61,6 +61,7 @@ local DEFAULTS = {
 		kill = 500,
 		round_win = 1000,
 		round_loss = 500,
+		draw = 500,
 	},
 	BuyLimits = {
 		weapon_per_round = 0,

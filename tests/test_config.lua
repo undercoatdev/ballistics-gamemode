@@ -16,7 +16,7 @@ dofile("gamemodes/ballistics/gamemode/core/sh_config.lua")
 local C = BALLISTICS.Config
 local r = 2 / 0.01905
 
-check("StartMoney is 800", C.StartMoney == 800)
+check("StartMoney is 1000", C.StartMoney == 1000)
 check("SlotsPerTeam is 5", C.SlotsPerTeam == 5)
 check("MinPerTeam is 1", C.MinPerTeam == 1)
 check("BuyTime is 10", C.BuyTime == 10)
@@ -46,10 +46,10 @@ check("weapon costs", C.Costs.tacrp_ex_m1911 == 100 and C.Costs.tacrp_mr96 == 50
 check("nade costs", C.Costs.nade_frag == 500 and C.Costs.nade_smoke == 200 and C.Costs.nade_thermite == 700 and C.Costs.nade_flashbang == 250)
 check("med costs", C.Costs.med_pills == 50 and C.Costs.med_small == 80 and C.Costs.med_trauma == 100 and C.Costs.med_resus == 500)
 check("att costs", C.AttCosts.optic == 250 and C.AttCosts.bolt == 100 and C.AttCosts.muzzle == 100 and C.AttCosts.trigger == 200 and C.AttCosts.tactical == 300 and C.AttCosts.ammo == 400 and C.AttCosts.accessory == 200 and C.AttCosts.perk == 700)
-check("gains", C.Gains.kill == 500 and C.Gains.round_win == 1000 and C.Gains.round_loss == 500)
+check("gains", C.Gains.kill == 500 and C.Gains.round_win == 1000 and C.Gains.round_loss == 500 and C.Gains.draw == 500)
 check("buy limits unlimited", C.BuyLimits.weapon_per_round == 0 and C.BuyLimits.nade_each == 0)
 
-check("Get StartMoney", C.Get("StartMoney") == 800)
+check("Get StartMoney", C.Get("StartMoney") == 1000)
 check("Get nested cost", C.Get("Costs.tacrp_mp5") == 600)
 
 local ok, val = C.Set("StartMoney", 1200)
@@ -105,7 +105,7 @@ C.ResetSection("weapons")
 check("ResetSection weapons restores gun prices only", C.Costs.tacrp_mp5 == 600 and C.Costs.nade_frag == 500)
 
 C.ResetSection("General")
-check("ResetSection General restores StartMoney and radii", C.StartMoney == 800 and math.abs(C.ObjectiveRadius - r) < 1e-9 and C.BuyTime == 10 and C.HealthMode == "realistic")
+check("ResetSection General restores StartMoney and radii", C.StartMoney == 1000 and math.abs(C.ObjectiveRadius - r) < 1e-9 and C.BuyTime == 10 and C.HealthMode == "realistic")
 
 C.Set("SlotsPerTeam", 8)
 C.ResetSection("teams")
@@ -116,12 +116,12 @@ C.ResetSection("attachments")
 check("ResetSection attachments", C.AttCosts.perk == 700 and C.AttRefundOnDetach == false)
 
 local exported = C.Export()
-check("Export has StartMoney and no Get function", exported.StartMoney == 800 and exported.Get == nil and exported.Set == nil)
+check("Export has StartMoney and no Get function", exported.StartMoney == 1000 and exported.Get == nil and exported.Set == nil)
 check("Export copies nested tables", exported.Costs ~= C.Costs and exported.Costs.tacrp_spr == 700)
 
 C.Set("StartMoney", 1)
 C.Reset()
-check("Reset restores every default", C.StartMoney == 800 and C.Costs.tacrp_mp5 == 600 and C.HealthMode == "realistic")
+check("Reset restores every default", C.StartMoney == 1000 and C.Costs.tacrp_mp5 == 600 and C.HealthMode == "realistic")
 
 local admin = { IsAdmin = function() return true end, IsSuperAdmin = function() return false end }
 local super = { IsAdmin = function() return true end, IsSuperAdmin = function() return true end }

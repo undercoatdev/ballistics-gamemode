@@ -53,7 +53,13 @@ local CORE_ORDER = {
 	"sh_net.lua",
 	"sh_deps.lua",
 	"sh_catalog.lua",
+	"sh_state.lua",
+	"sh_ledger.lua",
 	"sv_config.lua",
+	"sv_slots.lua",
+	"sv_money.lua",
+	"sv_player.lua",
+	"sv_round.lua",
 }
 
 local coreFiles = findLua("core/*.lua")
