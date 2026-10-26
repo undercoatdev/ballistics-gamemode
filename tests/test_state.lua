@@ -378,7 +378,7 @@ end
 check("death strips weapons and ammo", #good.weapons == 0)
 check("death zeros every med", meds[1] and meds[2] and meds[3] and meds[4])
 check("dead player stays slotted", BALLISTICS.Slots.TeamOf(good) == TEAM_GOOD)
-check("dead player spectates a living teammate", good.spec == (OBS_MODE_CHASE or 5) and good.specTarget == mate)
+check("dead player spectates a living teammate", good.spec == (OBS_MODE_IN_EYE or 4) and good.specTarget == mate)
 check("dead player cannot pick weapons up", GM:PlayerCanPickupWeapon(good, {}) == false)
 check("living player can pick a dropped gun up", GM:PlayerCanPickupWeapon(mate, {}) == true)
 PLAYER_BALLISTICS = nil
@@ -499,7 +499,7 @@ GM:DoPlayerDeath(good, bad, {})
 GM:PlayerDeath(good, nil, bad)
 flush()
 check("live death wipes the inventory again", #good.weapons == 0 and medCalls[1] and medCalls[1].n == -99)
-check("last living teammate is gone so they roam", good.spec == (OBS_MODE_ROAMING or 6))
+check("last living teammate is gone: fixed, no free roam", good.spec == (OBS_MODE_FIXED or 2))
 check("they are still slotted until the next buy", BALLISTICS.Slots.TeamOf(good) == TEAM_GOOD and good.alive == false)
 
 BALLISTICS.Round.Tick(645.2)

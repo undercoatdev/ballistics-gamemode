@@ -206,37 +206,48 @@ function BALLISTICS.Player.MakeSpectator(ply)
 	if ply.Alive and ply:Alive() and ply.KillSilent then ply:KillSilent() end
 	if ply.Spectate then ply:Spectate(roamMode()) end
 	ply.specTarget = nil
+	if ply.SetNW2Entity then ply:SetNW2Entity("bal_spec", NULL) end
 	if ply.SetNoTarget then ply:SetNoTarget(true) end
 end
 
-function BALLISTICS.Player.SpectateTeammates(ply)
-	if not isPlayer(ply) or not ply.Spectate then return end
+-- Follow a living teammate (knocked out counts as alive) in first person
+-- on the server; the client draws a helmet cam. dir: 1 next, -1 prev, nil keep.
+function BALLISTICS.Player.LivingMates(ply)
 	local id = BALLISTICS.PlayerId and BALLISTICS.PlayerId(ply)
 	local teamId = nil
 	if id and BALLISTICS.Slots and BALLISTICS.Slots.TeamOf then
 		teamId = BALLISTICS.Slots.TeamOf(id)
 	end
-	local target = nil
+	local mates = {}
 	if teamId and BALLISTICS.Slots.Members and BALLISTICS.Slots.Player then
 		local members = BALLISTICS.Slots.Members(teamId)
 		for i = 1, #members do
 			if members[i] ~= id then
 				local mate = BALLISTICS.Slots.Player(members[i])
 				if mate and mate ~= ply and mate.Alive and mate:Alive() then
-					target = mate
-					break
+					mates[#mates + 1] = mate
 				end
 			end
 		end
 	end
+	return mates
+end
+
+function BALLISTICS.Player.SpectateTeammates(ply, dir)
+	if not isPlayer(ply) or not ply.Spectate then return end
+	local mates = BALLISTICS.Player.LivingMates(ply)
+	local pick = BALLISTICS.Spectate and BALLISTICS.Spectate.Pick
+	local target = pick and pick(mates, ply.specTarget, dir) or mates[1]
 	if target then
-		ply:Spectate(chaseMode())
+		ply:Spectate(OBS_MODE_IN_EYE or 4)
 		if ply.SpectateEntity then ply:SpectateEntity(target) end
 		ply.specTarget = target
 	else
-		ply:Spectate(roamMode())
+		-- Nobody left to watch: stay put (no free roam during a round).
+		ply:Spectate(OBS_MODE_FIXED or 2)
 		ply.specTarget = nil
 	end
+	if ply.SetNW2Entity then ply:SetNW2Entity("bal_spec", target or NULL) end
 end
 
 function BALLISTICS.Player.RetargetSpectators(dead)
