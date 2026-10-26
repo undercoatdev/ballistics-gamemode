@@ -510,4 +510,18 @@ gbal, gpend = BALLISTICS.Money.Get(good)
 local _, bpend = BALLISTICS.Money.Get(bad)
 check("round rewards wait in pending", gpend == 500 and bpend == 1000 and gbal == 1600 and endings[2] == "bad:elimination")
 
+-- Lobby free cam: unfreezing a spectator must not set walk movetype.
+do
+	local spec = { movetype = 10, alive = false, obs = 6 }
+	function spec:Alive() return self.alive end
+	function spec:GetObserverMode() return self.obs end
+	function spec:Freeze(on) self.frozen = on end
+	function spec:SetMoveType(m) self.movetype = m end
+	BALLISTICS.Player.SetFrozen(spec, false)
+	check("unfreeze keeps a spectator's free cam", spec.movetype == 10 and spec.frozen == false)
+	spec.alive, spec.obs = true, 0
+	BALLISTICS.Player.SetFrozen(spec, false)
+	check("unfreeze still walks a living player", spec.movetype == 2)
+end
+
 if failed then os.exit(1) end

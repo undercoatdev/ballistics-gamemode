@@ -88,11 +88,23 @@ function BALLISTICS.Player.ModelFor(teamId)
 	return nil
 end
 
+function BALLISTICS.Player.IsObserving(ply)
+	if type(ply.Alive) == "function" and ply:Alive() == false then return true end
+	if type(ply.GetObserverMode) == "function" then
+		local mode = ply:GetObserverMode()
+		if type(mode) == "number" and mode ~= (OBS_MODE_NONE or 0) then return true end
+	end
+	return false
+end
+
 function BALLISTICS.Player.SetFrozen(ply, on)
 	if not isPlayer(ply) then return end
 	on = on and true or false
 	ply.balFrozen = on
 	if ply.Freeze then ply:Freeze(on) end
+	-- Unfreezing a dead player or a spectator must not set walk: that breaks
+	-- the lobby free cam (squad End unfreezes after everyone was made spectator).
+	if not on and BALLISTICS.Player.IsObserving(ply) then return end
 	if ply.SetMoveType then ply:SetMoveType(on and moveNone() or moveWalk()) end
 end
 

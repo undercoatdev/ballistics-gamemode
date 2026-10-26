@@ -327,9 +327,8 @@ local function drawBox(box)
 end
 
 local function showBox()
-	if editing then return true end
-	if BALLISTICS.ClientIsAdmin and BALLISTICS.ClientIsAdmin() == true then return true end
-	return false
+	-- Only in the overhead Spawns editor; in play the big box is distracting.
+	return editing == true
 end
 
 hook.Add("PostDrawTranslucentRenderables", "Ballistics_FlagRings", function(_, sky)
