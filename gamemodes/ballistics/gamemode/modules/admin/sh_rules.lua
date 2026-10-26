@@ -20,6 +20,9 @@ local ATT = {
 	{ key = "ammo", label = "Ammo" },
 	{ key = "accessory", label = "Accessory" },
 	{ key = "perk", label = "Perk" },
+	{ key = "technique", label = "Technique" },
+	{ key = "special", label = "Special" },
+	{ key = "boost", label = "Boost" },
 }
 
 local GAINS = {

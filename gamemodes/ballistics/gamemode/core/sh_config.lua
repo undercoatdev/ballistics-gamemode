@@ -56,6 +56,9 @@ local DEFAULTS = {
 		ammo = 400,
 		accessory = 200,
 		perk = 700,
+		technique = 300,
+		special = 500,
+		boost = 500,
 	},
 	AttRefundOnDetach = false,
 	Gains = {

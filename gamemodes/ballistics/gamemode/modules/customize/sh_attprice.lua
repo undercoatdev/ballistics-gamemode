@@ -18,6 +18,9 @@ local DEFAULTS = {
 	ammo = 400,
 	accessory = 200,
 	perk = 700,
+	technique = 300,
+	special = 500,
+	boost = 500,
 }
 
 -- First matching rule wins for a single category string.
@@ -30,6 +33,10 @@ local RULES = {
 	{ key = "ammo", exact = {}, prefix = { "ammo_" } },
 	{ key = "accessory", exact = { "acc" }, prefix = { "acc_" } },
 	{ key = "perk", exact = { "perk" }, prefix = { "perk_" } },
+	-- Melee (knife) slots. TacRP categories melee_tech / melee_spec / melee_boost.
+	{ key = "technique", exact = { "melee_tech" }, prefix = { "melee_tech_" } },
+	{ key = "special", exact = { "melee_spec" }, prefix = { "melee_spec_" } },
+	{ key = "boost", exact = { "melee_boost" }, prefix = { "melee_boost_" } },
 }
 
 local BY_NAME = {
@@ -41,6 +48,9 @@ local BY_NAME = {
 	ammo = "ammo",
 	accessory = "accessory",
 	perk = "perk",
+	technique = "technique",
+	special = "special",
+	boost = "boost",
 }
 
 local function norm(text)

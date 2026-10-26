@@ -392,3 +392,16 @@ if hook and hook.Add then
 		if id then bought[id] = nil end
 	end)
 end
+
+-- Weapon pick from the buy wheel (it holds the mouse, so binds never fire).
+-- Only an owned weapon can be selected; movement stays frozen.
+if concommand and concommand.Add then
+	concommand.Add("bal_select", function(ply, _, args)
+		if not (BALLISTICS.IsPlayer and BALLISTICS.IsPlayer(ply)) then return end
+		local class = args and args[1]
+		if type(class) ~= "string" or class == "" then return end
+		if type(ply.HasWeapon) ~= "function" or ply:HasWeapon(class) ~= true then return end
+		if ply.SelectWeapon then ply:SelectWeapon(class) end
+	end)
+end
+

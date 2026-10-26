@@ -503,4 +503,9 @@ check("the client hook is TacRP_CanCustomize", gateSrc:find("TacRP_CanCustomize"
 check("the client hook reads bal_money", gateSrc:find("bal_money", 1, true) ~= nil)
 check("the client hook does not read the server ledger", not gateSrc:find("Money.Get", 1, true))
 
+-- Knife slots: Technique 300, Special 500, Boost 500.
+check("melee_tech costs 300", BALLISTICS.AttPrice.Cost({ Category = "melee_tech" }) == 300)
+check("melee_spec costs 500", BALLISTICS.AttPrice.Cost({ Category = "melee_spec" }) == 500)
+check("melee_boost costs 500", BALLISTICS.AttPrice.Cost({ Category = "melee_boost" }) == 500)
+
 if failed then os.exit(1) end

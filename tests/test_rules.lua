@@ -66,7 +66,7 @@ local gains = V.Rows("gains")
 check("weapon rows use catalog names", #weapons == 8 and weapons[1].label == "Colt M1911" and weapons[1].path == "Costs.tacrp_ex_m1911" and weapons[1].display == 100)
 check("throwable rows use catalog names", #throwables == 4 and throwables[1].label == "Frag grenade" and throwables[1].path == "Costs.nade_frag")
 check("med rows use catalog names", #meds == 4 and meds[1].label == "Pills" and meds[4].label == "Resuscitation kit" and meds[4].path == "Costs.med_resus")
-check("attachment rows use price keys", #atts == 8 and atts[1].label == "Optic" and atts[1].path == "AttCosts.optic" and atts[8].label == "Perk" and atts[8].display == 700)
+check("attachment rows use price keys", #atts == 11 and atts[9].label == "Technique" and atts[9].display == 300 and atts[10].display == 500 and atts[11].label == "Boost" and atts[11].display == 500 and atts[1].label == "Optic" and atts[1].path == "AttCosts.optic" and atts[8].label == "Perk" and atts[8].display == 700)
 check("gain rows", #gains == 4 and gains[1].path == "Gains.kill" and gains[1].display == 500 and gains[2].label == "Round win" and gains[2].display == 1000 and gains[3].path == "Gains.round_loss" and gains[4].path == "Gains.draw")
 
 local generalMap, general = rowMap("general")

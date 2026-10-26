@@ -392,6 +392,57 @@ function BALLISTICS.BuyWheel.IsOpen()
 	return held == true and valid(root) and root:IsVisible()
 end
 
+local function ownedList()
+	local ply = localPly()
+	local out = {}
+	if not ply or type(ply.GetWeapons) ~= "function" then return out, nil end
+	for _, w in ipairs(ply:GetWeapons()) do
+		if valid(w) then
+			out[#out + 1] = {
+				class = w:GetClass(),
+				slot = w.GetSlot and w:GetSlot() or 0,
+				pos = w.GetSlotPos and w:GetSlotPos() or 0,
+			}
+		end
+	end
+	local active = ply.GetActiveWeapon and ply:GetActiveWeapon()
+	return out, valid(active) and active:GetClass() or nil
+end
+
+local function pickWeapon(action)
+	local W = BALLISTICS.WeaponPick
+	if not W or action == nil then return false end
+	local list, current = ownedList()
+	local class
+	if action == "next" then
+		class = W.Cycle(list, current, 1)
+	elseif action == "prev" then
+		class = W.Cycle(list, current, -1)
+	else
+		class = W.Slot(list, current, action)
+	end
+	if not class or class == current then return false end
+	RunConsoleCommand("bal_select", class)
+	if surface and surface.PlaySound then surface.PlaySound("common/wpn_moveselect.wav") end
+	return true
+end
+
+-- The popup takes the wheel and keys, so do weapon select here.
+function BALLISTICS.BuyWheel.HookWeaponPick(pnl)
+	if not valid(pnl) or pnl.balWeaponPick then return end
+	pnl.balWeaponPick = true
+	pnl.OnMouseWheeled = function(_, delta)
+		return pickWeapon(delta > 0 and "prev" or "next")
+	end
+	local oldKey = pnl.OnKeyCodePressed
+	pnl.OnKeyCodePressed = function(self, code)
+		local bind = input and input.LookupKeyBinding and input.LookupKeyBinding(code)
+		local action = BALLISTICS.WeaponPick and BALLISTICS.WeaponPick.BindAction(bind)
+		if action ~= nil then return pickWeapon(action) end
+		if oldKey then return oldKey(self, code) end
+	end
+end
+
 function BALLISTICS.BuyWheel.Open()
 	if not phaseBuy then return false end
 	local pnl = ensureRoot()
@@ -400,6 +451,7 @@ function BALLISTICS.BuyWheel.Open()
 		return false
 	end
 	held = true
+	BALLISTICS.BuyWheel.HookWeaponPick(pnl)
 	pnl:SetVisible(true)
 	pnl:SetMouseInputEnabled(true)
 	if pnl.MakePopup then pnl:MakePopup() end
