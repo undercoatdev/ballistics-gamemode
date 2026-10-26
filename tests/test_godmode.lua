@@ -48,4 +48,33 @@ BALLISTICS.GodMode.WrapHooks()
 E.BodyDamage_Track(ply, dmg)
 check("rewrap does not double wrap", organHits == 3)
 
+-- Passive drain is frozen in buy.
+local rec = { blood = 80, bleedPerSecond = 3, oxygenDebt = 20, waterDebt = 5, stress = 40 }
+local kills = 0
+BODY_DAMAGE = {
+	FindRecord = function() return rec end,
+	OxygenOutput = function() return 10 end,
+	KillBledOut = function() kills = kills + 1 end,
+}
+BALLISTICS.GodMode.WrapBodyDamage()
+phase = "buy"
+BALLISTICS.GodMode.Pin(ply)
+rec.blood = 60
+BALLISTICS.GodMode.Pin(ply)
+check("buy: bleed, debt and stress pinned", rec.bleedPerSecond == 0 and rec.oxygenDebt == 0 and rec.waterDebt == 0 and rec.stress == 0)
+check("buy: lost blood put back", rec.blood == 80)
+check("buy: weak organs still give full oxygen", BODY_DAMAGE.OxygenOutput({}, nil, ply) == 100)
+BODY_DAMAGE.KillBledOut(ply)
+check("buy: bled-out kill refused", kills == 0)
+phase = "live"
+check("live: oxygen output normal again", BODY_DAMAGE.OxygenOutput({}, nil, ply) == 10)
+BODY_DAMAGE.KillBledOut(ply)
+check("live: bled-out kill works", kills == 1)
+rec.bleedPerSecond = 2
+BALLISTICS.GodMode.Pin(ply)
+check("live: bleeding not touched", rec.bleedPerSecond == 2)
+BALLISTICS.GodMode.WrapBodyDamage()
+BODY_DAMAGE.KillBledOut(ply)
+check("no double wrap", kills == 2)
+
 if failed then os.exit(1) end

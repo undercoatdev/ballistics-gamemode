@@ -49,6 +49,70 @@ function G.WrapHooks()
 	end
 end
 
+-- Passive drain: Body Damage's 1 s vitals tick turns weak organs into low
+-- oxygen and then a knockout, and bleeding drains blood. During buy a
+-- protected player reads full oxygen output, and bleed / debt / stress /
+-- lost blood are pinned so nothing drains. A bled-out kill is refused.
+local held = setmetatable({}, { __mode = "k" })
+
+local function recOf(ply)
+	local bd = BODY_DAMAGE
+	if not (bd and type(bd.FindRecord) == "function") then return nil end
+	local ok, rec = pcall(bd.FindRecord, ply)
+	if ok and type(rec) == "table" then return rec end
+	return nil
+end
+
+function G.Pin(ply)
+	if not G.Protected(ply) then
+		held[ply] = nil
+		return
+	end
+	local rec = recOf(ply)
+	if not rec then return end
+	if held[ply] == nil or held[ply].rec ~= rec then
+		held[ply] = { rec = rec, blood = rec.blood }
+	end
+	local keep = held[ply]
+	rec.bleedPerSecond = 0
+	rec.oxygenDebt = 0
+	rec.waterDebt = 0
+	rec.stress = 0
+	if type(keep.blood) == "number" and (tonumber(rec.blood) or 0) < keep.blood then rec.blood = keep.blood end
+end
+
+function G.WrapBodyDamage()
+	local bd = BODY_DAMAGE
+	if type(bd) ~= "table" then return end
+	local out = bd.OxygenOutput
+	if type(out) == "function" and not wrapped[out] then
+		local guard = function(organs, flag, ent, ...)
+			if G.Protected(ent) then return 100 end
+			return out(organs, flag, ent, ...)
+		end
+		wrapped[guard] = true
+		bd.OxygenOutput = guard
+	end
+	local kill = bd.KillBledOut
+	if type(kill) == "function" and not wrapped[kill] then
+		local guard = function(ent, ...)
+			if G.Protected(ent) then return end
+			return kill(ent, ...)
+		end
+		wrapped[guard] = true
+		bd.KillBledOut = guard
+	end
+end
+
+function G.PinAll()
+	if not (player and player.GetAll) then return end
+	for _, ply in ipairs(player.GetAll()) do G.Pin(ply) end
+end
+
+if timer and timer.Create then
+	timer.Create("Ballistics_BuyGodPin", 0.1, 0, function() G.PinAll() end)
+end
+
 if hook and hook.Add then
 	hook.Add("EntityTakeDamage", OWN, function(ent, dmg)
 		if G.Protected(ent) then
@@ -69,8 +133,14 @@ if hook and hook.Add then
 	hook.Add("BodyDamage_OrganBleed", OWN, function(ent)
 		if G.Protected(ent) then return true end
 	end)
-	hook.Add("InitPostEntity", OWN, G.WrapHooks)
+	hook.Add("InitPostEntity", OWN, function()
+		G.WrapHooks()
+		G.WrapBodyDamage()
+	end)
 	hook.Add("Ballistics_PhaseChanged", OWN, function(_, new)
-		if new == "buy" then G.WrapHooks() end
+		if new == "buy" then
+			G.WrapHooks()
+			G.WrapBodyDamage()
+		end
 	end)
 end
