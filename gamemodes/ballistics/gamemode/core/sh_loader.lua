@@ -32,6 +32,8 @@ local function findLua(rel)
 end
 
 local function includeFile(rel, name)
+	-- GMod resolves include paths from the lua/gamemodes root, not the gamemode folder.
+	rel = ((GM and GM.FolderName) or "ballistics") .. "/gamemode/" .. rel
 	local realm = realmPrefix(name)
 	if realm == "sv_" then
 		if SERVER then include(rel) end
