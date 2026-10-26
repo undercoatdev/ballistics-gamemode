@@ -1,5 +1,5 @@
--- Admin tab tree. Pure data: which sub-tabs exist and whether Reset is live.
--- Rules stays a placeholder until its phase. Spawns and Teams are live.
+-- Admin tab tree. Pure data: which sub-tabs exist and which section Reset restores.
+-- Spawns resets this map's flags. Every other tab sends bal_config_set.
 
 BALLISTICS = BALLISTICS or {}
 BALLISTICS.AdminTabs = BALLISTICS.AdminTabs or {}
@@ -20,23 +20,23 @@ local TREE = {
 	{
 		id = "rules",
 		title = "Rules",
-		implemented = false,
-		reset = { enabled = false },
+		implemented = true,
+		reset = { enabled = true, section = "rules" },
 		children = {
 			{
 				id = "costs",
 				title = "Costs",
-				implemented = false,
-				reset = { enabled = false, section = "costs" },
+				implemented = true,
+				reset = { enabled = true, section = "costs" },
 				children = {
-					{ id = "weapons", title = "Weapons", implemented = false, reset = { enabled = false, section = "weapons" } },
-					{ id = "throwables", title = "Throwables", implemented = false, reset = { enabled = false, section = "throwables" } },
-					{ id = "meds", title = "Meds", implemented = false, reset = { enabled = false, section = "meds" } },
-					{ id = "attachments", title = "Attachments", implemented = false, reset = { enabled = false, section = "attachments" } },
+					{ id = "weapons", title = "Weapons", implemented = true, reset = { enabled = true, section = "weapons" } },
+					{ id = "throwables", title = "Throwables", implemented = true, reset = { enabled = true, section = "throwables" } },
+					{ id = "meds", title = "Meds", implemented = true, reset = { enabled = true, section = "meds" } },
+					{ id = "attachments", title = "Attachments", implemented = true, reset = { enabled = true, section = "attachments" } },
 				},
 			},
-			{ id = "gains", title = "Gains", implemented = false, reset = { enabled = false, section = "gains" } },
-			{ id = "general", title = "General", implemented = false, reset = { enabled = false, section = "general" } },
+			{ id = "gains", title = "Gains", implemented = true, reset = { enabled = true, section = "gains" } },
+			{ id = "general", title = "General", implemented = true, reset = { enabled = true, section = "general" } },
 		},
 	},
 }

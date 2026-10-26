@@ -219,19 +219,20 @@ local function readSlots()
 	return { perTeam = per, sides = sides, queue = queue }
 end
 
--- Mirrors sv_round.lua bal_round_sync. The clock fields are consumed and dropped:
--- the lobby never draws a countdown.
+-- Mirrors sv_round.lua bal_round_sync. The lobby never draws a countdown.
+-- The clock is kept for the round HUD.
 local function readRound()
-	local phase = net.ReadString()
-	net.ReadUInt(16)
-	net.ReadFloat()
-	net.ReadFloat()
-	net.ReadUInt(16)
-	net.ReadUInt(16)
-	net.ReadString()
-	net.ReadString()
-	net.ReadString()
-	return { phase = phase }
+	return {
+		phase = net.ReadString(),
+		round = net.ReadUInt(16),
+		endsAt = net.ReadFloat(),
+		enteredAt = net.ReadFloat(),
+		scoreGood = net.ReadUInt(16),
+		scoreBad = net.ReadUInt(16),
+		winner = net.ReadString(),
+		reason = net.ReadString(),
+		matchWinner = net.ReadString(),
+	}
 end
 
 local PHASES = { lobby = true, buy = true, live = true, post = true }
@@ -249,6 +250,9 @@ if BALLISTICS.Net and BALLISTICS.Net.Register then
 
 	BALLISTICS.Net.Register(msg("round", "bal_round_sync"), function(payload)
 		if type(payload) ~= "table" then return end
+		if BALLISTICS.RoundHud and BALLISTICS.RoundHud.Apply then
+			BALLISTICS.RoundHud.Apply(payload)
+		end
 		local prev = state.phase
 		if PHASES[payload.phase] then state.phase = payload.phase end
 		-- The match started: get the lobby popup out of the way of the buy phase.

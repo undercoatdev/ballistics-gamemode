@@ -147,6 +147,8 @@ local SECTION_ALIAS = {
 	gains = "gains",
 	BuyLimits = "buylimits",
 	buylimits = "buylimits",
+	rules = "rules",
+	Rules = "rules",
 	all = "all",
 	All = "all",
 }
@@ -281,6 +283,14 @@ function api.ResetSection(name)
 	if not section then return false, "unknown section" end
 	if section == "all" then
 		api.Reset()
+		return true
+	end
+	-- Rules tab: general, item prices, attachment prices, and gains. Not teams.
+	if section == "rules" then
+		api.ResetSection("general")
+		api.ResetSection("costs")
+		api.ResetSection("attachments")
+		api.ResetSection("gains")
 		return true
 	end
 	local group = COST_GROUPS[section]

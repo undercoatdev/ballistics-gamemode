@@ -13,35 +13,49 @@ local BAR_W = 300
 local BAR_H = 18
 local BAR_GAP = 6
 
-local function paintBar(x, y, bar)
+local function paintBar(rect, bar)
+	local x, y = rect.x, rect.y
+	local bw, bh = rect.w, rect.h
 	local col = (BALLISTICS.TeamColor and BALLISTICS.TeamColor[bar.team]) or Color(255, 255, 255)
 	local r = col.r or 255
 	local g = col.g or 255
 	local b = col.b or 255
 	surface.SetDrawColor(0, 0, 0, 170)
-	surface.DrawRect(x, y, BAR_W, BAR_H)
-	local fill = math.floor(BAR_W * (tonumber(bar.progress) or 0) + 0.5)
+	surface.DrawRect(x, y, bw, bh)
+	local fill = math.floor(bw * (tonumber(bar.progress) or 0) + 0.5)
 	if fill < 0 then fill = 0 end
-	if fill > BAR_W then fill = BAR_W end
+	if fill > bw then fill = bw end
 	if fill > 0 then
 		surface.SetDrawColor(r, g, b, 210)
-		surface.DrawRect(x, y, fill, BAR_H)
+		surface.DrawRect(x, y, fill, bh)
 	end
 	if surface.DrawOutlinedRect then
 		surface.SetDrawColor(r, g, b, 255)
-		surface.DrawOutlinedRect(x, y, BAR_W, BAR_H)
+		surface.DrawOutlinedRect(x, y, bw, bh)
 	end
 	if draw and type(draw.SimpleText) == "function" then
 		draw.SimpleText(
 			bar.text or "",
 			"BallisticsCapture",
-			x + BAR_W / 2,
-			y + BAR_H / 2,
+			x + bw / 2,
+			y + bh / 2,
 			Color(255, 255, 255),
 			TEXT_ALIGN_CENTER or 1,
 			TEXT_ALIGN_CENTER or 1
 		)
 	end
+end
+
+local function fallbackRects(screenW, barCount)
+	local rects = {}
+	local x = math.floor((screenW - BAR_W) / 2)
+	if x < 0 then x = 0 end
+	local y = 8
+	for i = 1, barCount do
+		rects[i] = { x = x, y = y, w = BAR_W, h = BAR_H }
+		y = y + BAR_H + BAR_GAP
+	end
+	return rects
 end
 
 local function paint()
@@ -52,12 +66,15 @@ local function paint()
 	local bars = cap.Bars(good, bad)
 	if #bars == 0 then return end
 	local sw = (ScrW and ScrW()) or 0
-	local x = math.floor((sw - BAR_W) / 2)
-	if x < 0 then x = 0 end
-	local y = 8
+	local rects
+	if type(cap.BarRects) == "function" then
+		rects = cap.BarRects(sw, #bars)
+	end
+	if type(rects) ~= "table" or #rects < #bars then
+		rects = fallbackRects(sw, #bars)
+	end
 	for i = 1, #bars do
-		paintBar(x, y, bars[i])
-		y = y + BAR_H + BAR_GAP
+		paintBar(rects[i], bars[i])
 	end
 end
 

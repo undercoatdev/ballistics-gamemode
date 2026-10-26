@@ -222,3 +222,25 @@ function C.Bars(good, bad)
 	add("bad", bad, BAD)
 	return list
 end
+
+-- Screen geometry for the top-middle bars. The round HUD reads this so its
+-- phase line can sit clear of the bars. cl_capture_bar paints these rects.
+C.BAR_W = 300
+C.BAR_H = 18
+C.BAR_GAP = 6
+C.BAR_TOP = 8
+
+function C.BarRects(screenW, barCount)
+	local count = math.floor(tonumber(barCount) or 0)
+	if count < 0 then count = 0 end
+	local sw = tonumber(screenW) or 0
+	local x = math.floor((sw - C.BAR_W) / 2)
+	if x < 0 then x = 0 end
+	local y = C.BAR_TOP
+	local rects = {}
+	for i = 1, count do
+		rects[i] = { x = x, y = y, w = C.BAR_W, h = C.BAR_H }
+		y = y + C.BAR_H + C.BAR_GAP
+	end
+	return rects
+end

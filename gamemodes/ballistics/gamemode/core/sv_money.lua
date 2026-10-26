@@ -1,5 +1,6 @@
 -- Ledger glue. NW2 ints bal_money and bal_pending, commit at BUY, reset at match start.
--- Round win/loss lands in pending here. A draw (timeout) pays Gains.draw to everyone slotted. Kill rewards are Phase 7.
+-- Round win/loss lands in pending here. A draw pays Gains.draw to everyone slotted.
+-- An enemy player kill during LIVE pays Gains.kill. Teamkills, suicides, and world deaths do not.
 
 if not SERVER then return end
 
@@ -128,6 +129,48 @@ function BALLISTICS.Money.Sync(ply)
 	sync(ply, playerId(ply))
 end
 
+local function phaseOf()
+	if BALLISTICS.Round and type(BALLISTICS.Round.Phase) == "function" then
+		local phase = BALLISTICS.Round.Phase()
+		if type(phase) == "string" and phase ~= "" then return phase end
+	end
+	return "lobby"
+end
+
+-- World and weapon entities are userdata too. Only a real player method counts.
+local function entityPlayer(ent)
+	if ent == nil or ent == false then return false end
+	if type(ent.IsPlayer) ~= "function" then return false end
+	return ent:IsPlayer() == true
+end
+
+local function teamOf(ply)
+	if ply == nil then return nil end
+	if not (BALLISTICS.Slots and type(BALLISTICS.Slots.TeamOf) == "function") then return nil end
+	local teamId = BALLISTICS.Slots.TeamOf(ply)
+	local good = TEAM_GOOD or 1
+	local bad = TEAM_BAD or 2
+	if teamId == good or teamId == bad then return teamId end
+	return nil
+end
+
+-- Pays Gains.kill into pending, or returns false and leaves the ledger alone.
+function BALLISTICS.Money.OnDeath(victim, attacker)
+	local reward = nil
+	if BALLISTICS.Gains and type(BALLISTICS.Gains.KillReward) == "function" then
+		reward = BALLISTICS.Gains.KillReward({
+			phase = phaseOf(),
+			suicide = victim ~= nil and attacker == victim,
+			attackerIsPlayer = entityPlayer(attacker),
+			victimTeam = teamOf(victim),
+			attackerTeam = teamOf(attacker),
+		})
+	end
+	if reward ~= "kill" then return false end
+	local ok = BALLISTICS.Money.Earn(attacker, "kill")
+	return ok == true
+end
+
 local function payTeam(teamId, key)
 	if not (BALLISTICS.Slots and BALLISTICS.Slots.Members) then return end
 	local members = BALLISTICS.Slots.Members(teamId)
@@ -161,5 +204,11 @@ if hook and hook.Add then
 		remember(ply, id)
 		ledger:Ensure(id)
 		sync(ply, id)
+	end)
+
+	-- PlayerDeath is (victim, inflictor, attacker). The inflictor is ignored:
+	-- only an enemy player attacker during LIVE is paid.
+	hook.Add("PlayerDeath", "Ballistics_MoneyKill", function(victim, _, attacker)
+		BALLISTICS.Money.OnDeath(victim, attacker)
 	end)
 end
