@@ -29,7 +29,9 @@ local function localRagdolls()
 				keep = ent.BallisticsKeep == true,
 				flagTeam = flag,
 			}
-			if BALLISTICS.Cleanup.ShouldRemove(info) and type(ent.Remove) == "function" then
+			-- Only client-side entities (EntIndex -1) may be removed here; the server removes its own.
+			local clientside = type(ent.EntIndex) == "function" and ent:EntIndex() == -1
+			if clientside and BALLISTICS.Cleanup.ShouldRemove(info) and type(ent.Remove) == "function" then
 				pcall(ent.Remove, ent)
 			end
 		end
