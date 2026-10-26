@@ -157,12 +157,14 @@ function BALLISTICS.Round.Broadcast(ply)
 	broadcast(ply)
 end
 
--- modules/spawns PlayerSpawn stands each slot on a ring around that team's flag.
--- The ring below is only for a round driver loaded without the spawns module.
+-- Slotted players stand on a ring around that team's flag. The origin ring
+-- below is only for a round driver loaded without the spawns module. A loaded
+-- module that has no flag for this team returns nil — never the origin.
 function BALLISTICS.Round.SpawnTransform(teamId, slot)
 	local spawns = BALLISTICS.Spawns
 	if type(spawns) == "table" and type(spawns.PlayerSpawn) == "function" then
-		return spawns.PlayerSpawn(teamId, slot)
+		local pos, ang = spawns.PlayerSpawn(teamId, slot)
+		return pos, ang
 	end
 	local per = 5
 	if BALLISTICS.Slots and BALLISTICS.Slots.Limit then per = BALLISTICS.Slots.Limit() end

@@ -19,7 +19,7 @@ local r = 2 / 0.01905
 check("StartMoney is 1000", C.StartMoney == 1000)
 check("SlotsPerTeam is 5", C.SlotsPerTeam == 5)
 check("MinPerTeam is 1", C.MinPerTeam == 1)
-check("BuyTime is 10", C.BuyTime == 10)
+check("BuyTime is 20", C.BuyTime == 20)
 check("RoundTime is 600", C.RoundTime == 600)
 check("PostRoundTime is 5", C.PostRoundTime == 5)
 check("RoundsToWin is 0 (endless)", C.RoundsToWin == 0)
@@ -112,7 +112,7 @@ check("healed organs clamp to 0", ok == true and val == 0 and C.HealedUpOrgans =
 C.Set("HealedUpOrgans", 40)
 C.Set("BuyAmmoMags", 9)
 C.ResetSection("General")
-check("ResetSection General restores StartMoney and radii", C.StartMoney == 1000 and math.abs(C.ObjectiveRadius - r) < 1e-9 and C.BuyTime == 10 and C.HealthMode == "realistic" and C.HealedUpOrgans == 10 and C.BuyAmmoMags == 3)
+check("ResetSection General restores StartMoney and radii", C.StartMoney == 1000 and math.abs(C.ObjectiveRadius - r) < 1e-9 and C.BuyTime == 20 and C.HealthMode == "realistic" and C.HealedUpOrgans == 10 and C.BuyAmmoMags == 3)
 
 C.Set("SlotsPerTeam", 8)
 C.ResetSection("teams")

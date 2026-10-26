@@ -168,6 +168,8 @@ function BALLISTICS.Spawns.Sync(ply)
 	sync(ply)
 end
 
+-- Slot N stands on the ring around this team's flag, nudged out if the hull is blocked.
+-- No flag for that side means no spawn point (the round must not invent a map start).
 function BALLISTICS.Spawns.PlayerSpawn(teamId, slot)
 	local side = D.side(teamId)
 	local flag = side and state[side]
@@ -177,9 +179,11 @@ function BALLISTICS.Spawns.PlayerSpawn(teamId, slot)
 		local x, y, z = snap(flag.pos.x + c.x, flag.pos.y + c.y, flag.pos.z + 16)
 		return hullBlocked(x, y, z)
 	end
-	local c = D.chooseCandidate(slot, per, D.RING, blocked)
-	local x, y, z = snap(flag.pos.x + c.x, flag.pos.y + c.y, flag.pos.z + 16)
-	return Vector(x, y, z + 2), Angle(0, c.yaw or 0, 0)
+	local stood, stoodAng = D.playerPoint(flag, slot, per, blocked)
+	if not stood then return nil end
+	local x, y, z = snap(stood.x, stood.y, stood.z + 16)
+	local yaw = stoodAng and stoodAng.y or 0
+	return Vector(x, y, z + 2), Angle(0, yaw, 0)
 end
 
 function BALLISTICS.Spawns.Reload()
