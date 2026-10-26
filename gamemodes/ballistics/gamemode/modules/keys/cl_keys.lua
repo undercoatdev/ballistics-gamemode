@@ -280,7 +280,22 @@ local function paint()
 	if type(K.PanelBox) ~= "function" then return end
 	local open = listOpen()
 	local rows = open and BALLISTICS.Keys.HintRows() or {}
-	local box = K.PanelBox(open and #rows or 1, ScrW(), ScrH(), open)
+	local face = fontName()
+	local lines = {}
+	if open then
+		for i = 1, #rows do lines[i] = tostring(rows[i].key) .. "  " .. tostring(rows[i].action) end
+	else
+		lines[1] = K.TAG or "F1 Keybinds"
+	end
+	local widest = 0
+	if surface.SetFont and surface.GetTextSize then
+		surface.SetFont(face)
+		for i = 1, #lines do
+			local w = surface.GetTextSize(lines[i])
+			if type(w) == "number" and w > widest then widest = w end
+		end
+	end
+	local box = K.PanelBox(open and #rows or 1, ScrW(), ScrH(), open, widest)
 	local white = Color and Color(255, 255, 255) or { r = 255, g = 255, b = 255, a = 255 }
 	surface.SetDrawColor(0, 0, 0, 150)
 	if type(TacRP) == "table" and type(TacRP.DrawCorneredBox) == "function" then
@@ -288,18 +303,17 @@ local function paint()
 	elseif type(surface.DrawRect) == "function" then
 		surface.DrawRect(box.x, box.y, box.w, box.h)
 	end
-	local face = fontName()
 	local function text(str, x, y)
 		if type(draw.SimpleText) ~= "function" then return end
 		draw.SimpleText(str, face, x, y, white, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
 	end
 	if not open then
-		text(K.TAG or "F1 Keybinds", box.x + 6, box.y + box.h / 2)
+		text(lines[1], box.x + K.PAD, box.y + box.h / 2)
 		return
 	end
 	for i = 1, #rows do
 		local y = box.y + (i - 0.5) * box.row
-		text(tostring(rows[i].key) .. "  " .. tostring(rows[i].action), box.x + 6, y)
+		text(lines[i], box.x + K.PAD, y)
 	end
 end
 

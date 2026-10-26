@@ -100,9 +100,9 @@ check("a missing medical wheel is left off the list", #noMed == 7)
 check("scroll and slot keys share one line", K.SwitchLabel("mwheelup", "slot1") == "MWHEELUP / SLOT1" and K.SwitchLabel("", "") == "SCROLL / SLOT")
 
 local box = K.PanelBox(8, 640, 480, true)
-check("the open list sits on the DrawHints anchor", box.x == 4 and box.y == math.floor(240 - box.h / 2) and box.h == 8 * 12 and box.w == 280)
+check("the open list sits on the DrawHints anchor", box.x == 4 and box.y == math.floor(240 - box.h / 2) and box.h == 8 * 12 and box.w == 140)
 local tag = K.PanelBox(8, 640, 480, false)
-check("the collapsed tag is one row", tag.x == 4 and tag.h == 12 and tag.w == 110 and tag.y == math.floor(240 - 6))
+check("the collapsed tag is one row", tag.x == 4 and tag.h == 12 and tag.w == 70 and tag.y == math.floor(240 - 6))
 check("spawn reveals the list and F1 closes it", K.ShowList(false, 1, K.NoteSpawn(0)) == true and K.ShowList(false, 4, K.NoteSpawn(0)) == false)
 local pin, untilAt = K.ToggleList(false, 10, 0)
 check("F1 pins a closed list", pin == true and K.ShowList(pin, 10, untilAt) == true)
@@ -252,5 +252,13 @@ hook.Run("Think")
 check("hints stay off while the gamemode runs", convars.tacrp_hints == 0)
 hook.Run("ShutDown")
 check("shutdown restores the hint convar", convars.tacrp_hints == 1)
+
+do
+	local fit = K.PanelBox(8, 1920, 1080, true, 200)
+	check("panel hugs the widest line plus padding", fit.w == 200 + 2 * K.PAD)
+	local tag = K.PanelBox(1, 1920, 1080, false, 60)
+	check("tag hugs its text", tag.w == 60 + 2 * K.PAD)
+	check("panel stays narrow on a wide screen", K.PanelBox(8, 3840, 2160, true, 300).w < 3840 * 0.2)
+end
 
 if failed then os.exit(1) end

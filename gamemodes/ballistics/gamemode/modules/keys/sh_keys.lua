@@ -204,7 +204,18 @@ end
 -- Same anchor as TacRP DrawHints: a few pixels in from the left, centred on
 -- the screen height. The open list is wider than TacRP's because the lines
 -- are sentences. The collapsed tag is one row.
-function K.PanelBox(rowCount, scrW, scrH, open)
+-- textW: widest line in pixels. Width hugs the text plus padding.
+K.PAD = 6
+
+function K.FitWidth(textW, s, open)
+	local tw = tonumber(textW)
+	if tw and tw == tw and tw > 0 then
+		return math.floor(tw + 2 * K.PAD)
+	end
+	return math.floor((open and 140 or 70) * (tonumber(s) or 1))
+end
+
+function K.PanelBox(rowCount, scrW, scrH, open, textW)
 	local s = K.Scale(scrW)
 	local row = math.floor(12 * s)
 	if row < 1 then row = 1 end
@@ -216,7 +227,7 @@ function K.PanelBox(rowCount, scrW, scrH, open)
 	return {
 		x = math.floor(4 * s),
 		y = math.floor(scr / 2 - h / 2),
-		w = math.floor((open and 280 or 110) * s),
+		w = K.FitWidth(textW, s, open),
 		h = h,
 		row = row,
 	}
