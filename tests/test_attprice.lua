@@ -152,6 +152,47 @@ ok, reason = gate({ price = CLEAR })
 check("a slot with no price cannot be bought", ok == false and reason == "That slot has no price.")
 check("a free slot can be taken", gate({ price = 0, balance = 0 }) == true)
 
+local function client(over)
+	local ctx = {
+		phase = "live",
+		inZone = true,
+		alive = true,
+		balance = 1000,
+		price = 250,
+		detach = false,
+	}
+	for k, v in pairs(over or {}) do
+		if v == CLEAR then
+			ctx[k] = nil
+		else
+			ctx[k] = v
+		end
+	end
+	return P.ClientDecide(ctx)
+end
+
+ok, reason = client({ inZone = false, balance = 0, detach = true })
+check("client detach is allowed outside the zone with no money", ok == true and reason == nil)
+ok, reason = client({ phase = "lobby", inZone = false, alive = false, balance = 0, price = 700, detach = true })
+check("client detach ignores phase, life, and price", ok == true and reason == nil)
+ok, reason = P.Gate({ phase = "live", inZone = false, alive = true, balance = 0, price = 250, detach = true })
+check("the server still refuses that detach", ok == false and reason == "Only at your objective")
+ok, reason = client({ inZone = false, balance = 1000 })
+check("client attach outside the zone is refused", ok == false and reason == "Only at your objective")
+ok, reason = client({ balance = 249 })
+check("client attach over the balance is refused", ok == false and reason == "Not enough money")
+ok, reason = client({ balance = 250 })
+check("client attach at the exact balance is allowed", ok == true and reason == nil)
+ok, reason = client({ phase = "buy", inZone = false, balance = 250 })
+check("client attach during buy does not need the flag", ok == true)
+ok, reason = client({ phase = "post", balance = 9999, price = 100 })
+check("client attach outside buy and live is refused", ok == false and reason == "Only at your objective")
+ok, reason = client({ alive = false, balance = 9999 })
+check("client attach while dead is refused", ok == false and reason == "You are not alive.")
+ok, reason = client({ price = CLEAR })
+check("client attach with no price is refused", ok == false and reason == "That slot has no price.")
+check("a bad client context cannot attach", P.ClientDecide(nil) == false)
+
 check("installing from empty charges", P.ShouldCharge(nil, "optic_a", "optic_a") == true)
 check("a failed install does not charge", P.ShouldCharge(nil, nil, "optic_a") == false)
 check("the same attachment does not charge again", P.ShouldCharge("optic_a", "optic_a", "optic_a") == false)
@@ -419,5 +460,47 @@ root.kids[#root.kids + 1] = blank
 root:Think()
 local blankDraw = paintOf(blank)
 check("a slot with no price draws nothing", #blankDraw == 0 and blank.paints == 1)
+
+dofile("gamemodes/ballistics/gamemode/modules/customize/cl_attgate.lua")
+
+local nwPhase = "live"
+function ply:GetNW2String(key, default)
+	if key == "bal_phase" then return nwPhase end
+	return default or ""
+end
+ply.alive = true
+ply.teamId = 1
+ply.pos = { x = 0, y = 0, z = 0 }
+
+local ledger = BALLISTICS.Money.Get(ply)
+money = 100
+ok, reason = BALLISTICS.AttPrice.Predict(ply, { Attachments = { [1] = optic } }, "optic_a", 1, false)
+check("predicted attach uses NW2 and refuses a short balance", ok == false and reason == "Not enough money" and ledger >= 250)
+
+money = 250
+ok, reason = BALLISTICS.AttPrice.Predict(ply, { Attachments = { [1] = optic } }, "optic_a", 1, false)
+check("predicted attach allows the networked balance in the zone", ok == true and reason == nil)
+
+ply.pos = { x = 400, y = 0, z = 0 }
+ok, reason = BALLISTICS.AttPrice.Predict(ply, { Attachments = { [1] = optic } }, "optic_a", 1, false)
+check("predicted attach outside the zone is refused", ok == false and reason == "Only at your objective")
+
+nwPhase = "buy"
+ok, reason = BALLISTICS.AttPrice.Predict(ply, { Attachments = { [1] = optic } }, "optic_a", 1, false)
+check("predicted attach during buy does not need the flag", ok == true and reason == nil)
+
+money = 0
+ply.alive = false
+nwPhase = "lobby"
+ok, reason = BALLISTICS.AttPrice.Predict(ply, { Attachments = { [1] = optic } }, "optic_a", 1, true)
+check("predicted detach is allowed when broke, dead, and outside", ok == true and reason == nil)
+ply.alive = true
+ok, reason = BALLISTICS.AttPrice.Predict(ply, { Attachments = { [1] = optic } }, "optic_a", 1, false)
+check("predicted attach in the lobby does not happen", ok == false and reason == "Only at your objective")
+
+local gateSrc = readAll("gamemodes/ballistics/gamemode/modules/customize/cl_attgate.lua")
+check("the client hook is TacRP_CanCustomize", gateSrc:find("TacRP_CanCustomize", 1, true) ~= nil)
+check("the client hook reads bal_money", gateSrc:find("bal_money", 1, true) ~= nil)
+check("the client hook does not read the server ledger", not gateSrc:find("Money.Get", 1, true))
 
 if failed then os.exit(1) end

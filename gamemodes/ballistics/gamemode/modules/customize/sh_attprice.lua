@@ -151,6 +151,15 @@ function P.Gate(ctx)
 	return true
 end
 
+-- Client prediction. TacRP calls CanCustomize from the shared CanAttach,
+-- which runs on the client before the predicted install and the net message.
+-- Detach is always allowed here. Attach uses the same place and money rules
+-- as Gate, with the balance taken from the local player's networked money.
+function P.ClientDecide(ctx)
+	if type(ctx) == "table" and ctx.detach == true then return true end
+	return P.Gate(ctx)
+end
+
 local function blank(v)
 	return v == nil or v == false or v == ""
 end
