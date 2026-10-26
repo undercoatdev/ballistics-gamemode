@@ -333,6 +333,12 @@ function BALLISTICS.Gear.ClearMeds(ply)
 end
 
 if hook and hook.Add then
+	-- Carried gear only lives inside one game: drop it at the firing squad,
+	-- back in the lobby, and (already) at a new match.
+	hook.Add("Ballistics_PhaseChanged", "Ballistics_GearDrop", function(_, new)
+		if new == "squad" or new == "lobby" then BALLISTICS.Gear.Reset() end
+	end)
+	hook.Add("Ballistics_MatchEnd", "Ballistics_GearDrop", function() BALLISTICS.Gear.Reset() end)
 	hook.Add("Ballistics_RoundEnd", "Ballistics_GearKeep", function(winner)
 		BALLISTICS.Gear.Capture(winner)
 	end)

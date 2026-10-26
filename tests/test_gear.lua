@@ -149,4 +149,31 @@ hook.Run("Ballistics_RoundEnd", "good", "elimination")
 BALLISTICS.Gear.Reset()
 check("match start drops the snapshot", BALLISTICS.Gear.WillKeep(winner) == false)
 
+-- Gear never outlives the game.
+winner.alive = true
+hook.Run("Ballistics_RoundEnd", "good", "elimination")
+check("survivor snapshot before game end", BALLISTICS.Gear.WillKeep(winner) == true)
+hook.Run("Ballistics_MatchEnd", "good")
+check("game end drops carried gear", BALLISTICS.Gear.WillKeep(winner) == false)
+hook.Run("Ballistics_RoundEnd", "good", "elimination")
+hook.Run("Ballistics_PhaseChanged", "post", "squad")
+check("firing squad drops carried gear", BALLISTICS.Gear.WillKeep(winner) == false)
+hook.Run("Ballistics_RoundEnd", "good", "elimination")
+hook.Run("Ballistics_PhaseChanged", "squad", "lobby")
+check("lobby drops carried gear", BALLISTICS.Gear.WillKeep(winner) == false)
+
+-- TacRP autosave forced off on the client so bought guns start bare.
+do
+	local val = 1
+	local cvar = { GetInt = function() return val end }
+	GetConVar = function(n) if n == "tacrp_autosave" then return cvar end end
+	RunConsoleCommand = function(n, v) if n == "tacrp_autosave" then val = tonumber(v) end end
+	CLIENT = true
+	dofile("gamemodes/ballistics/gamemode/modules/customize/cl_noautosave.lua")
+	check("tacrp_autosave forced off", val == 0)
+	BALLISTICS.NoAutosave.Restore()
+	check("tacrp_autosave restored on shutdown", val == 1)
+	CLIENT = nil
+end
+
 if failed then os.exit(1) end
