@@ -657,8 +657,12 @@ timer.Create("Ballistics_TeamsButton", 0.25, 0, refreshTeamsButton)
 
 -- F2 runs GM:ShowTeam on the SERVER only; sv_lobby.lua forwards it here.
 if BALLISTICS.Net and BALLISTICS.Net.Register then
+	-- F2 toggles; opening is lobby-only (Lobby.Toggle), closing always works.
 	BALLISTICS.Net.Register("bal_lobby_open", function()
-		BALLISTICS.Lobby.Open()
+		BALLISTICS.Lobby.Toggle()
+	end)
+	BALLISTICS.Net.Register("bal_admin_toggle", function()
+		if BALLISTICS.Admin and BALLISTICS.Admin.Toggle then BALLISTICS.Admin.Toggle() end
 	end)
 end
 

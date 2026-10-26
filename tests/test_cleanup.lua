@@ -101,4 +101,27 @@ check("spawn flag stays", removed[flag] ~= true)
 check("kept-body list is empty", #PLAYER_BALLISTICS.Bodies == 0)
 check("decals cleared and clients told", worldDecals == true and flag.decals == true and broadcast == "bal_cleanup")
 
+-- Client decal pass clears world and entity decals, and repeats later.
+do
+	local cmds, worldCleared, entCleared = {}, 0, 0
+	RunConsoleCommand = function(c) cmds[#cmds + 1] = c end
+	game = game or {}
+	game.GetWorld = function() return { RemoveAllDecals = function() worldCleared = worldCleared + 1 end } end
+	ents = ents or {}
+	local oldAll = ents.GetAll
+	ents.GetAll = function() return { { RemoveAllDecals = function() entCleared = entCleared + 1 end } } end
+	local wasServer = SERVER
+	CLIENT, SERVER = true, false
+	dofile("gamemodes/ballistics/gamemode/modules/cleanup/cl_cleanup.lua")
+	CLIENT, SERVER = nil, wasServer
+	if BALLISTICS.Cleanup.ClientDecals then
+		BALLISTICS.Cleanup.ClientDecals()
+		check("client clears decals everywhere", cmds[1] == "r_cleardecals" and worldCleared == 1 and entCleared == 1)
+		check("decal pass repeats after removals", #(BALLISTICS.Cleanup.DECAL_PASSES or {}) >= 2)
+	else
+		check("client decal pass exists", false)
+	end
+	ents.GetAll = oldAll
+end
+
 if failed then os.exit(1) end

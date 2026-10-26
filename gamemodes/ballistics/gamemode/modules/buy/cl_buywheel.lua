@@ -499,6 +499,12 @@ local function readPhase()
 end
 
 if BALLISTICS.Net and BALLISTICS.Net.Register then
+	-- Stock HL2 coin-slot sound as the purchase cha-ching.
+	BALLISTICS.BuyWheel.BUY_SOUND = "ambient/levels/labs/coinslot1.wav"
+	BALLISTICS.Net.Register("bal_buy_ok", function()
+		if surface and surface.PlaySound then surface.PlaySound(BALLISTICS.BuyWheel.BUY_SOUND) end
+	end, { read = function() return true end })
+
 	BALLISTICS.Net.Register("bal_buy_open", function(payload)
 		if type(payload) ~= "table" then return end
 		local left = tonumber(payload.timeLeft) or 0

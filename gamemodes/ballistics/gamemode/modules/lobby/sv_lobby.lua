@@ -57,4 +57,11 @@ if BALLISTICS.Net and BALLISTICS.Net.Register then
 	function GM:ShowTeam(ply)
 		BALLISTICS.Net.Send("bal_lobby_open", ply)
 	end
+
+	-- F3 (gm_showspare1) toggles the ADMIN window. The client checks admin.
+	BALLISTICS.Net.Register("bal_admin_toggle")
+	function GM:ShowSpare1(ply)
+		if BALLISTICS.IsAdmin and not BALLISTICS.IsAdmin(ply) then return end
+		BALLISTICS.Net.Send("bal_admin_toggle", ply)
+	end
 end

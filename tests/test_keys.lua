@@ -261,4 +261,14 @@ do
 	check("panel stays narrow on a wide screen", K.PanelBox(8, 3840, 2160, true, 300).w < 3840 * 0.2)
 end
 
+do
+	local function has(rows, key, action)
+		for _, r in ipairs(rows) do if r.key == key and r.action == action then return true end end
+		return false
+	end
+	check("F2 teams listed", has(K.Rows({}), "F2", "Teams (lobby)"))
+	check("F3 admin listed for admins", has(K.Rows({ isAdmin = true }), "F3", "Admin"))
+	check("F3 hidden for players", not has(K.Rows({}), "F3", "Admin"))
+end
+
 if failed then os.exit(1) end

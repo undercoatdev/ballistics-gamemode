@@ -21,6 +21,7 @@ local MESSAGES = {
 	"bal_round_sync",
 	"bal_capture_sync",
 	"bal_cleanup",
+	"bal_buy_ok",
 }
 
 local function addString(name)

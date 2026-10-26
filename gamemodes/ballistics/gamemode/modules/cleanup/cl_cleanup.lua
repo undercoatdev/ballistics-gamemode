@@ -38,9 +38,33 @@ local function localRagdolls()
 	end
 end
 
+BALLISTICS.Cleanup.DECAL_PASSES = { 0.3, 1, 2 }
+
+-- r_cleardecals alone is not enough: also strip decals from the world and
+-- every entity on this client (Body Damage / Sticky Blood paint on both).
+function BALLISTICS.Cleanup.ClientDecals()
+	if RunConsoleCommand then pcall(RunConsoleCommand, "r_cleardecals") end
+	if game and game.GetWorld then
+		local ok, world = pcall(game.GetWorld)
+		if ok and world and world.RemoveAllDecals then pcall(world.RemoveAllDecals, world) end
+	end
+	if ents and ents.GetAll then
+		for _, ent in ipairs(ents.GetAll()) do
+			if ent and ent.RemoveAllDecals then pcall(ent.RemoveAllDecals, ent) end
+		end
+	end
+end
+
 if BALLISTICS.Net and BALLISTICS.Net.Register then
 	BALLISTICS.Net.Register("bal_cleanup", function()
-		if RunConsoleCommand then RunConsoleCommand("r_cleardecals") end
 		localRagdolls()
+		BALLISTICS.Cleanup.ClientDecals()
+		-- Again after the server ragdoll removals arrive: Sticky Blood stamps
+		-- a fresh decal when a blood plate entity is removed (EntityRemoved).
+		if timer and timer.Simple then
+			for _, t in ipairs(BALLISTICS.Cleanup.DECAL_PASSES or {}) do
+				timer.Simple(t, BALLISTICS.Cleanup.ClientDecals)
+			end
+		end
 	end)
 end

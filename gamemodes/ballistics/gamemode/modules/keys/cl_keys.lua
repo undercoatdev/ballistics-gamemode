@@ -260,6 +260,8 @@ function BALLISTICS.Keys.HintRows()
 		blindfire = bindLabel("+zoom", "H"),
 		safety = bindLabel("+use", "E"),
 		teams = bindLabel("gm_showteam", "F2"),
+		admin = bindLabel("gm_showspare1", "F3"),
+		isAdmin = BALLISTICS.ClientIsAdmin and BALLISTICS.ClientIsAdmin() == true or false,
 		guns = guns,
 		med = med,
 	})

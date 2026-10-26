@@ -173,9 +173,12 @@ function K.Rows(binds)
 		line(binds.inspect or "G", "Medical / self-inspect"),
 		line(binds.blindfire or "H", "Blindfire menu"),
 		line(binds.safety or "E", "Safety / melee"),
-		line(binds.teams or "F2", "Teams"),
+		line(binds.teams or "F2", "Teams (lobby)"),
 		line(binds.guns or "SCROLL / SLOT", "Switch gun in buy"),
 	}
+	if binds.isAdmin == true then
+		rows[#rows + 1] = line(binds.admin or "F3", "Admin")
+	end
 	if type(binds.med) == "string" and binds.med ~= "" then
 		rows[#rows + 1] = line(binds.med, "Medical wheel")
 	end

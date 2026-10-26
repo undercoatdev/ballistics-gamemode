@@ -570,4 +570,20 @@ buyOk = BALLISTICS.Buy.Request(ply, "tacrp_ex_m1911")
 check("a second gun adds 3 clips to the old reserve", buyOk == true and store.pistol == 117)
 BALLISTICS.Config.BuyAmmoMags = 0
 
+-- Cha-ching: only the buyer, only on success.
+do
+	local sent = {}
+	local realSend = BALLISTICS.Net.Send
+	BALLISTICS.Net.Send = function(name, target, payload)
+		if name == "bal_buy_ok" then sent[#sent + 1] = target end
+		if realSend then return realSend(name, target, payload) end
+	end
+	fresh()
+	BALLISTICS.Buy.Request(ply, "tacrp_ex_m1911")
+	check("successful buy plays the sound for the buyer", #sent == 1 and sent[1] == ply)
+	BALLISTICS.Buy.Request(ply, "tacrp_ex_m1911")
+	check("refused buy plays no sound", #sent == 1)
+	BALLISTICS.Net.Send = realSend
+end
+
 if failed then os.exit(1) end

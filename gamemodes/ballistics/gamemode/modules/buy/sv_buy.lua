@@ -345,6 +345,8 @@ function BALLISTICS.Buy.Request(ply, key)
 	})
 	if result.ok then
 		clearNote(ply)
+		-- Cha-ching for the buyer only.
+		if BALLISTICS.Net and BALLISTICS.Net.Send then BALLISTICS.Net.Send("bal_buy_ok", ply, {}) end
 		if item.kind == "weapon" then
 			row.weapons = row.weapons + 1
 		elseif item.kind == "nade" then
@@ -365,6 +367,8 @@ if BALLISTICS.Net and BALLISTICS.Net.Register then
 			return net.ReadString()
 		end,
 	})
+
+	BALLISTICS.Net.Register("bal_buy_ok", nil, { write = function() end })
 
 	-- bool open, float seconds left in the buy phase
 	BALLISTICS.Net.Register("bal_buy_open", nil, {
