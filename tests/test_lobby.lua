@@ -251,7 +251,7 @@ BALLISTICS.AdminTabs.Walk(nil, function(node)
 	if node.implemented then implemented = implemented + 1 end
 end)
 check("every admin tab and sub-tab has a reset spec", nodes == 10 and everyReset)
-check("only Teams is implemented with Reset enabled", implemented == 1 and enabled == 1)
+check("Teams and Spawns are implemented with Reset enabled", implemented == 2 and enabled == 2)
 
 local teams = BALLISTICS.AdminTabs.Find("teams")
 local spawns = BALLISTICS.AdminTabs.Find("spawns")
@@ -259,7 +259,8 @@ local rules = BALLISTICS.AdminTabs.Find("rules")
 local weapons = BALLISTICS.AdminTabs.Find("weapons")
 local req = BALLISTICS.AdminTabs.ResetRequest(teams)
 check("Teams reset sends the teams section", req and req.reset == true and req.section == "teams" and teams.title == "Teams")
-check("Spawns and Rules placeholders do not reset", BALLISTICS.AdminTabs.ResetRequest(spawns) == nil and BALLISTICS.AdminTabs.ResetRequest(rules) == nil)
+local spawnReq = BALLISTICS.AdminTabs.ResetRequest(spawns)
+check("Spawns reset is a spawn action and Rules stays off", spawnReq and spawnReq.kind == "spawns" and spawnReq.reset == true and spawnReq.section == nil and BALLISTICS.AdminTabs.ResetRequest(rules) == nil)
 check("Rules sub-tabs keep a section but stay disabled", weapons.reset.section == "weapons" and weapons.reset.enabled == false and weapons.implemented == false)
 check("the admin button is admins only", BALLISTICS.AdminTabs.ButtonVisible(true) == true and BALLISTICS.AdminTabs.ButtonVisible(false) == false and BALLISTICS.AdminTabs.ButtonVisible(nil) == false)
 

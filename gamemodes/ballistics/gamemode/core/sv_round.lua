@@ -19,14 +19,14 @@ local function isValid(ent)
 	return type(ent) == "table"
 end
 
--- Phase 4's spawns module sets BALLISTICS.Spawns.HasBoth. Until it exists,
--- flags are treated as placed so a 1v1 can start.
+-- modules/spawns sets BALLISTICS.Spawns.HasBoth. With that module absent there
+-- are no flags, so the match cannot start.
 function BALLISTICS.HasBothFlags()
 	local spawns = BALLISTICS.Spawns
 	if type(spawns) == "table" and type(spawns.HasBoth) == "function" then
 		return spawns.HasBoth() == true
 	end
-	return true
+	return false
 end
 
 local function broadcast(target)
@@ -150,12 +150,12 @@ function BALLISTICS.Round.Broadcast(ply)
 	broadcast(ply)
 end
 
--- Fallback ring (40 u) until modules/spawns provides PlayerSpawn(team, slot).
+-- modules/spawns PlayerSpawn stands each slot on a ring around that team's flag.
+-- The ring below is only for a round driver loaded without the spawns module.
 function BALLISTICS.Round.SpawnTransform(teamId, slot)
 	local spawns = BALLISTICS.Spawns
 	if type(spawns) == "table" and type(spawns.PlayerSpawn) == "function" then
-		local pos, ang = spawns.PlayerSpawn(teamId, slot)
-		if pos then return pos, ang end
+		return spawns.PlayerSpawn(teamId, slot)
 	end
 	local per = 5
 	if BALLISTICS.Slots and BALLISTICS.Slots.Limit then per = BALLISTICS.Slots.Limit() end

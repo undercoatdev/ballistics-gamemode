@@ -1,5 +1,5 @@
 -- Admin tab tree. Pure data: which sub-tabs exist and whether Reset is live.
--- Spawns and Rules stay placeholders until their phases. Teams is live.
+-- Rules stays a placeholder until its phase. Spawns and Teams are live.
 
 BALLISTICS = BALLISTICS or {}
 BALLISTICS.AdminTabs = BALLISTICS.AdminTabs or {}
@@ -8,8 +8,8 @@ local TREE = {
 	{
 		id = "spawns",
 		title = "Spawns",
-		implemented = false,
-		reset = { enabled = false },
+		implemented = true,
+		reset = { enabled = true, kind = "spawns" },
 	},
 	{
 		id = "teams",
@@ -50,6 +50,7 @@ local function copyNode(node)
 		reset = {
 			enabled = reset.enabled == true,
 			section = reset.section,
+			kind = reset.kind,
 		},
 	}
 	if node.children then
@@ -87,11 +88,14 @@ function BALLISTICS.AdminTabs.Find(id, tree)
 	return found
 end
 
--- Payload for bal_config_set. Disabled placeholders return nil so the client
--- cannot reset a tab that is not implemented yet.
+-- Payload for a Reset button. Config tabs send bal_config_set. Spawns resets
+-- this map's flag file and does not touch Config. Disabled tabs return nil.
 function BALLISTICS.AdminTabs.ResetRequest(node)
 	if type(node) ~= "table" or type(node.reset) ~= "table" then return nil, "disabled" end
 	if node.reset.enabled ~= true then return nil, "disabled" end
+	if node.reset.kind == "spawns" then
+		return { reset = true, kind = "spawns" }
+	end
 	if type(node.reset.section) ~= "string" or node.reset.section == "" then
 		return nil, "section"
 	end

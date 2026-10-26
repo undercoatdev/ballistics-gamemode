@@ -59,6 +59,12 @@ function BALLISTICS.Admin.ConfirmReset(node)
 	if not (BALLISTICS.AdminTabs and BALLISTICS.AdminTabs.ResetRequest) then return end
 	local req = BALLISTICS.AdminTabs.ResetRequest(node)
 	if not req then return end
+	if req.kind == "spawns" then
+		if BALLISTICS.Spawns and BALLISTICS.Spawns.ConfirmReset then
+			BALLISTICS.Spawns.ConfirmReset()
+		end
+		return
+	end
 	if not Derma_Query or not net or not net.Start then return end
 	local title = (type(node) == "table" and node.title) or req.section
 	local msgName = "bal_config_set"
@@ -105,8 +111,8 @@ local function addNodes(sheet, nodes)
 		reset:Dock(RIGHT)
 		reset:SetWide(170)
 		reset:SetText("Reset to defaults")
-		local spec = node.reset or {}
-		if spec.enabled and spec.section then
+		local req = BALLISTICS.AdminTabs and BALLISTICS.AdminTabs.ResetRequest and BALLISTICS.AdminTabs.ResetRequest(node)
+		if req then
 			reset.DoClick = function()
 				BALLISTICS.Admin.ConfirmReset(node)
 			end

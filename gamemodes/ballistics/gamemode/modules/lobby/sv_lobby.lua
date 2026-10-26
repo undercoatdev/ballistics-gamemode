@@ -40,6 +40,9 @@ if BALLISTICS.Net and BALLISTICS.Net.Register then
 			BALLISTICS.Round.Broadcast(ply)
 		end
 		if BALLISTICS.BroadcastConfig then BALLISTICS.BroadcastConfig(ply) end
+		if BALLISTICS.Spawns and BALLISTICS.Spawns.Sync then
+			BALLISTICS.Spawns.Sync(ply)
+		end
 	end, { rate = 2 })
 
 	-- F2 (gm_showteam) calls GM:ShowTeam server-side; tell that client to open the lobby.
