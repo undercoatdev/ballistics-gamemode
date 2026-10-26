@@ -174,7 +174,7 @@ function CurTime() return clock end
 
 dofile("gamemodes/ballistics/gamemode/modules/spawns/sv_spawns.lua")
 -- The real server reloads on InitPostEntity, not at file load.
-check("no entities are made at file load", #(spawned or {}) == 0 or true)
+check("no flags are loaded at file load (waits for InitPostEntity)", BALLISTICS.Spawns.HasBoth() == false)
 BALLISTICS.Spawns.Reload()
 
 local function person(id, admin)
