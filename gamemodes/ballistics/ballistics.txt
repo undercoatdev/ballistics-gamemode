@@ -1,0 +1,11 @@
+"ballistics"
+{
+	"base"		"base"
+	"title"		"Ballistics Game Mode"
+	"maps"		""
+	"menusystem"	"1"
+	"workshopid"	""
+	"settings"
+	{
+	}
+}

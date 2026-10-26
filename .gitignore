@@ -1,0 +1,7 @@
+*.gma
+*.log
+.DS_Store
+*.bak
+/data/
+.vscode/
+.idea/

@@ -1,0 +1,1 @@
+-- Placeholder for luajit stubs (tests/support).
