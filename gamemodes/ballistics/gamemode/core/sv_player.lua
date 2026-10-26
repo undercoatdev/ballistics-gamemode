@@ -239,9 +239,12 @@ end
 function GM:PlayerSpawn(ply)
 	if not isPlayer(ply) then return end
 	if not ply.balNextSpawn then
+		-- A deferred join-spectator must not undo a round spawn in the same frame.
+		local token = ply.balSpawnToken or 0
 		local function sendOff()
 			if type(ply.IsValid) == "function" and ply:IsValid() ~= true then return end
 			if ply.balNextSpawn then return end
+			if (ply.balSpawnToken or 0) ~= token then return end
 			BALLISTICS.Player.MakeSpectator(ply)
 		end
 		if timer and timer.Simple then
@@ -252,6 +255,7 @@ function GM:PlayerSpawn(ply)
 		return
 	end
 	ply.balNextSpawn = false
+	ply.balSpawnToken = (ply.balSpawnToken or 0) + 1
 	if self.BaseClass and self.BaseClass.PlayerSpawn then
 		self.BaseClass.PlayerSpawn(self, ply)
 	end

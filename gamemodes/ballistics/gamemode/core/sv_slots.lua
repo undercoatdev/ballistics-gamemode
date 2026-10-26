@@ -273,6 +273,23 @@ function BALLISTICS.PlayerId(ply)
 	end
 	if kind == "number" then return tostring(ply) end
 	if not BALLISTICS.IsPlayer(ply) then return nil end
+	-- NextBots share one SteamID64 (the host's, or 90071996842377216).
+	-- UserID is unique per bot, so slots, money, and kills stay per player.
+	if type(ply.IsBot) == "function" and ply:IsBot() == true then
+		if type(ply.UserID) == "function" then
+			local uid = ply:UserID()
+			if uid ~= nil and uid ~= 0 and uid ~= "" then
+				return "bot:" .. tostring(uid)
+			end
+		end
+		if type(ply.EntIndex) == "function" then
+			local idx = ply:EntIndex()
+			if idx ~= nil and idx ~= 0 then
+				return "bot:" .. tostring(idx)
+			end
+		end
+		return nil
+	end
 	if type(ply.SteamID64) == "function" then
 		local id = ply:SteamID64()
 		if type(id) == "string" and id ~= "" and id ~= "0" then return id end

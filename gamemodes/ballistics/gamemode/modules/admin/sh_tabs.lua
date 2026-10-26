@@ -62,6 +62,26 @@ local function copyNode(node)
 	return out
 end
 
+-- A module can append a leaf. The core tree stays intact if that module is removed.
+function BALLISTICS.AdminTabs.Add(node)
+	if type(node) ~= "table" or type(node.id) ~= "string" or node.id == "" then return false end
+	for i = 1, #TREE do
+		if TREE[i].id == node.id then return false end
+	end
+	local reset = node.reset or {}
+	TREE[#TREE + 1] = {
+		id = node.id,
+		title = type(node.title) == "string" and node.title or node.id,
+		implemented = node.implemented == true,
+		reset = {
+			enabled = reset.enabled == true,
+			section = reset.section,
+			kind = reset.kind,
+		},
+	}
+	return true
+end
+
 function BALLISTICS.AdminTabs.Tree()
 	local out = {}
 	for i = 1, #TREE do
