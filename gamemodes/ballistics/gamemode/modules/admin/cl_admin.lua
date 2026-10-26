@@ -167,6 +167,27 @@ local function ensureFrame()
 		syncCursor()
 	end
 
+	-- Start lives here too, so it never depends on the team select panel.
+	local start = vgui.Create("DButton", frame)
+	start:Dock(BOTTOM)
+	start:DockMargin(0, 6, 0, 0)
+	start:SetTall(30)
+	start:SetText("Start match")
+	start.DoClick = function()
+		if net and net.Start then
+			net.Start("bal_match_start")
+			net.SendToServer()
+		end
+	end
+	start.Think = function(self)
+		local phase = BALLISTICS.Lobby and BALLISTICS.Lobby.Phase and BALLISTICS.Lobby.Phase()
+		local on = phase == nil or phase == "lobby"
+		if self:IsVisible() ~= on then
+			self:SetVisible(on)
+			if IsValid(frame) then frame:InvalidateLayout() end
+		end
+	end
+
 	local sheet = vgui.Create("DPropertySheet", frame)
 	sheet:Dock(FILL)
 	local tree = {}

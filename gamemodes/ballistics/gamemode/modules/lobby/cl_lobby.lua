@@ -533,6 +533,56 @@ function BALLISTICS.Lobby.Close()
 	if IsValid(frame) then frame:Close() end
 end
 
+function BALLISTICS.Lobby.Phase()
+	return state.phase
+end
+
+function BALLISTICS.Lobby.Toggle()
+	if BALLISTICS.Lobby.IsOpen() then
+		BALLISTICS.Lobby.Close()
+	elseif BALLISTICS.LobbyView.TeamsButtonVisible(state.phase) then
+		BALLISTICS.Lobby.Open()
+	end
+end
+
+-- Console fallback: `bal_teams` toggles the team select (F2 also opens it).
+if concommand and concommand.Add then
+	concommand.Add("bal_teams", function()
+		BALLISTICS.Lobby.Toggle()
+	end)
+end
+
+-- TEAMS button, top right left of ADMIN, every player, lobby phase only.
+-- Without it a closed lobby frame could only come back through F2.
+local teamsButton
+local function refreshTeamsButton()
+	if not vgui or not vgui.Create then return end
+	if not IsValid(teamsButton) then
+		teamsButton = vgui.Create("DButton")
+		teamsButton:SetZPos(32767)
+		teamsButton:SetText("")
+		teamsButton.DoClick = function()
+			BALLISTICS.Lobby.Toggle()
+		end
+		teamsButton.Paint = function(_, w, h)
+			surface.SetDrawColor(28, 28, 32, 230)
+			surface.DrawRect(0, 0, w, h)
+			surface.SetDrawColor(90, 150, 255, 255)
+			surface.DrawOutlinedRect(0, 0, w, h)
+			draw.SimpleText("TEAMS", "DermaDefaultBold", w / 2, h / 2, Color(190, 215, 255), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+		end
+	end
+	local V = BALLISTICS.LobbyView
+	local adminShown = BALLISTICS.ClientIsAdmin and BALLISTICS.ClientIsAdmin() == true
+	teamsButton:SetSize(V.TEAMS_W, V.TEAMS_H)
+	teamsButton:SetPos(V.TeamsButtonX((ScrW and ScrW()) or 0, adminShown), 10)
+	local show = V.TeamsButtonVisible(state.phase)
+	teamsButton:SetVisible(show)
+	if show then teamsButton:MoveToFront() end
+end
+
+timer.Create("Ballistics_TeamsButton", 0.25, 0, refreshTeamsButton)
+
 -- F2 runs GM:ShowTeam on the SERVER only; sv_lobby.lua forwards it here.
 if BALLISTICS.Net and BALLISTICS.Net.Register then
 	BALLISTICS.Net.Register("bal_lobby_open", function()

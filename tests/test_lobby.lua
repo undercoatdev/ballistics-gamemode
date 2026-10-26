@@ -323,4 +323,13 @@ end
 got["bal_lobby_ready"](nil, user)
 check("opening the lobby asks the server for a fresh snapshot", #sent == 3 and sent[1] == user and configs == 1)
 
+-- TEAMS toggle button: every player, lobby only, left of ADMIN.
+local LV = BALLISTICS.LobbyView
+check("TEAMS shows in the lobby", LV.TeamsButtonVisible("lobby") == true)
+check("TEAMS hides once the game starts", LV.TeamsButtonVisible("buy") == false and LV.TeamsButtonVisible("live") == false and LV.TeamsButtonVisible("post") == false)
+check("TEAMS shows before the phase is known", LV.TeamsButtonVisible(nil) == true)
+check("TEAMS sits left of ADMIN for admins", LV.TeamsButtonX(1920, true) == 1920 - 84 - 10 - 84 - 6)
+check("TEAMS takes the corner for non-admins", LV.TeamsButtonX(1920, false) == 1920 - 84 - 10)
+check("TEAMS never goes off screen", LV.TeamsButtonX(50, true) == 0)
+
 if failed then os.exit(1) end

@@ -509,3 +509,22 @@ function BALLISTICS.LobbyView.Hit(rects, x, y)
 	end
 	return nil
 end
+
+-- TEAMS toggle (top right, left of ADMIN). Every player sees it, lobby only.
+BALLISTICS.LobbyView.TEAMS_W = 84
+BALLISTICS.LobbyView.TEAMS_H = 26
+BALLISTICS.LobbyView.TOP_GAP = 6
+
+function BALLISTICS.LobbyView.TeamsButtonVisible(phase)
+	return phase == nil or phase == "lobby"
+end
+
+-- x of the TEAMS button: left of ADMIN when ADMIN is shown, else in its place.
+function BALLISTICS.LobbyView.TeamsButtonX(screenW, adminShown)
+	local w = BALLISTICS.LobbyView.TEAMS_W
+	local sw = tonumber(screenW) or 0
+	local x = sw - w - 10
+	if adminShown then x = x - w - BALLISTICS.LobbyView.TOP_GAP end
+	if x < 0 then x = 0 end
+	return x
+end
