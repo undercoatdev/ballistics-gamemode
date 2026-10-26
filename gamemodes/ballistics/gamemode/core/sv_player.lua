@@ -137,9 +137,52 @@ function BALLISTICS.Player.ApplyLoadout(ply)
 	if GM and GM.PlayerSetModel then GM:PlayerSetModel(ply) end
 end
 
+local spawnSpot
+
+local function applySpawnPoint(ply, pos, ang)
+	if not isPlayer(ply) then return end
+	if pos == nil then
+		pos = ply.balSpawnPos
+		ang = ply.balSpawnAng
+	end
+	if pos and ply.SetPos then ply:SetPos(pos) end
+	if ang and ply.SetEyeAngles then ply:SetEyeAngles(ang) end
+end
+
+-- The engine teleports a spawning player to whatever GM:PlayerSelectSpawn
+-- returns. One info_target is moved onto the flag ring for that call.
+local function ringSpot(pos, ang)
+	if not pos or not ents or type(ents.Create) ~= "function" then return nil end
+	local ent = spawnSpot
+	local alive = ent and (type(ent.IsValid) ~= "function" or ent:IsValid() ~= false)
+	if not alive then
+		ent = ents.Create("info_target")
+		if not ent then return nil end
+		spawnSpot = ent
+		if ent.Spawn then ent:Spawn() end
+	end
+	if ent.SetPos then ent:SetPos(pos) end
+	if ang and ent.SetAngles then ent:SetAngles(ang) end
+	return ent
+end
+
+local function reapplySpawn(ply, token, pos, ang)
+	if not timer or not timer.Simple then return end
+	timer.Simple(0, function()
+		if not isPlayer(ply) then return end
+		if type(ply.IsValid) == "function" and ply:IsValid() ~= true then return end
+		if (ply.balSpawnToken or 0) ~= token then return end
+		if ply.balNextSpawn then return end
+		if ply.Alive and ply:Alive() == false then return end
+		applySpawnPoint(ply, pos, ang)
+	end)
+end
+
 function BALLISTICS.Player.MakeSpectator(ply)
 	if not isPlayer(ply) then return end
 	ply.balNextSpawn = false
+	ply.balSpawnPos = nil
+	ply.balSpawnAng = nil
 	local id = BALLISTICS.PlayerId and BALLISTICS.PlayerId(ply)
 	local slotted = nil
 	if id and BALLISTICS.Slots and BALLISTICS.Slots.TeamOf then
@@ -205,6 +248,14 @@ function BALLISTICS.Player.SpawnInRound(ply)
 	end
 	if not playingTeam(teamId) then return false, "slot" end
 	BALLISTICS.Player.Track(ply)
+	local pos, ang
+	if BALLISTICS.Round and BALLISTICS.Round.SpawnTransform then
+		pos, ang = BALLISTICS.Round.SpawnTransform(teamId, slot)
+	end
+	-- Stash before Spawn so PlayerSelectSpawn can hand the engine the flag ring
+	-- instead of info_player_start. Cleared when they go back to spectator.
+	ply.balSpawnPos = pos
+	ply.balSpawnAng = ang
 	ply.balNextSpawn = true
 	if ply.SetTeam then ply:SetTeam(teamId) end
 	if ply.UnSpectate then ply:UnSpectate() end
@@ -235,12 +286,10 @@ function BALLISTICS.Player.SpawnInRound(ply)
 	if BALLISTICS.Round and BALLISTICS.Round.Phase and BALLISTICS.Round.Phase() == "buy" and freezeInBuy() then
 		BALLISTICS.Player.SetFrozen(ply, true)
 	end
-	local pos, ang
-	if BALLISTICS.Round and BALLISTICS.Round.SpawnTransform then
-		pos, ang = BALLISTICS.Round.SpawnTransform(teamId, slot)
-	end
-	if pos and ply.SetPos then ply:SetPos(pos) end
-	if ang and ply.SetEyeAngles then ply:SetEyeAngles(ang) end
+	-- Freeze and the engine spawn can both land after the hook. Put them on the
+	-- ring once more now, and again next tick once observer mode has finished.
+	applySpawnPoint(ply, pos, ang)
+	reapplySpawn(ply, ply.balSpawnToken or 0, pos, ang)
 	return true
 end
 
@@ -271,12 +320,36 @@ function GM:PlayerSpawn(ply)
 	end
 	ply.balNextSpawn = false
 	ply.balSpawnToken = (ply.balSpawnToken or 0) + 1
+	local token = ply.balSpawnToken
 	if self.BaseClass and self.BaseClass.PlayerSpawn then
 		self.BaseClass.PlayerSpawn(self, ply)
 	end
 	BALLISTICS.Player.ApplyLoadout(ply)
+	applySpawnPoint(ply)
 	if BALLISTICS.Round and BALLISTICS.Round.Phase and BALLISTICS.Round.Phase() == "buy" and freezeInBuy() then
 		BALLISTICS.Player.SetFrozen(ply, true)
+	end
+	applySpawnPoint(ply)
+	reapplySpawn(ply, token)
+end
+
+-- Map info_player_* is the wrong place for a slotted team. While a round spawn
+-- is in progress, the engine must use the flag ring as the spawn point.
+function GM:PlayerSelectSpawn(ply, transition)
+	if not transition and isPlayer(ply) and ply.balNextSpawn then
+		local pos = ply.balSpawnPos
+		local ang = ply.balSpawnAng
+		if not pos and BALLISTICS.Round and BALLISTICS.Round.SpawnTransform and BALLISTICS.Slots and BALLISTICS.Slots.TeamOf then
+			local teamId, slot = BALLISTICS.Slots.TeamOf(ply)
+			if teamId == GOOD or teamId == BAD then
+				pos, ang = BALLISTICS.Round.SpawnTransform(teamId, slot)
+			end
+		end
+		local spot = ringSpot(pos, ang)
+		if spot then return spot end
+	end
+	if self.BaseClass and self.BaseClass.PlayerSelectSpawn then
+		return self.BaseClass.PlayerSelectSpawn(self, ply, transition)
 	end
 end
 

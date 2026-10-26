@@ -163,7 +163,7 @@ function State:_enterBuy(now, matchStart)
 	end
 	self.phase = PHASE_BUY
 	self.enteredAt = now
-	self.endsAt = now + duration(self, "BuyTime", 10)
+	self.endsAt = now + duration(self, "BuyTime", 20)
 	self.winner = nil
 	self.reason = nil
 	return { phaseEvent(prev, PHASE_BUY, self.round, matchStart) }

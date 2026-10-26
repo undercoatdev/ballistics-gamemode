@@ -342,6 +342,23 @@ check("buy spawns the knife only", #good.weapons == 1 and good.weapons[1] == "ta
 check("buy forces combine models", good.model == "models/player/combine_soldier.mdl" and bad.model == "models/player/combine_super_soldier.mdl")
 check("buy freezes both sides", good.frozen == true and bad.frozen == true and good.movetype == (MOVETYPE_NONE or 0) and bad.movetype == (MOVETYPE_NONE or 0))
 check("buy puts them on a ring around their flag", good.pos and bad.pos and math.abs(good.pos.x - 40) < 1e-6 and math.abs((bad.pos.x - good.pos.x) - 256) < 1e-6)
+
+ents = {
+	Create = function()
+		local ent = { spawned = false }
+		function ent:SetPos(p) self.pos = p end
+		function ent:GetPos() return self.pos end
+		function ent:SetAngles(a) self.ang = a end
+		function ent:Spawn() self.spawned = true end
+		function ent:IsValid() return true end
+		return ent
+	end,
+}
+good.balNextSpawn = true
+local spot = GM:PlayerSelectSpawn(good)
+check("a slotted spawn selects the flag ring, not a map start", spot and spot:GetPos() and math.abs(spot:GetPos().x - 40) < 1e-6 and math.abs((spot:GetPos().y or 0) - (good.pos.y or 0)) < 1e-6)
+good.balNextSpawn = false
+ents = nil
 check("spawned players are on their teams and alive", good.alive == true and good.teamId == TEAM_GOOD and bad.teamId == TEAM_BAD)
 
 local gbal, gpend = BALLISTICS.Money.Get(good)
@@ -363,19 +380,19 @@ check("mid buy stays buy", BALLISTICS.Round.Phase() == "buy" and good.frozen == 
 
 good.pbDown = true
 bad.pbDown = true
-BALLISTICS.Round.Tick(10)
+BALLISTICS.Round.Tick(20)
 check("buy advances to live and unfreezes", BALLISTICS.Round.Phase() == "live" and good.frozen == false and bad.frozen == false and good.movetype == (MOVETYPE_WALK or 2))
-BALLISTICS.Round.Tick(10.5)
+BALLISTICS.Round.Tick(20.5)
 check("a team of only knocked-out players does not lose", BALLISTICS.Round.Phase() == "live" and good.pbDown == true and good.alive == true and bad.pbDown == true)
 
-BALLISTICS.Round.Tick(610)
-local snap = BALLISTICS.Round.Snapshot(610)
+BALLISTICS.Round.Tick(620)
+local snap = BALLISTICS.Round.Snapshot(620)
 check("round ends in a draw at 10 min", BALLISTICS.Round.Phase() == "post" and snap.winner == "draw" and snap.reason == "timeout" and snap.round == 1)
 gbal, gpend = BALLISTICS.Money.Get(good)
 local _, bpend = BALLISTICS.Money.Get(bad)
 check("a draw pays Gains.draw to everyone", gbal == 900 and gpend == 700 and bpend == 500 and endings[1] == "draw:timeout")
 
-BALLISTICS.Round.Tick(615)
+BALLISTICS.Round.Tick(625)
 gbal, gpend = BALLISTICS.Money.Get(good)
 bbal = BALLISTICS.Money.Get(bad)
 check("next round is buy and commits pending", BALLISTICS.Round.Phase() == "buy" and BALLISTICS.Round.Number() == 2 and gbal == 1600 and gpend == 0 and bbal == 1500 and good.nw.bal_pending == 0)
@@ -383,7 +400,7 @@ check("the next buy freezes and re-kits", good.frozen == true and #good.weapons 
 
 check("phase order is lobby buy live post buy", phases[1] == "lobby>buy" and phases[2] == "buy>live" and phases[3] == "live>post" and phases[4] == "post>buy")
 
-BALLISTICS.Round.Tick(625)
+BALLISTICS.Round.Tick(645)
 check("second live unfreezes", BALLISTICS.Round.Phase() == "live" and good.frozen == false)
 
 good.weapons = { "tacrp_knife", "tacrp_spr" }
@@ -404,7 +421,7 @@ check("live death wipes the inventory again", #good.weapons == 0 and medCalls[1]
 check("last living teammate is gone so they roam", good.spec == (OBS_MODE_ROAMING or 6))
 check("they are still slotted until the next buy", BALLISTICS.Slots.TeamOf(good) == TEAM_GOOD and good.alive == false)
 
-BALLISTICS.Round.Tick(625.2)
+BALLISTICS.Round.Tick(645.2)
 local score = BALLISTICS.Round.Score()
 snap = BALLISTICS.Round.Snapshot(625.2)
 check("a knocked-out side wins when the other side is dead", BALLISTICS.Round.Phase() == "post" and snap.winner == "bad" and snap.reason == "elimination" and score.good == 0 and score.bad == 1)

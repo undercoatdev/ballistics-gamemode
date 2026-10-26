@@ -83,7 +83,7 @@ end
 check("general fields are the rules list, in order", generalOk)
 check("general hides models, tick rate, and admin flag", generalMap.ModelGood == nil and generalMap.TickRate == nil and generalMap.AdminSuperOnly == nil and generalMap.TimeoutWinner == nil)
 check("round length is shown in minutes", generalMap.RoundTime.kind == "minutes" and generalMap.RoundTime.display == 10 and generalMap.RoundTime.unit == "min" and generalMap.RoundTime.max == 60)
-check("buy time stays in seconds", generalMap.BuyTime.display == 10 and generalMap.BuyTime.unit == "s" and generalMap.BuyTime.kind == "number")
+check("buy time stays in seconds", generalMap.BuyTime.display == 20 and generalMap.BuyTime.unit == "s" and generalMap.BuyTime.kind == "number")
 check("radii are shown in metres", generalMap.ObjectiveRadius.kind == "metres" and generalMap.ObjectiveRadius.unit == "m" and math.abs(generalMap.ObjectiveRadius.display - 2) < 1e-6 and math.abs(generalMap.CustomizeRadius.display - 2) < 1e-6)
 check("health mode is a realistic/arcade switch", generalMap.HealthMode.kind == "enum" and generalMap.HealthMode.display == "realistic" and generalMap.HealthMode.values[1].id == "realistic" and generalMap.HealthMode.values[2].label == "Arcade")
 check("capture flags are booleans", generalMap.CaptureDecay.kind == "bool" and generalMap.CaptureDecay.display == true and generalMap.CaptureContestedFreeze.display == true)
@@ -158,7 +158,7 @@ check("gains reset restores gains only", C.Gains.kill == 500 and C.Gains.round_w
 
 dirty()
 C.ResetSection(V.ResetPayload("general").section)
-check("general reset restores general only", C.StartMoney == 1000 and C.RoundTime == 600 and C.BuyTime == 10 and C.HealthMode == "realistic" and C.CaptureDecay == true and nearRadius() and C.Gains.kill == 15 and C.Costs.tacrp_mp5 == 11 and C.AttCosts.perk == 14 and C.SlotsPerTeam == 8 and C.BuyLimits.weapon_per_round == 2 and C.HealedUpOrgans == 10 and C.BuyAmmoMags == 3)
+check("general reset restores general only", C.StartMoney == 1000 and C.RoundTime == 600 and C.BuyTime == 20 and C.HealthMode == "realistic" and C.CaptureDecay == true and nearRadius() and C.Gains.kill == 15 and C.Costs.tacrp_mp5 == 11 and C.AttCosts.perk == 14 and C.SlotsPerTeam == 8 and C.BuyLimits.weapon_per_round == 2 and C.HealedUpOrgans == 10 and C.BuyAmmoMags == 3)
 
 dirty()
 C.ResetSection(V.ResetPayload("costs").section)
