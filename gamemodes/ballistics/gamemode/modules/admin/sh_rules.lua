@@ -44,13 +44,22 @@ local GENERAL = {
 			{ id = "arcade", label = "Arcade" },
 		},
 	},
+	{
+		path = "HealedUpOrgans",
+		label = "Healed up organs",
+		kind = "int",
+		min = 0,
+		max = 100,
+		decimals = 0,
+		blurb = "At each new round every organ heals this many units (capped at max). Destroyed organs always come back working, just weak.",
+	},
 	{ path = "CaptureTimeOne", label = "Capture time, 1 player (seconds)", kind = "number", min = 1, max = 3600, decimals = 0, unit = "s" },
 	{ path = "CaptureTimeTwo", label = "Capture time, 2 players (seconds)", kind = "number", min = 1, max = 3600, decimals = 0, unit = "s" },
 	{ path = "CaptureDecay", label = "Capture decay", kind = "bool" },
 	{ path = "CaptureContestedFreeze", label = "Contested capture freezes", kind = "bool" },
 	{ path = "ObjectiveRadius", label = "Objective radius (metres)", kind = "metres", min = 16 * METRES_PER_UNIT, max = 1000 * METRES_PER_UNIT, decimals = 2, unit = "m" },
 	{ path = "CustomizeRadius", label = "Customise radius (metres)", kind = "metres", min = 16 * METRES_PER_UNIT, max = 1000 * METRES_PER_UNIT, decimals = 2, unit = "m" },
-	{ path = "BuyAmmoMags", label = "Ammo magazines", kind = "int", min = 0, max = 30, decimals = 0 },
+	{ path = "BuyAmmoMags", label = "Magazines per gun", kind = "int", min = 0, max = 30, decimals = 0 },
 	{ path = "RoundsToWin", label = "Rounds to win (0 = endless)", kind = "int", min = 0, max = 1000, decimals = 0 },
 }
 
@@ -157,6 +166,7 @@ local function generalRows()
 			max = spec.max,
 			decimals = spec.decimals,
 			unit = spec.unit,
+			blurb = spec.blurb,
 		}
 		if spec.values then
 			local values = {}

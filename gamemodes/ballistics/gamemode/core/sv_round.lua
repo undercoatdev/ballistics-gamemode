@@ -82,9 +82,16 @@ local function handle(events)
 					if BALLISTICS.Money and BALLISTICS.Money.Reset then
 						BALLISTICS.Money.Reset()
 					end
-				elseif BALLISTICS.Money and BALLISTICS.Money.CommitAll then
-					BALLISTICS.Money.CommitAll()
+					if BALLISTICS.Gear and BALLISTICS.Gear.Reset then BALLISTICS.Gear.Reset() end
+					if BALLISTICS.Organs and BALLISTICS.Organs.Reset then BALLISTICS.Organs.Reset() end
+				else
+					if BALLISTICS.Money and BALLISTICS.Money.CommitAll then
+						BALLISTICS.Money.CommitAll()
+					end
+					-- Organ hp is read before corpses (and their records) are removed.
+					if BALLISTICS.Organs and BALLISTICS.Organs.Capture then BALLISTICS.Organs.Capture() end
 				end
+				if BALLISTICS.Cleanup and BALLISTICS.Cleanup.Round then BALLISTICS.Cleanup.Round() end
 				spawnSlotted()
 			elseif event.new == "live" then
 				unfreezeSlotted()

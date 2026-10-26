@@ -72,6 +72,7 @@ check("gain rows", #gains == 4 and gains[1].path == "Gains.kill" and gains[1].di
 local generalMap, general = rowMap("general")
 local generalPaths = {
 	"RoundTime", "BuyTime", "PostRoundTime", "StartMoney", "MaxMoney", "HealthMode",
+	"HealedUpOrgans",
 	"CaptureTimeOne", "CaptureTimeTwo", "CaptureDecay", "CaptureContestedFreeze",
 	"ObjectiveRadius", "CustomizeRadius", "BuyAmmoMags", "RoundsToWin",
 }
@@ -86,6 +87,9 @@ check("buy time stays in seconds", generalMap.BuyTime.display == 10 and generalM
 check("radii are shown in metres", generalMap.ObjectiveRadius.kind == "metres" and generalMap.ObjectiveRadius.unit == "m" and math.abs(generalMap.ObjectiveRadius.display - 2) < 1e-6 and math.abs(generalMap.CustomizeRadius.display - 2) < 1e-6)
 check("health mode is a realistic/arcade switch", generalMap.HealthMode.kind == "enum" and generalMap.HealthMode.display == "realistic" and generalMap.HealthMode.values[1].id == "realistic" and generalMap.HealthMode.values[2].label == "Arcade")
 check("capture flags are booleans", generalMap.CaptureDecay.kind == "bool" and generalMap.CaptureDecay.display == true and generalMap.CaptureContestedFreeze.display == true)
+check("magazines per gun", generalMap.BuyAmmoMags.label == "Magazines per gun" and generalMap.BuyAmmoMags.display == 3)
+local organBlurb = "At each new round every organ heals this many units (capped at max). Destroyed organs always come back working, just weak."
+check("healed organs row", generalMap.HealedUpOrgans.label == "Healed up organs" and generalMap.HealedUpOrgans.kind == "int" and generalMap.HealedUpOrgans.display == 10 and generalMap.HealedUpOrgans.min == 0 and generalMap.HealedUpOrgans.max == 100 and generalMap.HealedUpOrgans.blurb == organBlurb)
 
 local committed = V.Commit(generalMap.RoundTime, 12)
 check("committing minutes stores seconds", committed and committed.key == "RoundTime" and committed.value == 720)
@@ -124,6 +128,8 @@ local function dirty()
 	C.Set("BuyLimits.weapon_per_round", 2)
 	C.Set("CaptureDecay", false)
 	C.Set("BuyTime", 30)
+	C.Set("HealedUpOrgans", 33)
+	C.Set("BuyAmmoMags", 9)
 end
 
 local function nearRadius()
@@ -152,7 +158,7 @@ check("gains reset restores gains only", C.Gains.kill == 500 and C.Gains.round_w
 
 dirty()
 C.ResetSection(V.ResetPayload("general").section)
-check("general reset restores general only", C.StartMoney == 1000 and C.RoundTime == 600 and C.BuyTime == 10 and C.HealthMode == "realistic" and C.CaptureDecay == true and nearRadius() and C.Gains.kill == 15 and C.Costs.tacrp_mp5 == 11 and C.AttCosts.perk == 14 and C.SlotsPerTeam == 8 and C.BuyLimits.weapon_per_round == 2)
+check("general reset restores general only", C.StartMoney == 1000 and C.RoundTime == 600 and C.BuyTime == 10 and C.HealthMode == "realistic" and C.CaptureDecay == true and nearRadius() and C.Gains.kill == 15 and C.Costs.tacrp_mp5 == 11 and C.AttCosts.perk == 14 and C.SlotsPerTeam == 8 and C.BuyLimits.weapon_per_round == 2 and C.HealedUpOrgans == 10 and C.BuyAmmoMags == 3)
 
 dirty()
 C.ResetSection(V.ResetPayload("costs").section)
@@ -160,7 +166,7 @@ check("costs reset restores every item price and not attachments", C.Costs.tacrp
 
 dirty()
 C.ResetSection(V.ResetPayload("rules").section)
-check("rules reset restores rules and leaves teams and buy limits", C.Costs.tacrp_mp5 == 600 and C.Costs.nade_frag == 500 and C.Costs.med_pills == 50 and C.AttCosts.perk == 700 and C.AttRefundOnDetach == false and C.Gains.kill == 500 and C.Gains.round_win == 1000 and C.StartMoney == 1000 and C.RoundTime == 600 and C.HealthMode == "realistic" and C.CaptureDecay == true and nearRadius() and C.SlotsPerTeam == 8 and C.BuyLimits.weapon_per_round == 2)
+check("rules reset restores rules and leaves teams and buy limits", C.Costs.tacrp_mp5 == 600 and C.Costs.nade_frag == 500 and C.Costs.med_pills == 50 and C.AttCosts.perk == 700 and C.AttRefundOnDetach == false and C.Gains.kill == 500 and C.Gains.round_win == 1000 and C.StartMoney == 1000 and C.RoundTime == 600 and C.HealthMode == "realistic" and C.CaptureDecay == true and nearRadius() and C.SlotsPerTeam == 8 and C.BuyLimits.weapon_per_round == 2 and C.HealedUpOrgans == 10 and C.BuyAmmoMags == 3)
 
 dirty()
 local unknownOk = C.ResetSection("nope")

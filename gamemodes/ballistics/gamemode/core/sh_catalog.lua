@@ -5,14 +5,14 @@ BALLISTICS = BALLISTICS or {}
 BALLISTICS.Catalog = BALLISTICS.Catalog or {}
 
 local weapons = {
-	{ key = "tacrp_ex_m1911", kind = "weapon", class = "tacrp_ex_m1911", name = "Colt M1911" },
-	{ key = "tacrp_mr96", kind = "weapon", class = "tacrp_mr96", name = "Manurhin MR96" },
-	{ key = "tacrp_skorpion", kind = "weapon", class = "tacrp_skorpion", name = "Skorpion vz. 61" },
-	{ key = "tacrp_mp5", kind = "weapon", class = "tacrp_mp5", name = "HK MP5A3" },
-	{ key = "tacrp_ex_ak47", kind = "weapon", class = "tacrp_ex_ak47", name = "AK-47" },
-	{ key = "tacrp_hk417", kind = "weapon", class = "tacrp_hk417", name = "HK 417" },
-	{ key = "tacrp_tgs12", kind = "weapon", class = "tacrp_tgs12", name = "Tomahawk Matador" },
-	{ key = "tacrp_spr", kind = "weapon", class = "tacrp_spr", name = "Remington M700 SPS" },
+	{ key = "tacrp_ex_m1911", kind = "weapon", class = "tacrp_ex_m1911", name = "Colt M1911", category = "Pistol" },
+	{ key = "tacrp_mr96", kind = "weapon", class = "tacrp_mr96", name = "Manurhin MR96", category = "Magnum" },
+	{ key = "tacrp_skorpion", kind = "weapon", class = "tacrp_skorpion", name = "Skorpion vz. 61", category = "Machine Pistol" },
+	{ key = "tacrp_mp5", kind = "weapon", class = "tacrp_mp5", name = "HK MP5A3", category = "SMG" },
+	{ key = "tacrp_ex_ak47", kind = "weapon", class = "tacrp_ex_ak47", name = "AK-47", category = "Assault Rifle" },
+	{ key = "tacrp_hk417", kind = "weapon", class = "tacrp_hk417", name = "HK 417", category = "Battle Rifle" },
+	{ key = "tacrp_tgs12", kind = "weapon", class = "tacrp_tgs12", name = "Tomahawk Matador", category = "Shotgun" },
+	{ key = "tacrp_spr", kind = "weapon", class = "tacrp_spr", name = "Remington M700 SPS", category = "Sniper" },
 }
 
 local throwables = {
@@ -41,6 +41,50 @@ index(meds)
 
 function BALLISTICS.Catalog.Weapons()
 	return weapons
+end
+
+BALLISTICS.Catalog.WeaponCategoryOrder = {
+	"Pistol",
+	"Magnum",
+	"Machine Pistol",
+	"SMG",
+	"Assault Rifle",
+	"Battle Rifle",
+	"Shotgun",
+	"Sniper",
+}
+
+-- Ordered non-empty groups. A category outside the list falls under "Other".
+function BALLISTICS.Catalog.WeaponGroups(list)
+	if list == nil then list = weapons end
+	if type(list) ~= "table" then return {} end
+	local order = BALLISTICS.Catalog.WeaponCategoryOrder
+	local buckets = {}
+	for i = 1, #order do
+		buckets[order[i]] = {}
+	end
+	local other = {}
+	for i = 1, #list do
+		local item = list[i]
+		local cat = type(item) == "table" and item.category or nil
+		if type(cat) == "string" and buckets[cat] then
+			local bucket = buckets[cat]
+			bucket[#bucket + 1] = item
+		else
+			other[#other + 1] = item
+		end
+	end
+	local groups = {}
+	for i = 1, #order do
+		local items = buckets[order[i]]
+		if #items > 0 then
+			groups[#groups + 1] = { category = order[i], items = items }
+		end
+	end
+	if #other > 0 then
+		groups[#groups + 1] = { category = "Other", items = other }
+	end
+	return groups
 end
 
 function BALLISTICS.Catalog.Throwables()

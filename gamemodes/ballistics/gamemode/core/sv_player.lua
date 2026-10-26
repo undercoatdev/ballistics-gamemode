@@ -209,14 +209,29 @@ function BALLISTICS.Player.SpawnInRound(ply)
 	if ply.SetTeam then ply:SetTeam(teamId) end
 	if ply.UnSpectate then ply:UnSpectate() end
 	if ply.SetNoTarget then ply:SetNoTarget(false) end
+	-- Alive() is false for a player who died in the post round. Spawn() makes
+	-- everyone alive, so the keep check has to happen first.
+	local keepGear = false
+	if BALLISTICS.Gear and type(BALLISTICS.Gear.WillKeep) == "function" then
+		keepGear = BALLISTICS.Gear.WillKeep(ply) == true
+	end
 	if ply.Spawn then
 		ply:Spawn()
 	else
 		if GM and GM.PlayerSpawn then GM:PlayerSpawn(ply) end
 	end
 	-- Spawn() runs every PlayerSpawn hook. Re-apply afterwards so the knife,
-	-- model, and freeze are the last word.
+	-- model, and freeze are the last word. Gear and organs come after that
+	-- second strip, or the strip throws the restored loadout away.
 	BALLISTICS.Player.ApplyLoadout(ply)
+	if keepGear and BALLISTICS.Gear and type(BALLISTICS.Gear.ApplySpawn) == "function" then
+		BALLISTICS.Gear.ApplySpawn(ply)
+	elseif BALLISTICS.Gear and type(BALLISTICS.Gear.ClearMeds) == "function" then
+		BALLISTICS.Gear.ClearMeds(ply)
+	end
+	if BALLISTICS.Organs and type(BALLISTICS.Organs.ApplySpawn) == "function" then
+		BALLISTICS.Organs.ApplySpawn(ply)
+	end
 	if BALLISTICS.Round and BALLISTICS.Round.Phase and BALLISTICS.Round.Phase() == "buy" and freezeInBuy() then
 		BALLISTICS.Player.SetFrozen(ply, true)
 	end

@@ -107,10 +107,13 @@ local function wrapAttach(wep)
 	if type(wep.Attach) ~= "function" then return end
 	local original = wep.Attach
 	wep.BallisticsAttWrapped = true
+	-- Gear restore calls this, not the wrapper, so a kept gun is not charged.
+	wep.BallisticsAttOriginal = original
 	wep.Attach = function(self, slot, att, silent, suppress)
 		local slottbl = self.Attachments and self.Attachments[slot]
 		local before = slottbl and slottbl.Installed
 		local r1, r2 = original(self, slot, att, silent, suppress)
+		if self.BallisticsAttRestore == true then return r1, r2 end
 		slottbl = self.Attachments and self.Attachments[slot]
 		local after = slottbl and slottbl.Installed
 		local price = slottbl and BALLISTICS.AttPrice.Cost(slottbl) or nil

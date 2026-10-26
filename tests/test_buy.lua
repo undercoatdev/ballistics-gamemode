@@ -43,6 +43,7 @@ check("buy files do not bind the C key", not buySrc:find("menu_context", 1, true
 check("wheel exposes Open Hide IsOpen", buySrc:find("BuyWheel.Open", 1, true)
 	and buySrc:find("BuyWheel.Hide", 1, true)
 	and buySrc:find("BuyWheel.IsOpen", 1, true))
+check("weapon tab groups by category", buySrc:find("WeaponGroups", 1, true) ~= nil)
 
 local compiled = loadfile("gamemodes/ballistics/gamemode/modules/buy/cl_buywheel.lua")
 check("client wheel compiles", compiled ~= nil)
@@ -238,6 +239,19 @@ local ammo, clip = BALLISTICS.Buy.WeaponAmmo({
 	ClipSize = 7,
 })
 check("Primary.Ammo wins over the SWEP field", ammo == "ar2" and clip == 30)
+
+ammo, clip = BALLISTICS.Buy.WeaponAmmo({
+	Primary = { Ammo = "ar2", ClipSize = 30 },
+	GetMaxClip1 = function() return 12 end,
+	ClipSize = 7,
+})
+check("GetMaxClip1 wins over Primary.ClipSize", ammo == "ar2" and clip == 12)
+
+ammo, clip = BALLISTICS.Buy.WeaponAmmo({
+	Primary = { Ammo = "pistol", ClipSize = 7 },
+	GetMaxClip1 = function() return 0 end,
+})
+check("a zero GetMaxClip1 falls back to Primary.ClipSize", ammo == "pistol" and clip == 7)
 
 ammo, clip = BALLISTICS.Buy.WeaponAmmo({
 	Primary = { Ammo = "", ClipSize = 0 },
@@ -515,5 +529,36 @@ buyOk = BALLISTICS.Buy.Request(ply, "tacrp_hk417")
 check("exact balance can buy the hk417", buyOk == true and BALLISTICS.Money.Get(ply) == 0)
 buyOk, buyErr = BALLISTICS.Buy.Request(ply, "med_pills")
 check("broke player is refused", buyOk == false and buyErr == "money" and ply.pbMed.counts[1] == 0)
+
+-- TacRP EquipAmmo adds default magazines during Give. The reserve must ignore them.
+dofile("gamemodes/ballistics/gamemode/modules/ammo/sh_ammo.lua")
+fresh()
+local store = { pistol = 0 }
+function ply:GetAmmo() return store end
+function ply:SetAmmo(n, name) store[name] = n end
+function ply:Give(class, noAmmo)
+	self.giveCalls[#self.giveCalls + 1] = class
+	self.noAmmo = noAmmo
+	if self.failGive then return nil end
+	local spec = self.specs and self.specs[class] or { ammo = "pistol", clip = 7 }
+	local wep = {
+		Primary = { Ammo = spec.ammo, ClipSize = spec.clip },
+	}
+	function wep:IsValid() return true end
+	function wep:GetMaxClip1() return 9 end
+	function wep:SetClip1(n) self.clipSet = n end
+	store[spec.ammo] = (store[spec.ammo] or 0) + spec.clip * 2
+	self.weapons[class] = wep
+	return wep
+end
+buyOk = BALLISTICS.Buy.Request(ply, "tacrp_ex_m1911")
+local given = ply:GetWeapon("tacrp_ex_m1911")
+check("give skips default ammo", buyOk == true and ply.noAmmo == true)
+check("reserve is 3 live clips, not the injected default", store.pistol == 27)
+check("the bought gun is filled to the live clip", given and given.clipSet == 9)
+ply:StripWeapon("tacrp_ex_m1911")
+store.pistol = 90
+buyOk = BALLISTICS.Buy.Request(ply, "tacrp_ex_m1911")
+check("a second gun adds 3 clips to the old reserve", buyOk == true and store.pistol == 117)
 
 if failed then os.exit(1) end

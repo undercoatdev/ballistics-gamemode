@@ -76,6 +76,12 @@ function BALLISTICS.Admin.BuildRules(parent, sectionId)
 		send(payload)
 	end
 
+	local function hover(panel, row)
+		if panel == nil or type(row) ~= "table" then return end
+		if type(row.blurb) ~= "string" or row.blurb == "" then return end
+		if panel.SetTooltip then panel:SetTooltip(row.blurb) end
+	end
+
 	local function addLabel(line, text)
 		local lab = vgui.Create("DLabel", line)
 		lab:Dock(FILL)
@@ -90,8 +96,10 @@ function BALLISTICS.Admin.BuildRules(parent, sectionId)
 		line:SetTall(28)
 		line:DockMargin(0, 0, 0, 4)
 		line.Paint = function(_, w, h) paintLine(w, h) end
+		hover(line, row)
 
 		local wang = vgui.Create("DNumberWang", line)
+		hover(wang, row)
 		wang:Dock(RIGHT)
 		wang:SetWide(110)
 		wang:DockMargin(0, 2, 4, 2)
@@ -137,8 +145,10 @@ function BALLISTICS.Admin.BuildRules(parent, sectionId)
 		line:SetTall(28)
 		line:DockMargin(0, 0, 0, 4)
 		line.Paint = function(_, w, h) paintLine(w, h) end
+		hover(line, row)
 
 		local box = vgui.Create("DCheckBoxLabel", line)
+		hover(box, row)
 		box:Dock(FILL)
 		box:DockMargin(8, 4, 8, 4)
 		box:SetText(row.label or "")
@@ -185,6 +195,7 @@ function BALLISTICS.Admin.BuildRules(parent, sectionId)
 		line:SetTall(32)
 		line:DockMargin(0, 0, 0, 4)
 		line.Paint = function(_, w, h) paintLine(w, h) end
+		hover(line, row)
 
 		local buttons = {}
 		local values = row.values or {}
@@ -196,6 +207,7 @@ function BALLISTICS.Admin.BuildRules(parent, sectionId)
 			btn:DockMargin(0, 3, 4, 3)
 			btn.balLabel = entry.label or entry.id
 			btn.balId = entry.id
+			hover(btn, row)
 			btn.DoClick = function()
 				commit(row.path, entry.id)
 			end

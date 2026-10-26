@@ -83,4 +83,39 @@ check("every Costs key is a catalog item", orphan == false)
 check("AK-47 costs 900", BALLISTICS.Catalog.Price("tacrp_ex_ak47") == 900)
 check("pills cost 50", BALLISTICS.Catalog.Price("med_pills") == 50)
 
+local expectCat = {
+	tacrp_ex_m1911 = "Pistol",
+	tacrp_mr96 = "Magnum",
+	tacrp_skorpion = "Machine Pistol",
+	tacrp_mp5 = "SMG",
+	tacrp_ex_ak47 = "Assault Rifle",
+	tacrp_hk417 = "Battle Rifle",
+	tacrp_tgs12 = "Shotgun",
+	tacrp_spr = "Sniper",
+}
+local catOk = true
+for class, category in pairs(expectCat) do
+	local item = byClass(class)
+	if not item or item.category ~= category then catOk = false end
+end
+check("each gun has its category", catOk)
+
+local groups = BALLISTICS.Catalog.WeaponGroups()
+local order = {}
+for i = 1, #groups do order[i] = groups[i].category end
+check("groups follow the buy order", table.concat(order, ",") == "Pistol,Magnum,Machine Pistol,SMG,Assault Rifle,Battle Rifle,Shotgun,Sniper")
+check("pistol group is the m1911", #groups[1].items == 1 and groups[1].items[1].class == "tacrp_ex_m1911")
+check("sniper group is the m700", groups[8].items[1].class == "tacrp_spr")
+
+local custom = BALLISTICS.Catalog.WeaponGroups({
+	{ key = "a", category = "Sniper" },
+	{ key = "b", category = "Pistol" },
+	{ key = "c", category = "Pistol" },
+	{ key = "d", category = "Launcher" },
+	{ key = "e" },
+})
+check("empty categories are skipped", #custom == 3 and custom[1].category == "Pistol" and #custom[1].items == 2)
+check("sniper stays ahead of other", custom[2].category == "Sniper" and custom[2].items[1].key == "a")
+check("unknown categories land in Other", custom[3].category == "Other" and custom[3].items[1].key == "d" and custom[3].items[2].key == "e")
+
 if failed then os.exit(1) end

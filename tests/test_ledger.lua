@@ -199,4 +199,23 @@ getmetatable(ud).__index = {
 BALLISTICS.Money.Earn(ud, "kill")
 check("userdata player gets NW2 money synced", udnw.bal_pending == 500)
 
+-- Kicked bot / left player: entity is NULL, SetNW2Int would error.
+local gone = { nw = {}, valid = true }
+function gone:SteamID64() return "767" end
+function gone:SetNW2Int(k, v)
+	if not self.valid then error("Tried to use a NULL entity!") end
+	self.nw[k] = v
+end
+function gone:IsValid() return self.valid end
+local oldValid = IsValid
+IsValid = function(e) return e ~= nil and e.IsValid ~= nil and e:IsValid() == true end
+BALLISTICS.Money.Earn(gone, "kill")
+gone.valid = false
+check("CommitAll skips a NULL player", pcall(BALLISTICS.Money.CommitAll) == true)
+gone.valid = true
+BALLISTICS.Money.Forget(gone)
+gone.valid = false
+check("Forget then CommitAll still safe", pcall(BALLISTICS.Money.CommitAll) == true)
+IsValid = oldValid
+
 if failed then os.exit(1) end

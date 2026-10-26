@@ -207,19 +207,52 @@ local function refill()
 	local cols = 2
 	local bw = math.floor((wide - gap) / cols)
 	local bh = 64
-	for i = 1, #items do
-		local item = items[i]
-		local col = (i - 1) % cols
-		local row = math.floor((i - 1) / cols)
+	local function addButton(item, x, y)
 		local btn = vgui.Create("DButton", canvas)
 		btn:SetText("")
-		btn:SetPos(col * (bw + gap), row * (bh + gap))
+		btn:SetPos(x, y)
 		btn:SetSize(bw, bh)
 		btn.balItem = item
 		btn.Paint = paintItem
 		btn.DoClick = function()
 			tryBuy(item)
 		end
+	end
+	local function place(list, y)
+		for i = 1, #list do
+			local col = (i - 1) % cols
+			local row = math.floor((i - 1) / cols)
+			addButton(list[i], col * (bw + gap), y + row * (bh + gap))
+		end
+		local rows = math.ceil(#list / cols)
+		if rows < 1 then return y end
+		return y + rows * (bh + gap)
+	end
+	if tab == "weapon" and BALLISTICS.Catalog and type(BALLISTICS.Catalog.WeaponGroups) == "function" then
+		local groups = BALLISTICS.Catalog.WeaponGroups(items) or {}
+		local y = 0
+		local hh = 22
+		for g = 1, #groups do
+			local group = groups[g]
+			local head = vgui.Create("DPanel", canvas)
+			head:SetPos(0, y)
+			head:SetSize(wide, hh)
+			local title = group.category or ""
+			head.Paint = function(_, w, h)
+				if not draw or not draw.SimpleText then return end
+				draw.SimpleText(title, "BallisticsBuy", 4, h / 2, Color(170, 186, 204), TEXT_ALIGN_LEFT or 0, TEXT_ALIGN_CENTER or 1)
+			end
+			y = y + hh + 4
+			y = place(group.items or {}, y)
+		end
+		if y < 1 then y = bh end
+		canvas:SetTall(y)
+		return
+	end
+	for i = 1, #items do
+		local col = (i - 1) % cols
+		local row = math.floor((i - 1) / cols)
+		addButton(items[i], col * (bw + gap), row * (bh + gap))
 	end
 	local rows = math.ceil(#items / cols)
 	if rows < 1 then rows = 1 end

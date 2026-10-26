@@ -20,6 +20,7 @@ local MESSAGES = {
 	"bal_config_sync",
 	"bal_round_sync",
 	"bal_capture_sync",
+	"bal_cleanup",
 }
 
 local function addString(name)

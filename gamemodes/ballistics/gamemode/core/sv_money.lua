@@ -37,10 +37,26 @@ local function sync(ply, id)
 	local target = resolve(ply, id)
 	-- Real players are userdata, so only check for the method.
 	if target == nil or type(target.SetNW2Int) ~= "function" then return end
+	-- A kicked bot or a player who left is a NULL entity: drop it, keep the ledger row.
+	if IsValid and not IsValid(target) then
+		if plyById[id] == target then plyById[id] = nil end
+		return
+	end
 	local balance, pending = ledger:Get(id)
 	target:SetNW2Int("bal_money", balance)
 	target:SetNW2Int("bal_pending", pending)
 	if hook and hook.Run then hook.Run("Ballistics_MoneyChanged", target) end
+end
+
+function BALLISTICS.Money.Forget(ply)
+	for id, known in pairs(plyById) do
+		if known == ply then plyById[id] = nil end
+	end
+end
+
+if hook and hook.Add then
+	hook.Add("PlayerDisconnected", "Ballistics_MoneyForget", function(ply) BALLISTICS.Money.Forget(ply) end)
+	hook.Add("EntityRemoved", "Ballistics_MoneyForget", function(ent) BALLISTICS.Money.Forget(ent) end)
 end
 
 local function syncAll()

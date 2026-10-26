@@ -1,5 +1,6 @@
 -- Server buy: validate, spend, then grant. Refund if the grant fails.
--- Guns: Give(class) plus BuyAmmoMags clips of that weapon's Primary.Ammo.
+-- Guns: Give(class, true) so TacRP EquipAmmo does not add its default magazines,
+-- then reserve is set to the pre-give count plus BuyAmmoMags of that gun's clip.
 -- Throwables: GiveAmmo(1, ammo type) only. TacRP quick-throw (CheckGrenade)
 -- reads GetAmmoCount, so the grenade proxy weapon is not given and the ammo
 -- entity is never spawned.
@@ -156,12 +157,58 @@ local function giveAmmo(ply, amount, ammoType)
 	return true
 end
 
+-- Counts taken before Give. TacRP's default grant must not become the baseline.
+local function copyAmmo(ply)
+	if type(ply.GetAmmo) ~= "function" then return nil end
+	local ok, got = pcall(ply.GetAmmo, ply)
+	if not ok or type(got) ~= "table" then return nil end
+	local snap = {}
+	for id, n in pairs(got) do
+		n = tonumber(n) or 0
+		if n < 0 or n ~= n or n == math.huge then n = 0 end
+		n = math.floor(n)
+		snap[id] = n
+		if type(id) == "number" and game and type(game.GetAmmoName) == "function" then
+			local named, name = pcall(game.GetAmmoName, id)
+			if named and type(name) == "string" and name ~= "" then snap[name] = n end
+		end
+	end
+	return snap
+end
+
+local function snappedCount(snap, ammoType)
+	if type(snap) ~= "table" or type(ammoType) ~= "string" then return nil end
+	if snap[ammoType] ~= nil then return snap[ammoType] end
+	if game and type(game.GetAmmoID) == "function" then
+		local ok, id = pcall(game.GetAmmoID, ammoType)
+		if ok and id ~= nil and snap[id] ~= nil then return snap[id] end
+	end
+	-- A numeric id we could not translate is not "zero". Adding N mags is safer
+	-- than replacing an unknown reserve.
+	for key in pairs(snap) do
+		if type(key) == "number" then return nil end
+	end
+	return 0
+end
+
+local function fillClip(wep, clip)
+	if not clip or clip < 1 or wep == nil or type(wep.SetClip1) ~= "function" then return end
+	local current = nil
+	if type(wep.Clip1) == "function" then
+		local ok, n = pcall(wep.Clip1, wep)
+		if ok then current = tonumber(n) end
+	end
+	if current == nil or current < clip then pcall(wep.SetClip1, wep, clip) end
+end
+
 local function grantWeapon(ply, item)
 	if type(ply.HasWeapon) == "function" and ply:HasWeapon(item.class) == true then
 		return false, "duplicate"
 	end
 	if type(ply.Give) ~= "function" then return false, "give" end
-	local wep = ply:Give(item.class)
+	local beforeAmmo = copyAmmo(ply)
+	-- true skips engine/TacRP default ammo. EquipAmmo would add extra magazines.
+	local wep = ply:Give(item.class, true)
 	if not isValid(wep) and type(ply.GetWeapon) == "function" then
 		wep = ply:GetWeapon(item.class)
 	end
@@ -170,14 +217,26 @@ local function grantWeapon(ply, item)
 	if BALLISTICS.Buy.WeaponAmmo then
 		ammoType, clip = BALLISTICS.Buy.WeaponAmmo(wep)
 	end
+	local mags = buyMags()
 	local rounds = 0
 	if BALLISTICS.Buy.AmmoRounds then
-		rounds = BALLISTICS.Buy.AmmoRounds(clip, buyMags())
+		rounds = BALLISTICS.Buy.AmmoRounds(clip, mags)
+	end
+	local before = snappedCount(beforeAmmo, ammoType)
+	if before ~= nil and type(ply.SetAmmo) == "function" and type(ammoType) == "string" and ammoType ~= "" and ammoType ~= "none" then
+		local target = before + rounds
+		if BALLISTICS.Ammo and type(BALLISTICS.Ammo.ReserveTarget) == "function" then
+			target = BALLISTICS.Ammo.ReserveTarget(before, clip, mags)
+		end
+		ply:SetAmmo(target, ammoType)
+		fillClip(wep, clip)
+		return true
 	end
 	if rounds > 0 and not giveAmmo(ply, rounds, ammoType) then
 		stripWeapon(ply, item.class)
 		return false, "give"
 	end
+	fillClip(wep, clip)
 	return true
 end
 

@@ -68,7 +68,9 @@ function BALLISTICS.Buy.AmmoRounds(clipSize, mags)
 end
 
 -- TacRP copies SWEP.Ammo into Primary.Ammo inside SetBaseSettings during Give.
--- Weapons are userdata in GMod, so this only reads fields and methods.
+-- GetMaxClip1 is the live per-weapon clip (attachments can change it). Primary
+-- .ClipSize is the fallback TacRP writes at Give. Weapons are userdata in
+-- GMod, so this only reads fields and methods.
 function BALLISTICS.Buy.WeaponAmmo(wep)
 	if wep == nil then return nil, nil end
 	local kind = type(wep)
@@ -81,8 +83,6 @@ function BALLISTICS.Buy.WeaponAmmo(wep)
 		if type(primary.Ammo) == "string" and primary.Ammo ~= "" and primary.Ammo ~= "none" then
 			ammo = primary.Ammo
 		end
-		local primaryClip = tonumber(primary.ClipSize)
-		if primaryClip and primaryClip > 0 then clip = math.floor(primaryClip) end
 	end
 	if not ammo and type(wep.GetAmmoType) == "function" then
 		local ok, got = pcall(wep.GetAmmoType, wep)
@@ -90,6 +90,15 @@ function BALLISTICS.Buy.WeaponAmmo(wep)
 	end
 	if not ammo and type(wep.Ammo) == "string" and wep.Ammo ~= "" and wep.Ammo ~= "none" then
 		ammo = wep.Ammo
+	end
+	if type(wep.GetMaxClip1) == "function" then
+		local ok, got = pcall(wep.GetMaxClip1, wep)
+		got = ok and tonumber(got) or nil
+		if got and got > 0 then clip = math.floor(got) end
+	end
+	if not clip and type(primary) == "table" then
+		local primaryClip = tonumber(primary.ClipSize)
+		if primaryClip and primaryClip > 0 then clip = math.floor(primaryClip) end
 	end
 	if not clip and type(wep.GetCapacity) == "function" then
 		local ok, got = pcall(wep.GetCapacity, wep)
