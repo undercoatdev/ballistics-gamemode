@@ -62,7 +62,15 @@ local GENERAL = {
 	{ path = "CaptureContestedFreeze", label = "Contested capture freezes", kind = "bool" },
 	{ path = "ObjectiveRadius", label = "Objective radius (metres)", kind = "metres", min = 16 * METRES_PER_UNIT, max = 1000 * METRES_PER_UNIT, decimals = 2, unit = "m" },
 	{ path = "CustomizeRadius", label = "Customise radius (metres)", kind = "metres", min = 16 * METRES_PER_UNIT, max = 1000 * METRES_PER_UNIT, decimals = 2, unit = "m" },
-	{ path = "BuyAmmoMags", label = "Magazines per gun", kind = "int", min = 0, max = 30, decimals = 0 },
+	{
+		path = "BuyAmmoMags",
+		label = "Magazines per gun",
+		kind = "int",
+		min = 0,
+		max = 30,
+		decimals = 0,
+		blurb = "0 = infinite ammo.",
+	},
 	{ path = "RoundsToWin", label = "Rounds to win (0 = endless)", kind = "int", min = 0, max = 1000, decimals = 0 },
 }
 

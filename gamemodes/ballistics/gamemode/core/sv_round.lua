@@ -209,6 +209,22 @@ function BALLISTICS.Round.CheckElimination()
 	return winner, reason
 end
 
+local function slotCount(teamId)
+	if BALLISTICS.Slots and BALLISTICS.Slots.Count then
+		return tonumber(BALLISTICS.Slots.Count(teamId)) or 0
+	end
+	return 0
+end
+
+local function considerShowdown(now)
+	if state:Phase() ~= "squad" then return nil end
+	local snap = state:Snapshot(now)
+	if snap.squadMode ~= "showdown" then return nil end
+	local events = state:ConsiderShowdown(now, aliveCount(GOOD), aliveCount(BAD), slotCount(GOOD), slotCount(BAD))
+	if type(events) ~= "table" or #events == 0 then return nil end
+	return events
+end
+
 function BALLISTICS.Round.Tick(now)
 	if now == nil then now = (CurTime and CurTime()) or 0 end
 	if state:Phase() == "live" then
@@ -221,8 +237,20 @@ function BALLISTICS.Round.Tick(now)
 			end
 		end
 	end
+	if state:Phase() == "squad" then
+		local events = considerShowdown(now)
+		if events then
+			handle(events)
+			return events
+		end
+	end
 	local events = state:Tick(now)
 	handle(events)
+	local extra = considerShowdown(now)
+	if extra then
+		handle(extra)
+		return extra
+	end
 	return events
 end
 

@@ -20,6 +20,49 @@ D.BOX_WIDTH = 384
 D.BOX_MIN = 128
 D.BOX_MAX = 8192
 
+-- Team markers at the capture centres. They are not solid and cannot be moved.
+D.FLAG_MODEL_GOOD = "models/props_c17/cashregister01a.mdl"
+D.FLAG_MODEL_BAD = "models/combine_helicopter/helicopter_bomb01.mdl"
+
+function D.flagModel(team)
+	if team == "bad" or team == 2 then return D.FLAG_MODEL_BAD end
+	return D.FLAG_MODEL_GOOD
+end
+
+function D.flagProps()
+	return {
+		good = D.FLAG_MODEL_GOOD,
+		bad = D.FLAG_MODEL_BAD,
+		solid = "none",
+		pickup = false,
+		damage = false,
+	}
+end
+
+-- Closest placed flag to a point, for an editor that can no longer trace the prop.
+function D.nearestSide(state, pos, maxDist)
+	if type(state) ~= "table" or type(pos) ~= "table" then return nil end
+	local function ok(n)
+		return type(n) == "number" and n == n and n ~= math.huge and n ~= -math.huge
+	end
+	if not ok(pos.x) or not ok(pos.y) or not ok(pos.z) then return nil end
+	maxDist = tonumber(maxDist) or 96
+	local best, bestD = nil, nil
+	for _, side in ipairs({ "good", "bad" }) do
+		local flag = state[side]
+		if type(flag) == "table" and type(flag.pos) == "table" then
+			local dx = (flag.pos.x or 0) - pos.x
+			local dy = (flag.pos.y or 0) - pos.y
+			local dz = (flag.pos.z or 0) - pos.z
+			local d = math.sqrt(dx * dx + dy * dy + dz * dz)
+			if d <= maxDist and (bestD == nil or d < bestD) then
+				best, bestD = side, d
+			end
+		end
+	end
+	return best
+end
+
 local LIMIT = 200000
 
 local function finite(n)

@@ -24,6 +24,8 @@ dofile("gamemodes/ballistics/gamemode/core/sv_money.lua")
 dofile("gamemodes/ballistics/gamemode/core/sv_round.lua")
 dofile("gamemodes/ballistics/gamemode/modules/buy/sh_buy.lua")
 dofile("gamemodes/ballistics/gamemode/modules/buy/sv_buy.lua")
+-- These server buys assert three magazines. 0 is covered in the reserve block.
+BALLISTICS.Config.BuyAmmoMags = 3
 
 local function readAll(path)
 	local f = io.open(path, "r")
@@ -551,14 +553,21 @@ function ply:Give(class, noAmmo)
 	self.weapons[class] = wep
 	return wep
 end
+BALLISTICS.Config.BuyAmmoMags = 0
 buyOk = BALLISTICS.Buy.Request(ply, "tacrp_ex_m1911")
 local given = ply:GetWeapon("tacrp_ex_m1911")
 check("give skips default ammo", buyOk == true and ply.noAmmo == true)
-check("reserve is 3 live clips, not the injected default", store.pistol == 27)
-check("the bought gun is filled to the live clip", given and given.clipSet == 9)
+check("zero magazines leaves the injected reserve and fills the clip", store.pistol == 14 and given and given.clipSet == 9)
+BALLISTICS.Config.BuyAmmoMags = 3
+ply:StripWeapon("tacrp_ex_m1911")
+store.pistol = 0
+buyOk = BALLISTICS.Buy.Request(ply, "tacrp_ex_m1911")
+given = ply:GetWeapon("tacrp_ex_m1911")
+check("three magazines write three live clips", buyOk == true and store.pistol == 27 and given and given.clipSet == 9)
 ply:StripWeapon("tacrp_ex_m1911")
 store.pistol = 90
 buyOk = BALLISTICS.Buy.Request(ply, "tacrp_ex_m1911")
 check("a second gun adds 3 clips to the old reserve", buyOk == true and store.pistol == 117)
+BALLISTICS.Config.BuyAmmoMags = 0
 
 if failed then os.exit(1) end

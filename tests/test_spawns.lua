@@ -31,6 +31,11 @@ local function near(a, b, eps)
 	return math.abs(a - b) < (eps or 1e-4)
 end
 
+local props = D.flagProps()
+check("flag models are the cash register and the bomb", props.good == "models/props_c17/cashregister01a.mdl" and props.bad == "models/combine_helicopter/helicopter_bomb01.mdl" and D.flagModel("good") == props.good and D.flagModel(2) == props.bad)
+check("flag props are not solid and cannot be taken", props.solid == "none" and props.pickup == false and props.damage == false)
+check("the nearest flag is chosen by distance", D.nearestSide({ good = { pos = { x = 0, y = 0, z = 0 } }, bad = { pos = { x = 100, y = 0, z = 0 } } }, { x = 10, y = 0, z = 0 }, 96) == "good")
+check("a far point picks no flag", D.nearestSide({ good = { pos = { x = 0, y = 0, z = 0 } } }, { x = 500, y = 0, z = 0 }) == nil)
 check("map file is data/ballistics/spawns/<map>.json", D.mapFile("gm_construct") == "ballistics/spawns/gm_construct.json")
 check("map file rejects traversal and spaces", D.mapFile("../x") == nil and D.mapFile("gm construct") == nil and D.mapFile("") == nil and D.mapFile("gm_flatgrass") ~= nil)
 
@@ -346,6 +351,44 @@ util.TraceLine = function() return { Hit = false } end
 local missed = BALLISTICS.Spawns.Handle(admin, { op = D.OP_BOX, pos = { x = 5, y = 6, z = 80 }, ang = { y = 15 }, sx = 200, sy = 300 })
 check("a missed ground trace keeps the centre height", missed == true and snap().box and near(snap().box.pos.z, 80, 1e-6) and near(snap().box.yaw, 15, 1e-6))
 util.TraceLine = oldTrace
+
+mapNow = "gm_construct"
+local made = {}
+ents = ents or {}
+function ents.Create()
+	local ent = { kv = {} }
+	function ent:SetModel(m) self.model = m end
+	function ent:SetPos(p) self.pos = p end
+	function ent:SetAngles(a) self.ang = a end
+	function ent:SetKeyValue(k, v) self.kv[k] = v end
+	function ent:SetSolid(s) self.solid = s end
+	function ent:SetNotSolid(v) self.notSolid = v end
+	function ent:SetMoveType(m) self.move = m end
+	function ent:SetCollisionGroup(g) self.collision = g end
+	function ent:DrawShadow() end
+	function ent:GetPhysicsObject()
+		return {
+			IsValid = function() return true end,
+			EnableMotion = function(_, on) ent.motion = on end,
+			EnableCollisions = function(_, on) ent.collisions = on end,
+		}
+	end
+	function ent:Spawn()
+		self.spawned = true
+		self.solid = 6
+	end
+	function ent:Activate() end
+	function ent:SetNW2Int(_, v) self.nw = v end
+	function ent:GetNW2Int() return self.nw or 0 end
+	function ent:IsValid() return true end
+	made[#made + 1] = ent
+	return ent
+end
+BALLISTICS.Spawns.Reload()
+check("flag props use the team models", #made == 2 and made[1].model == D.FLAG_MODEL_GOOD and made[2].model == D.FLAG_MODEL_BAD)
+check("spawn cannot make a flag solid again", made[1].solid == 0 and made[1].notSolid == true and made[1].kv.solid == "0" and made[1].motion == false and made[1].collisions == false and made[1].collision == 10)
+check("a flag cannot be picked up or shot", made[1].PhysgunPickup() == false and made[1].GravGunPickupAllowed() == false and made[1].GravGunPunt() == false and hook.Run("PhysgunPickup", nil, made[1]) == false and hook.Run("EntityTakeDamage", made[1]) == true and hook.Run("ShouldCollide", made[1], {}) == false)
+ents.Create = nil
 
 local editor = loadfile("gamemodes/ballistics/gamemode/modules/spawns/cl_spawns_editor.lua")
 local tab = loadfile("gamemodes/ballistics/gamemode/modules/admin/cl_tab_spawns.lua")

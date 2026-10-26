@@ -138,24 +138,43 @@ events = match:Tick(35)
 check("series continues into the next buy", events[1].new == "buy" and match:Phase() == "buy" and match:Round() == 2)
 match:Tick(45)
 events = match:Transition({ type = "end", winner = "bad", reason = "capture" }, 50)
-check("reaching RoundsToWin records the match winner", events[1].scoreBad == 2 and match:MatchWinner() == "bad" and match:Phase() == "post")
+check("reaching RoundsToWin records the match winner", events[1].scoreBad == 2 and match:MatchWinner() == "bad" and match:Phase() == "post" and match:SquadMode() == "finale")
 events = match:Tick(55)
-check("finished match returns to lobby", events[1].type == "phase" and events[1].old == "post" and events[1].new == "lobby" and events[2].type == "match_end" and events[2].winner == "bad")
-check("lobby has no countdown after the match", match:Phase() == "lobby" and match:EndsAt() == nil and match:Score().bad == 2)
-events = match:Transition({ type = "start", good = 1, bad = 1, flags = true }, 80)
+check("a decided match enters the firing squad", events[1].type == "phase" and events[1].old == "post" and events[1].new == "squad" and events[2].type == "match_end" and events[2].winner == "bad" and match:Phase() == "squad" and match:SquadMode() == "finale")
+check("the squad keeps the score and lasts 30 seconds", match:Score().bad == 2 and match:EndsAt() == 85)
+events = match:Tick(85)
+check("the squad returns to the lobby without a second match end", #events == 1 and events[1].new == "lobby" and match:Phase() == "lobby" and match:EndsAt() == nil)
+events = match:Transition({ type = "start", good = 1, bad = 1, flags = true }, 90)
 check("a new match resets the score and round", events[1].matchStart == true and match:Round() == 1 and match:Score().good == 0 and match:Score().bad == 0 and match:Phase() == "buy")
 
--- First to 1 ends after a single win, not after a draw.
+-- A draw before the deciding round continues. A deciding draw is a showdown.
+local series = State.new(cfg({ RoundsToWin = 3 }))
+start(series, 0)
+series:Tick(10)
+series:Tick(610)
+events = series:Tick(615)
+check("a draw before the deciding round returns to buy", events[1].new == "buy" and series:Phase() == "buy" and series:MatchWinner() == nil and series:SquadMode() == nil)
+
 local quick = State.new(cfg({ RoundsToWin = 1 }))
 start(quick, 0)
 quick:Tick(10)
 quick:Tick(610)
 events = quick:Tick(615)
-check("a draw does not satisfy RoundsToWin", events[1].new == "buy" and quick:Phase() == "buy")
-quick:Tick(625)
-quick:Transition({ type = "end", winner = "good", reason = "elimination" }, 700)
-events = quick:Tick(705)
-check("one win can end the match", events[2].type == "match_end" and events[2].winner == "good" and quick:Phase() == "lobby")
+local quickEnd = false
+for i = 1, #events do
+	if events[i].type == "match_end" then quickEnd = true end
+end
+check("a deciding draw enters showdown without a winner", events[1].new == "squad" and quick:Phase() == "squad" and quick:SquadMode() == "showdown" and quick:MatchWinner() == nil and quick:EndsAt() == nil and quickEnd == false)
+check("showdown has no clock", #quick:Tick(99999) == 0 and quick:Phase() == "squad" and quick:MatchWinner() == nil)
+
+local one = State.new(cfg({ RoundsToWin = 1 }))
+start(one, 0)
+one:Tick(10)
+one:Transition({ type = "end", winner = "good", reason = "elimination" }, 20)
+events = one:Tick(25)
+check("one win enters the firing squad and names the winner", events[1].new == "squad" and events[2].type == "match_end" and events[2].winner == "good" and one:SquadMode() == "finale")
+events = one:Tick(55)
+check("the firing squad then returns to the lobby", #events == 1 and events[1].new == "lobby" and one:Phase() == "lobby")
 
 events, err = State.new(cfg()):Transition("nope", 0)
 check("unknown event", events == nil and err == "unknown event")
@@ -170,6 +189,65 @@ check("the living side wins", winner == "good" and reason == "elimination")
 winner, reason = elim(0, 0)
 check("both sides dead is a draw", winner == "draw" and reason == "elimination")
 check("a knocked-out player still counts as alive for the caller", elim(1, 1) == nil)
+
+local call = State.MatchCall
+check("endless never closes", call(9, 9, "draw", 0) == nil and call(3, 1, "good", 0) == nil)
+check("a unique reach is that side", call(3, 1, "good", 3) == "good" and call(1, 3, "bad", 3) == "bad")
+check("both sides on the line is a showdown", call(3, 3, "good", 3) == "showdown" and call(2, 2, "draw", 3) == "showdown")
+check("a non-deciding draw continues", call(0, 0, "draw", 3) == nil and call(1, 1, "draw", 3) == nil)
+check("a deciding draw is a showdown", call(0, 0, "draw", 1) == "showdown" and call(2, 2, "draw", 3) == "showdown")
+
+local show = State.ShowdownCall
+check("both sides alive keeps the showdown going", show(1, 1, 1, 1) == nil and show(2, 1, 3, 1) == nil)
+check("only dead players are out", show(0, 1, 1, 1) == "bad" and show(1, 0, 1, 1) == "good")
+check("both teams dying picks Good", show(0, 0, 1, 1) == "good" and show(0, 0, 4, 2) == "good")
+check("an empty team loses to the team that has players", show(0, 0, 0, 2) == "bad" and show(0, 0, 3, 0) == "good")
+check("nobody slotted leaves for the lobby", show(0, 0, 0, 0) == "lobby" and show(1, 1, 0, 0) == "lobby")
+
+local function enterShowdown()
+	local st = State.new(cfg({ RoundsToWin = 1 }))
+	start(st, 0)
+	st:Tick(10)
+	st:Tick(610)
+	st:Tick(615)
+	return st
+end
+
+local liveShow = enterShowdown()
+check("showdown waits while anyone is alive", #liveShow:ConsiderShowdown(700, 1, 1, 1, 1) == 0 and liveShow:Phase() == "squad")
+check("knocked-out players do not end the showdown", #liveShow:ConsiderShowdown(701, 1, 1, 2, 2) == 0 and liveShow:Phase() == "squad")
+local wiped = liveShow:ConsiderShowdown(702, 1, 0, 2, 2)
+check("wiping a side wins the game then the lobby", wiped[1].type == "match_end" and wiped[1].winner == "good" and wiped[2].new == "lobby" and liveShow:Phase() == "lobby" and liveShow:MatchWinner() == "good")
+
+local bothDead = enterShowdown()
+local bothEv = bothDead:ConsiderShowdown(1, 0, 0, 1, 1)
+check("a simultaneous wipe still names Good", bothEv[1].type == "match_end" and bothEv[1].winner == "good" and bothDead:Phase() == "lobby")
+
+local emptySide = enterShowdown()
+local emptyEv = emptySide:ConsiderShowdown(1, 0, 0, 0, 3)
+check("a team with no players loses the showdown", emptyEv[1].winner == "bad" and emptySide:MatchWinner() == "bad" and emptySide:Phase() == "lobby")
+
+local nobody = enterShowdown()
+local noneEv = nobody:ConsiderShowdown(3, 0, 0, 0, 0)
+check("nobody slotted does not invent a winner", noneEv[1].new == "lobby" and noneEv[2] == nil and nobody:MatchWinner() == nil and nobody:Phase() == "lobby")
+local refused, refuseErr = nobody:FinishShowdown(4, "good")
+check("a finished showdown cannot be finished again", refused == nil and refuseErr == "not showdown")
+
+local stray = State.new(cfg({ RoundsToWin = 3 }))
+start(stray, 0)
+stray:Tick(10)
+stray:Transition({ type = "end", winner = "draw", reason = "timeout" }, 20)
+stray.matchWinner = "draw"
+events = stray:Tick(25)
+local strayEnd = false
+for i = 1, #events do
+	if events[i].type == "match_end" then strayEnd = true end
+end
+check("a stray draw winner becomes a showdown", events[1].new == "squad" and stray:SquadMode() == "showdown" and stray:Phase() == "squad" and strayEnd == false and stray:MatchWinner() == nil)
+
+local badCall = enterShowdown()
+local badEv, badErr = badCall:FinishShowdown(5, "draw")
+check("showdown refuses a draw as the game winner", badEv == nil and badErr == "bad winner" and badCall:Phase() == "squad")
 
 -- Server driver. concommand must exist before sv_round loads.
 local cmds = {}

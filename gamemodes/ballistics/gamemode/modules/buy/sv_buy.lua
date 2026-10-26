@@ -1,6 +1,7 @@
 -- Server buy: validate, spend, then grant. Refund if the grant fails.
 -- Guns: Give(class, true) so TacRP EquipAmmo does not add its default magazines,
 -- then reserve is set to the pre-give count plus BuyAmmoMags of that gun's clip.
+-- 0 magazines is infinite ammo: the clip is filled and no reserve is written.
 -- Throwables: GiveAmmo(1, ammo type) only. TacRP quick-throw (CheckGrenade)
 -- reads GetAmmoCount, so the grenade proxy weapon is not given and the ammo
 -- entity is never spawned.
@@ -41,7 +42,7 @@ end
 
 local function buyMags()
 	local n = BALLISTICS.Config and BALLISTICS.Config.BuyAmmoMags
-	n = tonumber(n) or 3
+	n = tonumber(n) or 0
 	if n ~= n or n < 0 then n = 0 end
 	n = math.floor(n)
 	if n > 30 then n = 30 end
@@ -218,6 +219,10 @@ local function grantWeapon(ply, item)
 		ammoType, clip = BALLISTICS.Buy.WeaponAmmo(wep)
 	end
 	local mags = buyMags()
+	if BALLISTICS.Ammo and BALLISTICS.Ammo.WritesReserve and not BALLISTICS.Ammo.WritesReserve(mags) then
+		fillClip(wep, clip)
+		return true
+	end
 	local rounds = 0
 	if BALLISTICS.Buy.AmmoRounds then
 		rounds = BALLISTICS.Buy.AmmoRounds(clip, mags)

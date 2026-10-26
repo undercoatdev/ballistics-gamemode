@@ -59,28 +59,35 @@ local function play(over, winner)
 	return st, events
 end
 
-local off, events = play({ FiringSquadEnabled = false }, "bad")
-check("disabled squad returns to the lobby", events[1].new == "lobby" and events[2].type == "match_end" and events[2].winner == "bad" and off:Phase() == "lobby")
+local decided, events = play({}, "bad")
+check("a decided match always enters the firing squad", events[1].new == "squad" and events[2].type == "match_end" and events[2].winner == "bad" and decided:Phase() == "squad" and decided:SquadMode() == "finale")
 
-local missing = play({}, "good")
-check("a missing firing squad setting stays off", missing:Phase() == "lobby" and missing:MatchWinner() == "good")
+local ignored = play({ FiringSquadEnabled = false }, "good")
+check("the removed enabled flag does not skip the squad", ignored:Phase() == "squad" and ignored:MatchWinner() == "good" and ignored:SquadMode() == "finale")
 
-local drawn, drawEvents = play({ FiringSquadEnabled = true }, "draw")
-check("a draw skips the firing squad", drawEvents[1].new == "buy" and drawn:Phase() == "buy" and drawn:MatchWinner() == nil)
+local drawn, drawEvents = play({}, "draw")
+local drawAnnounced = false
+for i = 1, #drawEvents do
+	if drawEvents[i].type == "match_end" then drawAnnounced = true end
+end
+check("a deciding draw enters showdown", drawEvents[1].new == "squad" and drawn:Phase() == "squad" and drawn:SquadMode() == "showdown" and drawn:MatchWinner() == nil and drawn:EndsAt() == nil and drawAnnounced == false)
+check("showdown does not time out", #drawn:Tick(100000) == 0 and drawn:Phase() == "squad")
+local named = drawn:FinishShowdown(30, "bad")
+check("showdown names a winner then the lobby", named[1].type == "match_end" and named[1].winner == "bad" and named[2].new == "lobby" and drawn:Phase() == "lobby")
 
-local endless, endlessEvents = play({ RoundsToWin = 0, FiringSquadEnabled = true }, "good")
+local endless, endlessEvents = play({ RoundsToWin = 0 }, "good")
 check("rounds to win 0 never starts the firing squad", endlessEvents[1].new == "buy" and endless:MatchWinner() == nil and endless:Phase() == "buy")
 
-local squad, squadEvents = play({ FiringSquadEnabled = true, FiringSquadDuration = 12 }, "good")
+local squad, squadEvents = play({ FiringSquadDuration = 12 }, "good")
 check("a winning match enters squad and announces the match once", squad:Phase() == "squad" and squadEvents[1].old == "post" and squadEvents[1].new == "squad" and squadEvents[2].type == "match_end" and squadEvents[2].winner == "good")
 check("one tick does not skip the squad into the lobby", #squadEvents == 2 and squad:EndsAt() == 37)
 check("squad waits out its clock", #squad:Tick(36.9) == 0 and squad:Phase() == "squad")
 local back = squad:Tick(37)
 check("squad then returns to the lobby without a second match end", back and #back == 1 and back[1].type == "phase" and back[1].new == "lobby" and squad:Phase() == "lobby" and squad:EndsAt() == nil)
 
-local timed = play({ FiringSquadEnabled = true }, "bad")
+local timed = play({}, "bad")
 check("a missing duration lasts 30 seconds", timed:Phase() == "squad" and timed:EndsAt() == 55)
-local zero = play({ FiringSquadEnabled = true, FiringSquadDuration = 0 }, "good")
+local zero = play({ FiringSquadDuration = 0 }, "good")
 check("a non-positive duration lasts 30 seconds", zero:Phase() == "squad" and zero:EndsAt() == 55)
 
 local box = { pos = { x = 0, y = 0, z = 64 }, yaw = 0, sx = 768, sy = 384 }
@@ -97,11 +104,13 @@ check("yaw 90 turns the lines across world X", turned and near(turned.good[1].po
 check("yaw 90 bad stands on the other side facing back", turned and near(turned.bad[1].pos.x, -144) and near(turned.bad[1].pos.y, 0) and near(turned.bad[1].yaw, 0))
 check("a bad box has no lineup", S.Line(nil, { 1 }, { 1 }) == nil)
 
-check("winner and loser roles follow the match", S.Role(1, "good") == "winner" and S.Role("bad", "good") == "loser" and S.Role(2, "bad") == "winner" and S.Role("good", "draw") == nil)
-local winners = S.Kit("winner", { FiringSquadWeapon = "tacrp_ex_ak47", FiringSquadMags = 4, FiringSquadLoserKnife = true, FiringSquadFreeze = 10 })
-local losers = S.Kit("loser", { FiringSquadWeapon = "tacrp_ex_ak47", FiringSquadMags = 4, FiringSquadLoserKnife = false, FiringSquadFreeze = 10 })
+check("winner and loser roles follow the match", S.Role(1, "good") == "winner" and S.Role("bad", "good") == "loser" and S.Role(2, "bad") == "winner" and S.Role("good", "draw") == nil and S.Role(1, "showdown") == "showdown" and S.Role(2, "showdown") == "showdown")
+local winners = S.Kit("winner", { FiringSquadWeapon = "tacrp_ex_ak47", FiringSquadMags = 4, FiringSquadFreeze = 10 })
+local losers = S.Kit("loser", { FiringSquadWeapon = "tacrp_ex_ak47", FiringSquadMags = 4, FiringSquadFreeze = 10 })
+local both = S.Kit("showdown", { FiringSquadWeapon = "tacrp_ex_ak47", FiringSquadMags = 0, FiringSquadFreeze = 10 })
 check("winners get the gun and no knife", winners and winners.weapon == "tacrp_ex_ak47" and winners.mags == 4 and winners.knife == false and winners.freeze == 0)
-check("losers are frozen and unarmed by default", losers and losers.weapon == nil and losers.knife == false and losers.freeze == 10)
+check("losers are frozen and unarmed", losers and losers.weapon == nil and losers.knife == false and losers.mags == 0 and losers.freeze == 10)
+check("showdown arms both sides and freezes nobody", both and both.weapon == "tacrp_ex_ak47" and both.mags == 0 and both.knife == false and both.freeze == 0)
 check("freeze text counts down", S.FreezeLabel(10) == "FROZEN 10" and S.FreezeLabel(9.1) == "FROZEN 10" and S.FreezeLabel(0.2) == "FROZEN 1" and S.FreezeLabel(0) == nil and S.FreezeLabel(-1) == nil)
 
 local wep = {
@@ -113,7 +122,10 @@ check("four magazines use the weapon clip", ammo == "ar2" and clip == 30 and rou
 check("a class name is a token", S.ValidClass("tacrp_ex_ak47") == true and S.ValidClass("") == false and S.ValidClass("bad class") == false and S.ValidClass("models/a.mdl") == false)
 
 local C = BALLISTICS.Config
-check("firing squad defaults are on", C.FiringSquadEnabled == true and C.FiringSquadDuration == 30 and C.FiringSquadFreeze == 10 and C.FiringSquadWeapon == "tacrp_ex_ak47" and C.FiringSquadMags == 4 and C.FiringSquadLoserKnife == false)
+check("firing squad defaults", C.FiringSquadDuration == 30 and C.FiringSquadFreeze == 10 and C.FiringSquadWeapon == "tacrp_ex_ak47" and C.FiringSquadMags == 0 and C.FiringSquadEnabled == nil and C.FiringSquadLoserKnife == nil)
+local enabledSet, enabledErr = C.Set("FiringSquadEnabled", true)
+local knifeSet = C.Set("FiringSquadLoserKnife", true)
+check("removed firing squad toggles are unknown", enabledSet == false and enabledErr == "unknown key" and knifeSet == false)
 check("an empty weapon class is refused", C.Set("FiringSquadWeapon", "") == false)
 check("a weapon class with a space is refused", C.Set("FiringSquadWeapon", "bad class") == false)
 local modelOk = C.Set("ModelGood", "models/player/combine_soldier.mdl")
@@ -130,24 +142,26 @@ local _, mags = C.Set("FiringSquadMags", 40)
 check("magazines clamp high", mags == 30)
 C.Set("FiringSquadWeapon", "tacrp_ex_m1911")
 C.ResetSection("general")
-check("resetting general leaves the firing squad weapon", C.FiringSquadWeapon == "tacrp_ex_m1911" and C.BuyTime == 20 and C.RoundsToWin == 0)
+check("resetting general leaves the firing squad weapon", C.FiringSquadWeapon == "tacrp_ex_m1911" and C.BuyTime == 20 and C.RoundsToWin == 3)
 C.ResetSection("firing_squad")
-check("resetting the firing squad restores its defaults", C.FiringSquadWeapon == "tacrp_ex_ak47" and C.FiringSquadEnabled == true and C.FiringSquadFreeze == 10 and C.FiringSquadMags == 4 and C.FiringSquadLoserKnife == false)
+check("resetting the firing squad restores its defaults", C.FiringSquadWeapon == "tacrp_ex_ak47" and C.FiringSquadFreeze == 10 and C.FiringSquadMags == 0 and C.FiringSquadDuration == 30)
 
 local rows = S.Rows("firing_squad")
-check("the firing squad tab has six rows", #rows == 6)
+check("the firing squad tab has four rows", #rows == 4)
 local blurbs = true
-local weaponRow, enabledRow = nil, nil
+local weaponRow, magRow, enabledRow = nil, nil, nil
 for i = 1, #rows do
 	if type(rows[i].blurb) ~= "string" or rows[i].blurb == "" then blurbs = false end
 	if rows[i].path == "FiringSquadWeapon" then weaponRow = rows[i] end
-	if rows[i].path == "FiringSquadEnabled" then enabledRow = rows[i] end
+	if rows[i].path == "FiringSquadMags" then magRow = rows[i] end
+	if rows[i].path == "FiringSquadEnabled" or rows[i].path == "FiringSquadLoserKnife" then enabledRow = rows[i] end
 end
-check("every firing squad row has a blurb", blurbs and weaponRow and weaponRow.kind == "string" and enabledRow.kind == "bool")
+check("every firing squad row has a blurb", blurbs and weaponRow and weaponRow.kind == "string" and magRow and magRow.kind == "int" and string.find(magRow.blurb, "0 = infinite ammo", 1, true) and enabledRow == nil)
 local committed = S.Commit(weaponRow, "  tacrp_mp5 ")
 check("a weapon class is trimmed and committed", committed and committed.key == "FiringSquadWeapon" and committed.value == "tacrp_mp5")
 check("a bad weapon class is not committed", S.Commit(weaponRow, "bad class") == nil)
-check("a bool row commits through the rules view", S.Commit(enabledRow, false) and S.Commit(enabledRow, false).value == false)
+local magCommit = S.Commit(magRow, 0)
+check("zero magazines commits", magCommit and magCommit.key == "FiringSquadMags" and magCommit.value == 0)
 check("a non-admin cannot send the row", S.PayloadFor(false, committed) == nil and S.PayloadFor(true, committed).key == "FiringSquadWeapon")
 
 local general = BALLISTICS.RulesView.Rows("general")
@@ -185,6 +199,7 @@ BALLISTICS.Player = {
 		ply.wiped = (ply.wiped or 0) + 1
 		ply.weapons = {}
 		ply.ammo = {}
+		ply.setAmmo = nil
 	end,
 	SetFrozen = function(ply, on)
 		ply.frozen = on and true or false
@@ -217,7 +232,10 @@ local function person(teamId, slot)
 		self.wep = gun
 		return gun
 	end
-	function ply:SetAmmo(n, kind) self.ammo[kind] = n end
+	function ply:SetAmmo(n, kind)
+		self.ammo[kind] = n
+		self.setAmmo = true
+	end
 	function ply:SetPos(p) self.pos = p end
 	function ply:SetEyeAngles(a) self.ang = a end
 	function ply:SetTeam(t) self.teamId = t end
@@ -252,12 +270,13 @@ BALLISTICS.Round = {
 local clock = 0
 function CurTime() return clock end
 
+dofile("gamemodes/ballistics/gamemode/modules/ammo/sh_ammo.lua")
 dofile("gamemodes/ballistics/gamemode/modules/squad/sv_squad.lua")
 dofile("gamemodes/ballistics/gamemode/modules/hud/sv_banner.lua")
 
 hook.Run("Ballistics_PhaseChanged", "post", "squad")
 check("squad spawns slotted players who were dead", good.spawned == 1 and good.alive == true and bad.spawned == 1 and goodLate.spawned == 1)
-check("winners are stripped to the squad weapon and four mags", #good.weapons == 1 and good.weapons[1] == "tacrp_ex_ak47" and good.lastSkip == true and good.ammo.ar2 == 120 and good.wep.clip == 30 and good.selected == "tacrp_ex_ak47" and good.frozen == false)
+check("winners are stripped to the squad weapon and infinite ammo writes no reserve", #good.weapons == 1 and good.weapons[1] == "tacrp_ex_ak47" and good.lastSkip == true and good.setAmmo ~= true and good.wep.clip == 30 and good.selected == "tacrp_ex_ak47" and good.frozen == false)
 check("losers are stripped, unarmed, and frozen", #bad.weapons == 0 and bad.frozen == true and bad.balSquadUntil == 10 and bad.selected == nil)
 check("the lineup uses the box, feet lifted by 2", near(good.pos.x, -168) and near(good.pos.y, -144) and near(good.pos.z, 2) and near(good.ang.y, 90))
 check("the later good slot stands further along the same side", near(goodLate.pos.x, 168) and near(goodLate.pos.y, -144) and near(goodLate.ang.y, 90))
@@ -275,6 +294,17 @@ check("losers stay frozen until the count ends", bad.frozen == true and bad.balS
 clock = 10
 hook.Run("Think")
 check("losers unfreeze when the count ends", bad.frozen == false and bad.balSquadUntil == nil)
+
+BALLISTICS.Config.FiringSquadMags = 4
+hook.Run("Ballistics_PhaseChanged", "post", "squad")
+check("finite magazines write a reserve", good.setAmmo == true and good.ammo.ar2 == 120 and good.wep.clip == 30 and bad.frozen == true)
+BALLISTICS.Config.FiringSquadMags = 0
+
+BALLISTICS.Round.Snapshot = function()
+	return { matchWinner = "", squadMode = "showdown", phase = phase }
+end
+hook.Run("Ballistics_PhaseChanged", "post", "squad")
+check("showdown arms both teams and freezes nobody", good.weapons[1] == "tacrp_ex_ak47" and bad.weapons[1] == "tacrp_ex_ak47" and good.frozen == false and bad.frozen == false and good.balSquadUntil == nil and bad.balSquadUntil == nil and good.setAmmo ~= true)
 
 phase = "lobby"
 hook.Run("Ballistics_PhaseChanged", "squad", "lobby")

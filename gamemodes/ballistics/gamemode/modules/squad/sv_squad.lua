@@ -21,6 +21,7 @@ local function winnerOf()
 	if not (BALLISTICS.Round and type(BALLISTICS.Round.Snapshot) == "function") then return nil end
 	local snap = BALLISTICS.Round.Snapshot()
 	if type(snap) ~= "table" then return nil end
+	if snap.squadMode == "showdown" then return "showdown" end
 	if snap.matchWinner == "good" or snap.matchWinner == "bad" then return snap.matchWinner end
 	return nil
 end
@@ -58,7 +59,11 @@ local function giveKit(ply, kit)
 		if BALLISTICS.Squad.Reserve then
 			ammo, clip, rounds = BALLISTICS.Squad.Reserve(wep, kit.mags)
 		end
-		if type(ammo) == "string" and ammo ~= "" and ammo ~= "none" and ply.SetAmmo then
+		local writeReserve = (tonumber(kit.mags) or 0) > 0
+		if BALLISTICS.Ammo and type(BALLISTICS.Ammo.WritesReserve) == "function" then
+			writeReserve = BALLISTICS.Ammo.WritesReserve(kit.mags) == true
+		end
+		if writeReserve and type(ammo) == "string" and ammo ~= "" and ammo ~= "none" and ply.SetAmmo then
 			ply:SetAmmo(rounds or 0, ammo)
 		end
 		if wep and type(wep.SetClip1) == "function" and clip and clip > 0 then
@@ -133,7 +138,7 @@ end
 
 function BALLISTICS.Squad.Begin()
 	local winner = winnerOf()
-	if winner ~= "good" and winner ~= "bad" then return end
+	if winner ~= "good" and winner ~= "bad" and winner ~= "showdown" then return end
 	lined = {}
 	active = true
 	local box = nil

@@ -10,7 +10,7 @@ local DEFAULTS = {
 	BuyTime = 20,
 	RoundTime = 600,
 	PostRoundTime = 5,
-	RoundsToWin = 0,
+	RoundsToWin = 3,
 	TimeoutWinner = "draw",
 	FreezeInBuy = true,
 	HealthMode = "realistic",
@@ -25,7 +25,7 @@ local DEFAULTS = {
 	CaptureDecayRate = 1.0,
 	CaptureContestedFreeze = true,
 	TickRate = 0.1,
-	BuyAmmoMags = 3,
+	BuyAmmoMags = 0,
 	HealedUpOrgans = 10,
 	StartMoney = 1000,
 	MaxMoney = 0,
@@ -72,12 +72,10 @@ local DEFAULTS = {
 		nade_each = 0,
 	},
 	AdminSuperOnly = false,
-	FiringSquadEnabled = true,
 	FiringSquadDuration = 30,
 	FiringSquadFreeze = 10,
 	FiringSquadWeapon = "tacrp_ex_ak47",
-	FiringSquadMags = 4,
-	FiringSquadLoserKnife = false,
+	FiringSquadMags = 0,
 }
 
 local INT = { kind = "int", min = 0, max = 1000000 }
@@ -112,12 +110,10 @@ local SCHEMA = {
 	Gains = { kind = "map", value = INT },
 	BuyLimits = { kind = "map", value = { kind = "int", min = 0, max = 100 } },
 	AdminSuperOnly = { kind = "bool" },
-	FiringSquadEnabled = { kind = "bool" },
 	FiringSquadDuration = { kind = "number", min = 5, max = 300 },
 	FiringSquadFreeze = { kind = "int", min = 0, max = 120 },
 	FiringSquadWeapon = { kind = "string", pattern = "^[%w_]+$", max = 64 },
 	FiringSquadMags = { kind = "int", min = 0, max = 30 },
-	FiringSquadLoserKnife = { kind = "bool" },
 }
 
 local COST_GROUPS = {
@@ -144,8 +140,8 @@ local SECTIONS = {
 	gains = { "Gains" },
 	buylimits = { "BuyLimits" },
 	firing_squad = {
-		"FiringSquadEnabled", "FiringSquadDuration", "FiringSquadFreeze",
-		"FiringSquadWeapon", "FiringSquadMags", "FiringSquadLoserKnife",
+		"FiringSquadDuration", "FiringSquadFreeze",
+		"FiringSquadWeapon", "FiringSquadMags",
 	},
 }
 

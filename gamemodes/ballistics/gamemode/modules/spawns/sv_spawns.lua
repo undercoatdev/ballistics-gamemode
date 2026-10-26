@@ -7,7 +7,6 @@ BALLISTICS = BALLISTICS or {}
 BALLISTICS.Spawns = BALLISTICS.Spawns or {}
 
 local D = BALLISTICS.SpawnData
-local MODEL = "models/props_c17/signpole001.mdl"
 local WARN = "Ballistics: this map has no Good and Bad flags. Open Admin → Spawns, place both, and save."
 local BOX_WARN = "Ballistics: Place the firing squad box in Admin > Spawns."
 
@@ -101,11 +100,24 @@ local function clearProps()
 	props = {}
 end
 
-local function teamColor(teamId)
-	local col = BALLISTICS.TeamColor and BALLISTICS.TeamColor[teamId]
-	if col then return col end
-	if teamId == (TEAM_BAD or 2) then return Color(220, 50, 50) end
-	return Color(70, 140, 255)
+local function sealFlag(ent)
+	if not ent then return end
+	if ent.SetKeyValue then ent:SetKeyValue("solid", "0") end
+	if ent.SetSolid then ent:SetSolid(SOLID_NONE or 0) end
+	if ent.SetNotSolid then ent:SetNotSolid(true) end
+	if ent.SetMoveType then ent:SetMoveType(MOVETYPE_NONE or 0) end
+	if ent.SetCollisionGroup then
+		ent:SetCollisionGroup(COLLISION_GROUP_IN_VEHICLE or 10)
+	end
+	if ent.DrawShadow then ent:DrawShadow(false) end
+	local phys = ent.GetPhysicsObject and ent:GetPhysicsObject()
+	if phys and (not phys.IsValid or phys:IsValid()) then
+		if phys.EnableMotion then phys:EnableMotion(false) end
+		if phys.EnableCollisions then phys:EnableCollisions(false) end
+	end
+	ent.PhysgunPickup = function() return false end
+	ent.GravGunPickupAllowed = function() return false end
+	ent.GravGunPunt = function() return false end
 end
 
 local function makeProp(flag, teamId)
@@ -114,23 +126,16 @@ local function makeProp(flag, teamId)
 	if not ent then return end
 	if ent.IsValid and not ent:IsValid() then return end
 	local x, y, z = snap(flag.pos.x, flag.pos.y, flag.pos.z)
-	ent:SetModel(MODEL)
+	local model = D.flagModel and D.flagModel(teamId) or D.FLAG_MODEL_GOOD
+	ent:SetModel(model)
 	ent:SetPos(Vector(x, y, z))
 	ent:SetAngles(Angle(0, flag.ang and flag.ang.y or 0, 0))
-	if ent.SetKeyValue then ent:SetKeyValue("solid", "0") end
-	ent:SetSolid(SOLID_NONE or 0)
-	ent:SetMoveType(MOVETYPE_NONE or 0)
+	sealFlag(ent)
 	ent:Spawn()
 	if ent.Activate then ent:Activate() end
-	if ent.SetModelScale then ent:SetModelScale(0.35, 0) end
-	if ent.SetRenderMode then ent:SetRenderMode(RENDERMODE_TRANSCOLOR or 1) end
-	if ent.SetColor then ent:SetColor(teamColor(teamId)) end
-	if ent.DrawShadow then ent:DrawShadow(false) end
+	-- Spawn can turn solidity and motion back on.
+	sealFlag(ent)
 	if ent.SetNW2Int then ent:SetNW2Int("bal_flag_team", teamId) end
-	local phys = ent.GetPhysicsObject and ent:GetPhysicsObject()
-	if phys and (not phys.IsValid or phys:IsValid()) and phys.EnableMotion then
-		phys:EnableMotion(false)
-	end
 	props[#props + 1] = ent
 end
 
@@ -354,7 +359,10 @@ function BALLISTICS.Spawns.Handle(ply, payload)
 	return false, "op"
 end
 
-if util and util.PrecacheModel then util.PrecacheModel(MODEL) end
+if util and util.PrecacheModel then
+	if D.FLAG_MODEL_GOOD then util.PrecacheModel(D.FLAG_MODEL_GOOD) end
+	if D.FLAG_MODEL_BAD then util.PrecacheModel(D.FLAG_MODEL_BAD) end
+end
 
 local function readPlace()
 	local pos = {}
@@ -433,8 +441,20 @@ if hook and hook.Add then
 	hook.Add("PhysgunPickup", "Ballistics_Flags", function(_, ent)
 		if isFlagEnt(ent) then return false end
 	end)
+	hook.Add("GravGunPickupAllowed", "Ballistics_Flags", function(_, ent)
+		if isFlagEnt(ent) then return false end
+	end)
+	hook.Add("GravGunPunt", "Ballistics_Flags", function(_, ent)
+		if isFlagEnt(ent) then return false end
+	end)
 	hook.Add("CanTool", "Ballistics_Flags", function(_, tr)
 		if tr and isFlagEnt(tr.Entity) then return false end
+	end)
+	hook.Add("EntityTakeDamage", "Ballistics_Flags", function(ent)
+		if isFlagEnt(ent) then return true end
+	end)
+	hook.Add("ShouldCollide", "Ballistics_Flags", function(a, b)
+		if isFlagEnt(a) or isFlagEnt(b) then return false end
 	end)
 end
 

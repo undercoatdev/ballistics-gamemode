@@ -1,9 +1,10 @@
 -- Pure round state machine. No GMod calls.
 -- Phases: lobby → buy → live → post → buy … until RoundsToWin (0 = endless).
--- A team that reaches RoundsToWin leaves post for squad when FiringSquadEnabled
--- is on and the winner is good or bad, then lobby. A draw, a disabled firing
--- squad, or an endless match (RoundsToWin 0) never enters squad. Post then
--- returns to lobby, as before.
+-- A decided match (one team reaches RoundsToWin) always leaves post for the
+-- firing squad, then the lobby. A deciding tie (equal score on the line, or a
+-- draw when one more win would clinch) leaves post for an untimed showdown in
+-- the same phase. Showdown names a winner before the lobby. An endless match
+-- never enters squad. Post never returns straight to the lobby.
 --
 -- state:Transition(evt, now) → events, or nil, err
 -- state:Tick(now) → events (one phase boundary per call; empty if nothing fired)
@@ -46,12 +47,6 @@ local function roundsToWin(self)
 	return n
 end
 
--- Missing or false stays off, so a state built without this key still
--- returns to the lobby. The live config default is on.
-local function squadOn(self)
-	return self.cfg.FiringSquadEnabled == true
-end
-
 local function squadDuration(self)
 	local n = tonumber(self.cfg.FiringSquadDuration)
 	if not n or n ~= n or n <= 0 then return 30 end
@@ -70,6 +65,7 @@ function State.new(cfg)
 		winner = nil,
 		reason = nil,
 		matchWinner = nil,
+		squadMode = nil,
 		ready = nil,
 	}, State)
 end
@@ -98,6 +94,10 @@ function State:MatchWinner()
 	return self.matchWinner
 end
 
+function State:SquadMode()
+	return self.squadMode
+end
+
 function State:TimeLeft(now)
 	if not self.endsAt then return nil end
 	now = tonumber(now) or 0
@@ -120,6 +120,7 @@ function State:Snapshot(now)
 		winner = self.winner or "",
 		reason = self.reason or "",
 		matchWinner = self.matchWinner or "",
+		squadMode = self.squadMode or "",
 	}
 end
 
@@ -157,6 +158,47 @@ function State.Elimination(goodAlive, badAlive)
 	return "good", "elimination"
 end
 
+-- "good", "bad", "showdown", or nil when the series continues.
+-- A deciding tie is an equal score already on the rounds-to-win line, or a
+-- draw while the scores are level and one more win would clinch. RoundsToWin
+-- 0 never closes. Knocked-out players are not an input here.
+function State.MatchCall(good, bad, roundWinner, roundsToWin)
+	good = math.floor(tonumber(good) or 0)
+	bad = math.floor(tonumber(bad) or 0)
+	if good < 0 then good = 0 end
+	if bad < 0 then bad = 0 end
+	local need = math.floor(tonumber(roundsToWin) or 0)
+	if need <= 0 then return nil end
+	local goodHit = good >= need
+	local badHit = bad >= need
+	if goodHit and badHit then return "showdown" end
+	if goodHit then return "good" end
+	if badHit then return "bad" end
+	if roundWinner == "draw" and good == bad and good + 1 >= need then
+		return "showdown"
+	end
+	return nil
+end
+
+-- Alive counts are Alive(), so knocked-out players are still in. Slot counts
+-- are how many players are on the team. nil means the fight continues.
+-- "lobby" means nobody is slotted. A simultaneous wipe is Good's win.
+function State.ShowdownCall(goodAlive, badAlive, goodSlots, badSlots)
+	goodSlots = math.floor(tonumber(goodSlots) or 0)
+	badSlots = math.floor(tonumber(badSlots) or 0)
+	if goodSlots < 0 then goodSlots = 0 end
+	if badSlots < 0 then badSlots = 0 end
+	if goodSlots <= 0 and badSlots <= 0 then return "lobby" end
+	if goodSlots <= 0 then return "bad" end
+	if badSlots <= 0 then return "good" end
+	goodAlive = math.floor(tonumber(goodAlive) or 0)
+	badAlive = math.floor(tonumber(badAlive) or 0)
+	if goodAlive > 0 and badAlive > 0 then return nil end
+	if goodAlive <= 0 and badAlive <= 0 then return "good" end
+	if goodAlive <= 0 then return "bad" end
+	return "good"
+end
+
 local function phaseEvent(old, new, round, matchStart)
 	return {
 		type = "phase",
@@ -177,6 +219,7 @@ function State:_enterBuy(now, matchStart)
 	else
 		self.round = self.round + 1
 	end
+	self.squadMode = nil
 	self.phase = PHASE_BUY
 	self.enteredAt = now
 	self.endsAt = now + duration(self, "BuyTime", 20)
@@ -188,6 +231,7 @@ end
 function State:_enterLive(now)
 	local prev = self.phase
 	self.phase = PHASE_LIVE
+	self.squadMode = nil
 	self.enteredAt = now
 	self.endsAt = now + duration(self, "RoundTime", 600)
 	return { phaseEvent(prev, PHASE_LIVE, self.round, false) }
@@ -205,13 +249,15 @@ function State:_enterPost(now, winner, reason)
 	elseif winner == "bad" then
 		self.score.bad = self.score.bad + 1
 	end
-	local need = roundsToWin(self)
-	if need > 0 and self.matchWinner == nil then
-		if self.score.good >= need then
-			self.matchWinner = "good"
-		elseif self.score.bad >= need then
-			self.matchWinner = "bad"
-		end
+	local call = State.MatchCall(self.score.good, self.score.bad, winner, roundsToWin(self))
+	if call == "good" or call == "bad" then
+		self.matchWinner = call
+		self.squadMode = "finale"
+	elseif call == "showdown" then
+		self.matchWinner = nil
+		self.squadMode = "showdown"
+	else
+		self.squadMode = nil
 	end
 	return {
 		{
@@ -229,6 +275,7 @@ end
 function State:_enterSquad(now)
 	local prev = self.phase
 	self.phase = PHASE_SQUAD
+	self.squadMode = "finale"
 	self.enteredAt = now
 	self.endsAt = now + squadDuration(self)
 	return {
@@ -237,10 +284,21 @@ function State:_enterSquad(now)
 	}
 end
 
+function State:_enterShowdown(now)
+	local prev = self.phase
+	self.phase = PHASE_SQUAD
+	self.squadMode = "showdown"
+	self.matchWinner = nil
+	self.enteredAt = now
+	self.endsAt = nil
+	return { phaseEvent(prev, PHASE_SQUAD, self.round, false) }
+end
+
 function State:_enterLobby(now)
 	local prev = self.phase
 	local winner = self.matchWinner
 	self.phase = PHASE_LOBBY
+	self.squadMode = nil
 	self.enteredAt = now
 	self.endsAt = nil
 	local events = {
@@ -305,14 +363,60 @@ function State:Tick(now)
 		return self:_enterPost(now, timeoutWinner(self), "timeout")
 	end
 	if self.phase == PHASE_POST then
-		if self.matchWinner == "good" or self.matchWinner == "bad" then
-			if squadOn(self) then return self:_enterSquad(now) end
-			return self:_enterLobby(now)
+		-- A tie must not fall through to the lobby without a side.
+		if self.squadMode == "showdown" then return self:_enterShowdown(now) end
+		if self.matchWinner and self.matchWinner ~= "good" and self.matchWinner ~= "bad" then
+			return self:_enterShowdown(now)
 		end
-		if self.matchWinner then return self:_enterLobby(now) end
+		if self.matchWinner == "good" or self.matchWinner == "bad" or self.squadMode == "finale" then
+			return self:_enterSquad(now)
+		end
 		return self:_enterBuy(now, false)
 	end
-	if self.phase == PHASE_SQUAD then return self:_enterLobby(now) end
+	if self.phase == PHASE_SQUAD then
+		if self.squadMode == "showdown" then return {} end
+		return self:_enterLobby(now)
+	end
+	return {}
+end
+
+function State:FinishShowdown(now, winner)
+	if self.phase ~= PHASE_SQUAD or self.squadMode ~= "showdown" then return nil, "not showdown" end
+	if winner ~= "good" and winner ~= "bad" then return nil, "bad winner" end
+	now = tonumber(now) or 0
+	self.matchWinner = winner
+	local prev = self.phase
+	self.phase = PHASE_LOBBY
+	self.squadMode = nil
+	self.enteredAt = now
+	self.endsAt = nil
+	return {
+		{ type = "match_end", winner = winner, round = self.round },
+		phaseEvent(prev, PHASE_LOBBY, self.round, false),
+	}
+end
+
+function State:AbandonShowdown(now)
+	if self.phase ~= PHASE_SQUAD or self.squadMode ~= "showdown" then return nil, "not showdown" end
+	now = tonumber(now) or 0
+	self.matchWinner = nil
+	local prev = self.phase
+	self.phase = PHASE_LOBBY
+	self.squadMode = nil
+	self.enteredAt = now
+	self.endsAt = nil
+	return { phaseEvent(prev, PHASE_LOBBY, self.round, false) }
+end
+
+function State:ConsiderShowdown(now, goodAlive, badAlive, goodSlots, badSlots)
+	if self.phase ~= PHASE_SQUAD or self.squadMode ~= "showdown" then return {} end
+	local call = State.ShowdownCall(goodAlive, badAlive, goodSlots, badSlots)
+	if call == "good" or call == "bad" then
+		return self:FinishShowdown(now, call) or {}
+	end
+	if call == "lobby" then
+		return self:AbandonShowdown(now) or {}
+	end
 	return {}
 end
 

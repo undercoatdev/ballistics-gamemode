@@ -12,12 +12,6 @@ S.DEFAULT_WEAPON = "tacrp_ex_ak47"
 
 local ROWS = {
 	{
-		path = "FiringSquadEnabled",
-		label = "Enabled",
-		kind = "bool",
-		blurb = "When a team reaches Rounds to win, line both teams up before the lobby. Off, or a draw, goes straight to the lobby. Rounds to win 0 never ends the match.",
-	},
-	{
 		path = "FiringSquadDuration",
 		label = "Duration (seconds)",
 		kind = "number",
@@ -39,7 +33,7 @@ local ROWS = {
 		path = "FiringSquadWeapon",
 		label = "Winner weapon",
 		kind = "string",
-		blurb = "Weapon class given to the winners. Everything else is stripped.",
+		blurb = "Weapon class given to the winners. Everything else is stripped. A draw showdown gives this gun to both teams.",
 	},
 	{
 		path = "FiringSquadMags",
@@ -48,13 +42,7 @@ local ROWS = {
 		min = 0,
 		max = 30,
 		decimals = 0,
-		blurb = "Full magazines of that weapon's own clip, given as reserve ammo.",
-	},
-	{
-		path = "FiringSquadLoserKnife",
-		label = "Loser knife",
-		kind = "bool",
-		blurb = "Give the losers a knife. Off leaves them unarmed.",
+		blurb = "0 = infinite ammo. Above zero, full magazines of that weapon's own clip are given as reserve.",
 	},
 }
 
@@ -92,36 +80,35 @@ function S.Settings(cfg)
 	if freeze > 120 then freeze = 120 end
 	local weapon = cfg.FiringSquadWeapon
 	if not S.ValidClass(weapon) then weapon = S.DEFAULT_WEAPON end
-	local mags = whole(cfg.FiringSquadMags, 4)
+	local mags = whole(cfg.FiringSquadMags, 0)
 	if mags < 0 then mags = 0 end
 	if mags > 30 then mags = 30 end
 	return {
-		enabled = cfg.FiringSquadEnabled == true,
 		duration = duration,
 		freeze = freeze,
 		weapon = weapon,
 		mags = mags,
-		loserKnife = cfg.FiringSquadLoserKnife == true,
 	}
 end
 
 function S.Role(team, winner)
-	if winner ~= "good" and winner ~= "bad" then return nil end
 	local side = nil
 	if team == "good" or team == 1 then side = "good" end
 	if team == "bad" or team == 2 then side = "bad" end
 	if not side then return nil end
+	if winner == "showdown" then return "showdown" end
+	if winner ~= "good" and winner ~= "bad" then return nil end
 	if side == winner then return "winner" end
 	return "loser"
 end
 
 function S.Kit(role, cfg)
 	local settings = S.Settings(cfg)
-	if role == "winner" then
+	if role == "winner" or role == "showdown" then
 		return { weapon = settings.weapon, mags = settings.mags, knife = false, freeze = 0 }
 	end
 	if role == "loser" then
-		return { weapon = nil, mags = 0, knife = settings.loserKnife, freeze = settings.freeze }
+		return { weapon = nil, mags = 0, knife = false, freeze = settings.freeze }
 	end
 	return nil
 end

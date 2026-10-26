@@ -65,6 +65,9 @@ if BALLISTICS.Net and BALLISTICS.Net.Register then
 			BALLISTICS.Config.Apply(payload)
 		end
 		applyHealthMode()
+		if BALLISTICS.Ammo and type(BALLISTICS.Ammo.ApplyConVar) == "function" then
+			BALLISTICS.Ammo.ApplyConVar()
+		end
 		BALLISTICS.SaveConfig()
 		BALLISTICS.BroadcastConfig()
 	end, { admin = true, rate = 10, read = "table" })

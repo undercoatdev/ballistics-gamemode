@@ -49,6 +49,9 @@ function hook.Run(event, ...)
 		if r ~= nil then return r end
 	end
 end
+function hook.GetTable()
+	return hooks
+end
 hook.Call = hook.Run
 
 timer = {}
