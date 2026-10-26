@@ -596,8 +596,8 @@ function D.playerPoint(flag, slot, per, blocked)
 end
 
 if SERVER and AddCSLuaFile then
-	AddCSLuaFile("modules/spawns/defaults.lua")
+	AddCSLuaFile(((GM and GM.FolderName) or "ballistics") .. "/gamemode/modules/spawns/defaults.lua")
 end
 if include then
-	include("modules/spawns/defaults.lua")
+	include(((GM and GM.FolderName) or "ballistics") .. "/gamemode/modules/spawns/defaults.lua")
 end
