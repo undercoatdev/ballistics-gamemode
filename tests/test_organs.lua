@@ -84,4 +84,27 @@ local src = readAll("gamemodes/ballistics/gamemode/modules/organs/sv_organs.lua"
 check("sync uses Body Damage's own path", src:find("WriteOrganCopies", 1, true) and src:find("OrganNetPush", 1, true))
 check("write is deferred past GiveOrgans", src:find("timer.Simple", 1, true) ~= nil)
 
+-- Only survivors keep organ hp. A full death resets.
+do
+	local function mk(id, alive)
+		local p = { id = id, alive = alive }
+		function p:Alive() return self.alive end
+		function p:IsValid() return true end
+		return p
+	end
+	local live, dead, ko = mk("live", true), mk("dead", false), mk("ko", true)
+	local rec = { organs = { copies = { lung = { parts = { left = 0 } } } } }
+	BODY_DAMAGE = { FindRecord = function() return rec end, SideHealth = function() return 100 end }
+	BALLISTICS.PlayerId = function(p) return p.id end
+	BALLISTICS.Slots = {
+		Members = function(t) if t == 1 then return { "live", "ko" } end return { "dead" } end,
+		Player = function(id) return ({ live = live, dead = dead, ko = ko })[id] end,
+	}
+	dofile("gamemodes/ballistics/gamemode/modules/organs/sv_organs.lua")
+	BALLISTICS.Organs.Capture()
+	check("survivor keeps organs", BALLISTICS.Organs.Captured("live") == true)
+	check("knocked out (still alive) keeps organs", BALLISTICS.Organs.Captured("ko") == true)
+	check("fully dead player gets a full organ reset", BALLISTICS.Organs.Captured("dead") == false)
+end
+
 if failed then os.exit(1) end

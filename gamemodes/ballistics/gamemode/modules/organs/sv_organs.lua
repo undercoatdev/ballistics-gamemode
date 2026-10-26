@@ -138,9 +138,16 @@ function BALLISTICS.Organs.Capture()
 	eachSlotted(function(ply)
 		local id = playerId(ply)
 		if not id then return end
+		-- Only survivors carry organs. A full death (not a knockout, which is
+		-- still Alive) gets a fresh body like a normal respawn.
+		if type(ply.Alive) == "function" and ply:Alive() ~= true then return end
 		local snap = BALLISTICS.Organs.SnapshotRecord(findRecord(ply), sideMax)
 		if snap then captured[id] = snap end
 	end)
+end
+
+function BALLISTICS.Organs.Captured(id)
+	return captured[id] ~= nil
 end
 
 function BALLISTICS.Organs.Reset()
