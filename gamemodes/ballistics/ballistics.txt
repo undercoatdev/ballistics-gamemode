@@ -5,6 +5,7 @@
 	"maps"		""
 	"menusystem"	"1"
 	"workshopid"	""
+	"tacrp_workshopid"	"3734712166"
 	"settings"
 	{
 	}

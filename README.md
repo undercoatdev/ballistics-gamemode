@@ -9,8 +9,13 @@ Buy phase, spawn objectives with capture circles, per-player money and an admin 
 Copy `gamemodes/ballistics` into `garrysmod/gamemodes/` and pick "Ballistics Game Mode" in the menu.
 
 ## Dependencies (Workshop, not bundled)
-- Tactical RP Weapons (TacRP)
-- Player Ballistics (and its Body Damage core)
+These are **not** included. Subscribe and enable them:
+
+- [TacRP — Tactical RP Weapons (OFFICIAL)](https://steamcommunity.com/sharedfiles/filedetails/?id=3734712166) (`3734712166`) — all weapons, knife, grenades, attachment menu
+- Player Ballistics (workshop id TBD) — meds bag, knockout / unconscious state
+- Body Damage core (workshop id TBD) — required by Player Ballistics (`BODY_DAMAGE.FindRecord`)
+
+If TacRP is missing the gamemode still boots and prints a warning; the buy menu stays disabled.
 
 ## Tests
 `sh tests/run_all.sh` (needs luajit).
