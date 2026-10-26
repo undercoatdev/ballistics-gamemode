@@ -9,8 +9,9 @@ BALLISTICS.Spawns = BALLISTICS.Spawns or {}
 local D = BALLISTICS.SpawnData
 local MODEL = "models/props_c17/signpole001.mdl"
 local WARN = "Ballistics: this map has no Good and Bad flags. Open Admin → Spawns, place both, and save."
+local BOX_WARN = "Ballistics: Place the firing squad box in Admin > Spawns."
 
-local state = { good = nil, bad = nil, source = "none", map = "", dirty = false }
+local state = { good = nil, bad = nil, box = nil, source = "none", map = "", dirty = false }
 local props = {}
 
 local function mapName()
@@ -51,6 +52,29 @@ local function snapFlag(flag)
 		pos = { x = x, y = y, z = z },
 		ang = { p = 0, y = flag.ang and flag.ang.y or 0, r = 0 },
 	}
+end
+
+-- Centre z becomes ground + half height. A miss keeps the centre that was sent.
+local function snapBox(box)
+	if not box or not box.pos then return nil end
+	local out = {
+		pos = { x = box.pos.x, y = box.pos.y, z = box.pos.z },
+		yaw = box.yaw or 0,
+		sx = box.sx,
+		sy = box.sy,
+	}
+	if not util or not util.TraceLine then return out end
+	local x, y, z = out.pos.x, out.pos.y, out.pos.z
+	local tr = util.TraceLine({
+		start = Vector(x, y, z + 64),
+		endpos = Vector(x, y, z - 4096),
+		mask = MASK_SOLID_BRUSHONLY or 16395,
+	})
+	if not tr or not tr.Hit or tr.HitSky or not tr.HitPos or tr.HitPos.z == nil then
+		return out
+	end
+	out.pos.z = tr.HitPos.z + (D.BOX_HEIGHT * 0.5)
+	return out
 end
 
 local function hullBlocked(x, y, z)
@@ -147,6 +171,26 @@ local function warnAdmins(ply)
 	end
 end
 
+local function warnBox(ply)
+	if D.hasBox(state) then return end
+	if ply then
+		if BALLISTICS.IsAdmin and BALLISTICS.IsAdmin(ply) and ply.ChatPrint then
+			ply:ChatPrint(BOX_WARN)
+		end
+		return
+	end
+	print(BOX_WARN)
+	if not player or not player.GetAll then return end
+	local all = player.GetAll()
+	if type(all) ~= "table" then return end
+	for i = 1, #all do
+		local p = all[i]
+		if BALLISTICS.IsAdmin and BALLISTICS.IsAdmin(p) and p.ChatPrint then
+			p:ChatPrint(BOX_WARN)
+		end
+	end
+end
+
 local function perTeam()
 	if BALLISTICS.Slots and BALLISTICS.Slots.Limit then
 		return BALLISTICS.Slots.Limit()
@@ -162,6 +206,16 @@ end
 
 function BALLISTICS.Spawns.HasBoth()
 	return D.hasBoth(state) == true
+end
+
+function BALLISTICS.Spawns.HasBox()
+	return D.hasBox(state) == true
+end
+
+function BALLISTICS.Spawns.SquadBox()
+	if not D.hasBox(state) then return nil end
+	local copy = D.copy(state)
+	return copy.box
 end
 
 function BALLISTICS.Spawns.Sync(ply)
@@ -196,14 +250,17 @@ function BALLISTICS.Spawns.Reload()
 	state = D.resolve(saved, BALLISTICS.SpawnDefaults, map)
 	state.good = snapFlag(state.good)
 	state.bad = snapFlag(state.bad)
+	state.box = snapBox(state.box)
 	rebuild()
 	sync()
 	if not D.hasBoth(state) then warnAdmins() end
+	if not D.hasBox(state) then warnBox() end
 	return state.source
 end
 
 local function save()
-	if not state.good and not state.bad then return false, "empty" end
+	local hasBox = type(state.box) == "table" and type(state.box.pos) == "table"
+	if not state.good and not state.bad and not hasBox then return false, "empty" end
 	local map = mapName()
 	local path = D.mapFile(map)
 	if not path then return false, "map" end
@@ -229,12 +286,14 @@ local function reset()
 	state = D.resolve(nil, BALLISTICS.SpawnDefaults, map)
 	state.good = snapFlag(state.good)
 	state.bad = snapFlag(state.bad)
+	state.box = snapBox(state.box)
 	rebuild()
 	sync()
 	if state.source == "defaults" then
 		return true, "Ballistics: flags reset to the built-in defaults for this map."
 	end
 	warnAdmins()
+	warnBox()
 	return true, "Ballistics: this map has no built-in flags. Place both before the round can start."
 end
 
@@ -262,6 +321,22 @@ function BALLISTICS.Spawns.Handle(ply, payload)
 		sync()
 		local side = D.side(payload.team) or "flag"
 		tell(ply, "Ballistics: placed the " .. side .. " flag. Save to keep it.")
+		return true
+	elseif op == D.OP_BOX then
+		local pos = payload.pos
+		local yaw = payload.yaw
+		if yaw == nil and type(payload.ang) == "table" then yaw = payload.ang.y end
+		local nextState, err = D.placeBox(state, pos, yaw, payload.sx, payload.sy)
+		if not nextState then
+			tell(ply, "Ballistics: " .. D.reasonText(err))
+			return false, err
+		end
+		nextState.box = snapBox(nextState.box)
+		state = nextState
+		state.map = mapName()
+		state.dirty = true
+		sync()
+		tell(ply, "Ballistics: placed the firing squad box. Save to keep it.")
 		return true
 	elseif op == D.OP_SAVE then
 		local ok, err = save()
@@ -292,7 +367,9 @@ local function readPlace()
 	ang.p = net.ReadFloat()
 	ang.y = net.ReadFloat()
 	ang.r = net.ReadFloat()
-	return { op = op, team = team, pos = pos, ang = ang }
+	local sx = net.ReadFloat()
+	local sy = net.ReadFloat()
+	return { op = op, team = team, pos = pos, ang = ang, sx = sx, sy = sy }
 end
 
 local function writeFlag(flag)
@@ -308,6 +385,18 @@ local function writeFlag(flag)
 	net.WriteFloat(ang.r or 0)
 end
 
+local function writeBox(box)
+	local on = type(box) == "table" and type(box.pos) == "table"
+	net.WriteBool(on)
+	if not on then return end
+	net.WriteFloat(box.pos.x or 0)
+	net.WriteFloat(box.pos.y or 0)
+	net.WriteFloat(box.pos.z or 0)
+	net.WriteFloat(box.yaw or 0)
+	net.WriteFloat(box.sx or 0)
+	net.WriteFloat(box.sy or 0)
+end
+
 if BALLISTICS.Net and BALLISTICS.Net.Register then
 	BALLISTICS.Net.Register("bal_spawn_place", function(ply, payload)
 		BALLISTICS.Spawns.Handle(ply, payload)
@@ -321,6 +410,7 @@ if BALLISTICS.Net and BALLISTICS.Net.Register then
 			net.WriteBool(payload.dirty == true)
 			writeFlag(payload.good)
 			writeFlag(payload.bad)
+			writeBox(payload.box)
 		end,
 	})
 end
@@ -332,6 +422,7 @@ if hook and hook.Add then
 	hook.Add("PlayerInitialSpawn", "Ballistics_SpawnsSync", function(ply)
 		sync(ply)
 		warnAdmins(ply)
+		warnBox(ply)
 		if timer and timer.Simple then
 			timer.Simple(1, function()
 				if ply and type(ply.IsValid) == "function" and ply:IsValid() ~= true then return end

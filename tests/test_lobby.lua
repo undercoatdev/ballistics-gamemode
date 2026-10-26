@@ -218,6 +218,20 @@ local noFlags = build({
 check("missing flags disable Start", noFlags.start.enabled == false and noFlags.start.reason == "flags")
 check("unknown flags do not block Start", staff.start.enabled == true)
 
+local noBox = build({
+	isAdmin = true,
+	flags = true,
+	box = false,
+	sides = {
+		[GOOD] = { [1] = { id = "a", name = "Ada" } },
+		[BAD] = { [1] = { id = "b", name = "Bea" } },
+	},
+})
+check("a missing firing squad box disables Start", noBox.start.enabled == false and noBox.start.reason == "box")
+check("the box reason tells the admin where to place it", V.ReasonText("box") == "Place the firing squad box in Admin > Spawns")
+check("an alive player cannot switch during the firing squad", V.Click(staff, BAD, 2, { phase = "squad", alive = true }).reason == "alive")
+check("a dead player queues a switch during the firing squad", V.Click(staff, BAD, 2, { phase = "squad", alive = false }).action == "queue")
+
 local both = true
 local phases = { "lobby", "buy", "live", "post" }
 for p = 1, #phases do

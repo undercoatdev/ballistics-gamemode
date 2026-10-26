@@ -319,7 +319,10 @@ BALLISTICS.Slots.Take(bad, TEAM_BAD, 1)
 BALLISTICS.Spawns = { HasBoth = function() return false end }
 ok, why = BALLISTICS.StartMatch(admin)
 check("start without flags is refused", ok == false and why == "flags" and BALLISTICS.Round.Phase() == "lobby")
-BALLISTICS.Spawns = { HasBoth = function() return true end }
+BALLISTICS.Spawns = { HasBoth = function() return true end, HasBox = function() return false end }
+ok, why = BALLISTICS.StartMatch(admin)
+check("start without the firing squad box is refused", ok == false and why == "box" and BALLISTICS.Round.Phase() == "lobby")
+BALLISTICS.Spawns = { HasBoth = function() return true end, HasBox = function() return true end }
 
 ok, why = cmds.bal_debug_start(user)
 check("non-admin cannot start", ok == false and why == "admin" and BALLISTICS.Round.Phase() == "lobby")

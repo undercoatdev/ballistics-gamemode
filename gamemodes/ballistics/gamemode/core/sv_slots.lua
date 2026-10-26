@@ -168,7 +168,7 @@ end
 -- LIVE/POST: a living slotted player cannot hop. A dead one is queued for the
 -- next BUY. LOBBY/BUY take effect immediately (the caller respawns on BUY).
 function SlotTable:Request(id, teamId, slot, phase, alive)
-	if phase == "live" or phase == "post" then
+	if phase == "live" or phase == "post" or phase == "squad" then
 		if alive then return false, "alive" end
 		return self:Queue(id, teamId, slot)
 	end

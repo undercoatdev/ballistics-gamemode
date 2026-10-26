@@ -48,6 +48,7 @@ check("a missing attacker pays nothing", G.KillReward({
 check("buy pays nothing", G.KillReward(ctx({ phase = "buy" })) == nil)
 check("lobby pays nothing", G.KillReward(ctx({ phase = "lobby" })) == nil)
 check("post pays nothing", G.KillReward(ctx({ phase = "post" })) == nil)
+check("squad pays nothing", G.KillReward(ctx({ phase = "squad" })) == nil)
 check("phase match is exact", G.KillReward(ctx({ phase = "LIVE" })) == nil)
 check("an unslotted victim pays nothing", G.KillReward({
 	phase = "live",

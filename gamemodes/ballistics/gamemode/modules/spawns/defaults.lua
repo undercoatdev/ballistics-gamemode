@@ -8,9 +8,20 @@ local function face(ax, ay, bx, by)
 end
 
 local function pair(ax, ay, az, bx, by, bz)
+	local data = BALLISTICS.SpawnData or {}
+	local length = data.BOX_LENGTH or 768
+	local width = data.BOX_WIDTH or 384
+	local lift = ((data.BOX_HEIGHT or 128) * 0.5)
 	return {
 		good = { pos = { x = ax, y = ay, z = az }, ang = { p = 0, y = face(ax, ay, bx, by), r = 0 } },
 		bad = { pos = { x = bx, y = by, z = bz }, ang = { p = 0, y = face(bx, by, ax, ay), r = 0 } },
+		-- Between the flags, on the ground, long axis along the flag line.
+		box = {
+			pos = { x = (ax + bx) * 0.5, y = (ay + by) * 0.5, z = az + lift },
+			yaw = face(ax, ay, bx, by),
+			sx = length,
+			sy = width,
+		},
 	}
 end
 

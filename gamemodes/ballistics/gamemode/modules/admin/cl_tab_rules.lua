@@ -18,8 +18,10 @@ local function messageName()
 	return name
 end
 
-local function send(payload)
-	local view = BALLISTICS.RulesView
+local function send(view, payload)
+	if not view or type(view.PayloadFor) ~= "function" then
+		view = BALLISTICS.RulesView
+	end
 	if not view or type(view.PayloadFor) ~= "function" then return end
 	local admin = BALLISTICS.ClientIsAdmin and BALLISTICS.ClientIsAdmin()
 	local clean = view.PayloadFor(admin, payload)
@@ -30,8 +32,7 @@ local function send(payload)
 	net.SendToServer()
 end
 
-local function findRow(sectionId, path)
-	local view = BALLISTICS.RulesView
+local function findRow(view, sectionId, path)
 	if not view or type(view.Rows) ~= "function" then return nil end
 	local rows = view.Rows(sectionId)
 	for i = 1, #rows do
@@ -46,13 +47,15 @@ local function paintLine(w, h)
 	surface.DrawRect(0, 0, w, h)
 end
 
-function BALLISTICS.Admin.BuildRules(parent, sectionId)
+function BALLISTICS.Admin.BuildRules(parent, sectionId, view)
 	if parent == nil then return end
 	if IsValid and not IsValid(parent) then return end
 	if parent.Clear then parent:Clear() end
 	if not vgui or not vgui.Create then return end
 
-	local view = BALLISTICS.RulesView
+	if not view or type(view.Rows) ~= "function" then
+		view = BALLISTICS.RulesView
+	end
 	if not view or type(view.Rows) ~= "function" then return end
 
 	local scroll = vgui.Create("DScrollPanel", parent)
@@ -66,14 +69,17 @@ function BALLISTICS.Admin.BuildRules(parent, sectionId)
 
 	local function commit(path, display)
 		if mute then return end
-		local row = findRow(sectionId, path)
+		local row = findRow(view, sectionId, path)
 		if not row then return end
 		if view.Same and view.Same(row.display, display) then return end
 		if view.Same and view.Same(lastSent[path], display) then return end
-		local payload = view.Commit(row, display)
+		local payload = nil
+		if type(view.Commit) == "function" then
+			payload = view.Commit(row, display)
+		end
 		if not payload then return end
 		lastSent[path] = display
-		send(payload)
+		send(view, payload)
 	end
 
 	local function hover(panel, row)
@@ -170,6 +176,53 @@ function BALLISTICS.Admin.BuildRules(parent, sectionId)
 		}
 	end
 
+	local function addString(row)
+		local line = vgui.Create("DPanel", scroll)
+		line:Dock(TOP)
+		line:SetTall(28)
+		line:DockMargin(0, 0, 0, 4)
+		line.Paint = function(_, w, h) paintLine(w, h) end
+		hover(line, row)
+
+		local entry = vgui.Create("DTextEntry", line)
+		hover(entry, row)
+		entry:Dock(RIGHT)
+		entry:SetWide(180)
+		entry:DockMargin(0, 2, 4, 2)
+		mute = true
+		if entry.SetText then entry:SetText(tostring(row.display or "")) end
+		mute = false
+		addLabel(line, row.label)
+
+		local function push()
+			if mute then return end
+			local val = ""
+			if entry.GetValue then
+				val = entry:GetValue()
+			elseif entry.GetText then
+				val = entry:GetText()
+			end
+			commit(row.path, val)
+		end
+		entry.OnEnter = function()
+			push()
+		end
+		local base = entry.OnLoseFocus
+		entry.OnLoseFocus = function(self)
+			if base then base(self) end
+			push()
+		end
+		widgets[row.path] = {
+			apply = function(live)
+				if entry.HasFocus and entry:HasFocus() then return end
+				mute = true
+				if entry.SetText then entry:SetText(tostring(live.display or "")) end
+				mute = false
+				lastSent[row.path] = nil
+			end,
+		}
+	end
+
 	local function paintMode(btn, on)
 		local label = btn.balLabel or ""
 		btn.Paint = function(_, w, h)
@@ -245,6 +298,8 @@ function BALLISTICS.Admin.BuildRules(parent, sectionId)
 			addBool(row)
 		elseif row.kind == "enum" then
 			addEnum(row)
+		elseif row.kind == "string" then
+			addString(row)
 		else
 			addNumber(row)
 		end

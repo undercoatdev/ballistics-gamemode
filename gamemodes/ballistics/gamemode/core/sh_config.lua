@@ -72,6 +72,12 @@ local DEFAULTS = {
 		nade_each = 0,
 	},
 	AdminSuperOnly = false,
+	FiringSquadEnabled = true,
+	FiringSquadDuration = 30,
+	FiringSquadFreeze = 10,
+	FiringSquadWeapon = "tacrp_ex_ak47",
+	FiringSquadMags = 4,
+	FiringSquadLoserKnife = false,
 }
 
 local INT = { kind = "int", min = 0, max = 1000000 }
@@ -106,6 +112,12 @@ local SCHEMA = {
 	Gains = { kind = "map", value = INT },
 	BuyLimits = { kind = "map", value = { kind = "int", min = 0, max = 100 } },
 	AdminSuperOnly = { kind = "bool" },
+	FiringSquadEnabled = { kind = "bool" },
+	FiringSquadDuration = { kind = "number", min = 5, max = 300 },
+	FiringSquadFreeze = { kind = "int", min = 0, max = 120 },
+	FiringSquadWeapon = { kind = "string", pattern = "^[%w_]+$", max = 64 },
+	FiringSquadMags = { kind = "int", min = 0, max = 30 },
+	FiringSquadLoserKnife = { kind = "bool" },
 }
 
 local COST_GROUPS = {
@@ -131,6 +143,10 @@ local SECTIONS = {
 	attachments = { "AttCosts", "AttRefundOnDetach" },
 	gains = { "Gains" },
 	buylimits = { "BuyLimits" },
+	firing_squad = {
+		"FiringSquadEnabled", "FiringSquadDuration", "FiringSquadFreeze",
+		"FiringSquadWeapon", "FiringSquadMags", "FiringSquadLoserKnife",
+	},
 }
 
 local SECTION_ALIAS = {
@@ -154,6 +170,8 @@ local SECTION_ALIAS = {
 	buylimits = "buylimits",
 	rules = "rules",
 	Rules = "rules",
+	firing_squad = "firing_squad",
+	FiringSquad = "firing_squad",
 	all = "all",
 	All = "all",
 }
@@ -181,6 +199,8 @@ local function coerce(value, spec)
 		return nil
 	elseif kind == "string" then
 		if type(value) ~= "string" or value == "" then return nil end
+		if spec.max and #value > spec.max then return nil end
+		if spec.pattern and not string.match(value, spec.pattern) then return nil end
 		return value
 	elseif kind == "enum" then
 		if type(value) ~= "string" then return nil end

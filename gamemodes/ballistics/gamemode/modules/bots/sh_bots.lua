@@ -39,7 +39,7 @@ end
 
 -- Lobby and buy take a slot immediately. Live and post wait for the next buy.
 function BALLISTICS.Bots.JoinsNow(phase)
-	return phase ~= "live" and phase ~= "post"
+	return phase ~= "live" and phase ~= "post" and phase ~= "squad"
 end
 
 -- Buy puts a new bot on the flag. Lobby waits for the match. Live and post

@@ -12,6 +12,7 @@ local NAMES = {
 	buy = "BUY",
 	live = "LIVE",
 	post = "POST",
+	squad = "SQUAD",
 }
 
 local CHIP_W = 220

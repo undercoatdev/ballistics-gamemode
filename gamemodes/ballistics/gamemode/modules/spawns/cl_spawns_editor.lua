@@ -10,10 +10,12 @@ local D = BALLISTICS.SpawnData
 local GOOD = TEAM_GOOD or 1
 local BAD = TEAM_BAD or 2
 
-local view = { map = "", source = "none", dirty = false, good = nil, bad = nil }
+local view = { map = "", source = "none", dirty = false, good = nil, bad = nil, box = nil }
 local listeners = {}
 local side = GOOD
+local boxDraft = { yaw = 0, sx = D.BOX_LENGTH or 768, sy = D.BOX_WIDTH or 384 }
 local editing = false
+local send
 local cam = nil
 local toolbar = nil
 local wheelAt = 0
@@ -37,6 +39,7 @@ function BALLISTICS.Spawns.Snapshot()
 		dirty = view.dirty == true,
 		good = view.good,
 		bad = view.bad,
+		box = view.box,
 	}
 end
 
@@ -44,7 +47,35 @@ function BALLISTICS.Spawns.Side()
 	return side
 end
 
+local function wrapYaw(y)
+	y = (tonumber(y) or 0) % 360
+	if y < 0 then y = y + 360 end
+	if y >= 360 then y = 0 end
+	return y
+end
+
+function BALLISTICS.Spawns.BoxDraft()
+	return { yaw = boxDraft.yaw, sx = boxDraft.sx, sy = boxDraft.sy }
+end
+
+-- sendNow places or resizes only when a box already exists. Otherwise the
+-- next ground click uses this draft.
+function BALLISTICS.Spawns.SetBoxDraft(yaw, sx, sy, sendNow)
+	if yaw ~= nil then boxDraft.yaw = wrapYaw(yaw) end
+	if sx ~= nil then boxDraft.sx = tonumber(sx) or boxDraft.sx end
+	if sy ~= nil then boxDraft.sy = tonumber(sy) or boxDraft.sy end
+	if sendNow and view.box and view.box.pos then
+		send(D.OP_BOX, 0, view.box.pos, { p = 0, y = boxDraft.yaw, r = 0 }, boxDraft.sx, boxDraft.sy)
+	end
+	emit()
+end
+
 function BALLISTICS.Spawns.SetSide(teamId)
+	if teamId == "box" then
+		side = "box"
+		emit()
+		return
+	end
 	teamId = tonumber(teamId)
 	if teamId ~= GOOD and teamId ~= BAD then return end
 	side = teamId
@@ -65,7 +96,7 @@ local function syncCursor()
 	end
 end
 
-local function send(op, team, pos, ang)
+function send(op, team, pos, ang, sx, sy)
 	if not net or not net.Start then return end
 	pos = pos or {}
 	ang = ang or {}
@@ -78,6 +109,8 @@ local function send(op, team, pos, ang)
 	net.WriteFloat(tonumber(ang.p) or 0)
 	net.WriteFloat(tonumber(ang.y) or 0)
 	net.WriteFloat(tonumber(ang.r) or 0)
+	net.WriteFloat(tonumber(sx) or 0)
+	net.WriteFloat(tonumber(sy) or 0)
 	net.SendToServer()
 end
 
@@ -98,7 +131,7 @@ function BALLISTICS.Spawns.ConfirmReset()
 		return
 	end
 	Derma_Query(
-		"Reset this map's flags to the built-in defaults? A saved layout for this map is removed.",
+		"Reset this map's flags and firing squad box to the built-in defaults? A saved layout for this map is removed.",
 		"Reset to defaults",
 		"Reset",
 		go,
@@ -115,6 +148,16 @@ local function readFlag()
 	}
 end
 
+local function readBox()
+	if not net.ReadBool() then return nil end
+	return {
+		pos = { x = net.ReadFloat(), y = net.ReadFloat(), z = net.ReadFloat() },
+		yaw = net.ReadFloat(),
+		sx = net.ReadFloat(),
+		sy = net.ReadFloat(),
+	}
+end
+
 if BALLISTICS.Net and BALLISTICS.Net.Register then
 	BALLISTICS.Net.Register("bal_spawns_sync", function()
 		view.map = net.ReadString() or ""
@@ -122,6 +165,12 @@ if BALLISTICS.Net and BALLISTICS.Net.Register then
 		view.dirty = net.ReadBool() == true
 		view.good = readFlag()
 		view.bad = readFlag()
+		view.box = readBox()
+		if view.box then
+			boxDraft.yaw = view.box.yaw or boxDraft.yaw
+			boxDraft.sx = view.box.sx or boxDraft.sx
+			boxDraft.sy = view.box.sy or boxDraft.sy
+		end
 		emit()
 	end)
 end
@@ -195,8 +244,20 @@ local function frameMap()
 	return framed
 end
 
+local function shiftDown()
+	if not input or not input.IsKeyDown then return false end
+	local left = KEY_LSHIFT and input.IsKeyDown(KEY_LSHIFT)
+	local right = KEY_RSHIFT and input.IsKeyDown(KEY_RSHIFT)
+	return left or right
+end
+
 local function zoom(direction)
 	if not cam then return end
+	if side == "box" and shiftDown() then
+		local step = (tonumber(direction) or 0) > 0 and 15 or -15
+		BALLISTICS.Spawns.SetBoxDraft(boxDraft.yaw + step, nil, nil, true)
+		return
+	end
 	local now = (RealTime and RealTime()) or 0
 	if wheelAt > 0 and (now - wheelAt) < 0.01 then return end
 	wheelAt = now
@@ -248,10 +309,34 @@ local function drawRing(flag, teamId)
 	end
 end
 
+local function drawBox(box)
+	if not box or not render or not render.DrawLine or not D.boxCorners then return end
+	local corners = D.boxCorners(box)
+	local edges = D.BOX_EDGES
+	if not corners or not edges then return end
+	local col = Color(240, 200, 60, 220)
+	if render.SetColorMaterial then render.SetColorMaterial() end
+	for i = 1, #edges do
+		local edge = edges[i]
+		local a = corners[edge[1]]
+		local b = corners[edge[2]]
+		if a and b then
+			render.DrawLine(Vector(a.x, a.y, a.z), Vector(b.x, b.y, b.z), col, true)
+		end
+	end
+end
+
+local function showBox()
+	if editing then return true end
+	if BALLISTICS.ClientIsAdmin and BALLISTICS.ClientIsAdmin() == true then return true end
+	return false
+end
+
 hook.Add("PostDrawTranslucentRenderables", "Ballistics_FlagRings", function(_, sky)
 	if sky then return end
 	drawRing(view.good, GOOD)
 	drawRing(view.bad, BAD)
+	if showBox() then drawBox(view.box) end
 end)
 
 hook.Add("CalcView", "Ballistics_SpawnEditor", function()
@@ -328,6 +413,16 @@ hook.Add("Think", "Ballistics_SpawnEditor", function()
 		keyZoomAt = now
 		zoom(zin and 1 or -1)
 	end
+	-- Arrows rotate the box. Q and E stay on zoom.
+	if side == "box" and (now - keyZoomAt) > 0.12 then
+		local typing = vgui and vgui.GetKeyboardFocus and IsValid and IsValid(vgui.GetKeyboardFocus())
+		local left = KEY_LEFT and input.IsKeyDown(KEY_LEFT)
+		local right = KEY_RIGHT and input.IsKeyDown(KEY_RIGHT)
+		if not typing and (left or right) and not (left and right) then
+			keyZoomAt = now
+			BALLISTICS.Spawns.SetBoxDraft(boxDraft.yaw + (right and 15 or -15), nil, nil, true)
+		end
+	end
 end)
 
 hook.Add("PlayerBindPress", "Ballistics_SpawnEditor", function(_, bind, pressed)
@@ -382,6 +477,13 @@ local function placeAtCursor()
 		})
 	end
 	if not tr or not tr.Hit or tr.HitSky or not tr.HitPos then return end
+	if side == "box" then
+		local lift = (D.BOX_HEIGHT or 128) * 0.5
+		send(D.OP_BOX, 0, {
+			x = tr.HitPos.x, y = tr.HitPos.y, z = tr.HitPos.z + lift,
+		}, { p = 0, y = boxDraft.yaw, r = 0 }, boxDraft.sx, boxDraft.sy)
+		return
+	end
 	local yaw = 0
 	local other = side == GOOD and view.bad or view.good
 	if other and other.pos then
@@ -429,7 +531,7 @@ local function ensureToolbar()
 	if not vgui or not vgui.Create then return nil end
 	toolbar = vgui.Create("DFrame")
 	toolbar:SetTitle("Edit spawns")
-	toolbar:SetSize(360, 168)
+	toolbar:SetSize(480, 196)
 	toolbar:SetPos(12, 12)
 	toolbar:SetDeleteOnClose(false)
 	toolbar:SetSizable(false)
@@ -445,7 +547,7 @@ local function ensureToolbar()
 	for _, teamId in ipairs({ GOOD, BAD }) do
 		local btn = vgui.Create("DButton", row)
 		btn:Dock(LEFT)
-		btn:SetWide(120)
+		btn:SetWide(100)
 		btn:DockMargin(0, 0, 8, 0)
 		btn:SetText("")
 		btn.balTeam = teamId
@@ -453,6 +555,30 @@ local function ensureToolbar()
 		btn.DoClick = function()
 			BALLISTICS.Spawns.SetSide(teamId)
 		end
+	end
+
+	local squad = vgui.Create("DButton", row)
+	squad:Dock(LEFT)
+	squad:SetWide(110)
+	squad:DockMargin(0, 0, 8, 0)
+	squad:SetText("")
+	squad.Paint = function(_, w, h)
+		local on = side == "box"
+		if on then
+			surface.SetDrawColor(240, 200, 60, 255)
+		else
+			surface.SetDrawColor(36, 36, 42, 255)
+		end
+		surface.DrawRect(0, 0, w, h)
+		surface.SetDrawColor(240, 200, 60, 255)
+		surface.DrawOutlinedRect(0, 0, w, h)
+		draw.SimpleText("Squad", "BallisticsSmall", w / 2, h / 2, Color(255, 255, 255), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+	end
+	squad.DoClick = function()
+		BALLISTICS.Spawns.SetSide("box")
+	end
+	if squad.SetTooltip then
+		squad:SetTooltip("Place and resize the firing squad box. Arrows or shift+wheel rotate it.")
 	end
 
 	local ortho = vgui.Create("DButton", row)
@@ -482,8 +608,9 @@ local function ensureToolbar()
 
 	local hint = vgui.Create("DLabel", toolbar)
 	hint:Dock(TOP)
-	hint:SetTall(18)
-	hint:SetText("WASD pan, wheel zooms, click the ground to place.")
+	hint:SetTall(32)
+	hint:SetWrap(true)
+	hint:SetText("WASD pan, wheel zooms, click the ground. Squad: arrows or shift+wheel rotate. Sliders resize.")
 	if hint.SetTextColor then hint:SetTextColor(Color(170, 170, 170)) end
 
 	local bar = vgui.Create("DPanel", toolbar)

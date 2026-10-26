@@ -119,6 +119,11 @@ check("queue records the request", qTeam == BAD and qSlot == 1)
 ok, err = s:Request("b", GOOD, 2, "post", true)
 check("alive player cannot switch during post", ok == false and err == "alive" and s:Occupant(BAD, 2) == "b")
 
+ok, err = s:Request("b", GOOD, 1, "squad", true)
+check("alive player cannot switch during the firing squad", ok == false and err == "alive" and s:Occupant(BAD, 2) == "b")
+ok, err = s:Request("b", GOOD, 1, "squad", false)
+check("a dead player queues a switch during the firing squad", ok == true and err == "queued" and s:Occupant(BAD, 2) == "b" and s:Queued("b") == GOOD)
+
 s:Clear()
 s:Take("a", GOOD, 1)
 s:Take("m", GOOD, 2)

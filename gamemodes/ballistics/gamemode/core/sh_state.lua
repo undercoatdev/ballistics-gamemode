@@ -1,6 +1,9 @@
 -- Pure round state machine. No GMod calls.
--- Phases: lobby → buy → live → post → buy … until RoundsToWin (0 = endless),
--- then post returns to lobby.
+-- Phases: lobby → buy → live → post → buy … until RoundsToWin (0 = endless).
+-- A team that reaches RoundsToWin leaves post for squad when FiringSquadEnabled
+-- is on and the winner is good or bad, then lobby. A draw, a disabled firing
+-- squad, or an endless match (RoundsToWin 0) never enters squad. Post then
+-- returns to lobby, as before.
 --
 -- state:Transition(evt, now) → events, or nil, err
 -- state:Tick(now) → events (one phase boundary per call; empty if nothing fired)
@@ -17,6 +20,7 @@ local PHASE_LOBBY = "lobby"
 local PHASE_BUY = "buy"
 local PHASE_LIVE = "live"
 local PHASE_POST = "post"
+local PHASE_SQUAD = "squad"
 
 local function duration(self, key, default)
 	local n = tonumber(self.cfg[key])
@@ -39,6 +43,18 @@ end
 local function roundsToWin(self)
 	local n = whole(self, "RoundsToWin", 0)
 	if n < 0 then return 0 end
+	return n
+end
+
+-- Missing or false stays off, so a state built without this key still
+-- returns to the lobby. The live config default is on.
+local function squadOn(self)
+	return self.cfg.FiringSquadEnabled == true
+end
+
+local function squadDuration(self)
+	local n = tonumber(self.cfg.FiringSquadDuration)
+	if not n or n ~= n or n <= 0 then return 30 end
 	return n
 end
 
@@ -210,16 +226,31 @@ function State:_enterPost(now, winner, reason)
 	}
 end
 
+function State:_enterSquad(now)
+	local prev = self.phase
+	self.phase = PHASE_SQUAD
+	self.enteredAt = now
+	self.endsAt = now + squadDuration(self)
+	return {
+		phaseEvent(prev, PHASE_SQUAD, self.round, false),
+		{ type = "match_end", winner = self.matchWinner, round = self.round },
+	}
+end
+
 function State:_enterLobby(now)
 	local prev = self.phase
 	local winner = self.matchWinner
 	self.phase = PHASE_LOBBY
 	self.enteredAt = now
 	self.endsAt = nil
-	return {
+	local events = {
 		phaseEvent(prev, PHASE_LOBBY, self.round, false),
-		{ type = "match_end", winner = winner, round = self.round },
 	}
+	-- Squad already announced the match win on the way in.
+	if prev ~= PHASE_SQUAD then
+		events[#events + 1] = { type = "match_end", winner = winner, round = self.round }
+	end
+	return events
 end
 
 local function startFields(self, data)
@@ -274,9 +305,14 @@ function State:Tick(now)
 		return self:_enterPost(now, timeoutWinner(self), "timeout")
 	end
 	if self.phase == PHASE_POST then
+		if self.matchWinner == "good" or self.matchWinner == "bad" then
+			if squadOn(self) then return self:_enterSquad(now) end
+			return self:_enterLobby(now)
+		end
 		if self.matchWinner then return self:_enterLobby(now) end
 		return self:_enterBuy(now, false)
 	end
+	if self.phase == PHASE_SQUAD then return self:_enterLobby(now) end
 	return {}
 end
 

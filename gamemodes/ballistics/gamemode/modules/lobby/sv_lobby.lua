@@ -26,7 +26,14 @@ if BALLISTICS.Net and BALLISTICS.Net.Register then
 		if ok then
 			tell(ply, "Ballistics: match started")
 		else
-			tell(ply, "Ballistics: cannot start (" .. tostring(err) .. ")")
+			local text = tostring(err)
+			local view = BALLISTICS.LobbyView
+			local minPer = BALLISTICS.Config and BALLISTICS.Config.MinPerTeam
+			if view and type(view.ReasonText) == "function" then
+				local nice = view.ReasonText(err, minPer)
+				if type(nice) == "string" and nice ~= "" then text = nice end
+			end
+			tell(ply, "Ballistics: cannot start (" .. text .. ")")
 		end
 	end, { admin = true, rate = 4 })
 

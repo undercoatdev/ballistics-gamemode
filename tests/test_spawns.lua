@@ -82,6 +82,47 @@ check("an unknown team is refused", D.place(base, 3, { x = 0, y = 0, z = 0 }) ==
 check("status names the source and unsaved edits", D.statusText(base) == "Built-in defaults" and D.statusText(moved) == "Built-in defaults (unsaved)" and D.statusText({ source = "file" }) == "Saved for this map" and D.statusText({ source = "none" }) == "No flags")
 check("readiness asks for both flags until they exist", D.readiness(one) == "Both flags must be placed before the round can start." and D.readiness(base) == "Both flags are placed.")
 
+local function outsideBox(flag, box)
+	local dx = flag.pos.x - box.pos.x
+	local dy = flag.pos.y - box.pos.y
+	local rad = math.rad(box.yaw)
+	local c, s = math.cos(rad), math.sin(rad)
+	local lx = dx * c + dy * s
+	local ly = -dx * s + dy * c
+	return math.abs(lx) > box.sx * 0.5 + 1 or math.abs(ly) > box.sy * 0.5 + 1
+end
+
+for _, map in ipairs({ "gm_construct", "gm_flatgrass" }) do
+	local state = D.resolve(nil, defs, map)
+	local box = state.box
+	local midX = (state.good.pos.x + state.bad.pos.x) * 0.5
+	local midY = (state.good.pos.y + state.bad.pos.y) * 0.5
+	check(map .. " default box sits between the flags", box and near(box.pos.x, midX, 1e-6) and near(box.pos.y, midY, 1e-6) and near(box.pos.z, state.good.pos.z + 64, 1e-6) and near(box.sx, 768, 1e-6) and near(box.sy, 384, 1e-6))
+	check(map .. " flags stand outside the firing squad box", outsideBox(state.good, box) and outsideBox(state.bad, box))
+end
+
+check("an old save with no box stays without one", one.box == nil and D.hasBox(one) == false)
+local legacy = D.fromJSON('{"good":{"pos":{"x":1,"y":2,"z":3},"ang":{"p":0,"y":0,"r":0}},"bad":{"pos":{"x":80,"y":0,"z":3},"ang":{"p":0,"y":180,"r":0}}}')
+check("a legacy file loads both flags and no box", legacy and D.hasBoth(legacy) and legacy.box == nil)
+local brokenBox = D.fromJSON('{"good":{"pos":{"x":1,"y":2,"z":3},"ang":{"p":0,"y":0,"r":0}},"bad":{"pos":{"x":80,"y":0,"z":3},"ang":{"p":0,"y":180,"r":0}},"box":{"pos":{"x":"no","y":0,"z":0},"yaw":0,"sx":10,"sy":10}}')
+check("an invalid box is dropped and the flags stay", brokenBox and brokenBox.good.pos.x == 1 and brokenBox.box == nil and D.hasBoth(brokenBox))
+
+local kept = D.place(base, 1, { x = 10, y = 20, z = 30 }, { y = 45 })
+check("placing a flag keeps the firing squad box", kept and kept.box and near(kept.box.pos.x, base.box.pos.x, 1e-6) and near(kept.box.sx, base.box.sx, 1e-6))
+local clamped = D.placeBox(base, { x = 1, y = 2, z = 3 }, 370, 50, 9000)
+check("box size clamps and yaw wraps", clamped and clamped.box.sx == 128 and clamped.box.sy == 8192 and near(clamped.box.yaw, 10, 1e-6) and clamped.box.pos.z == 3 and clamped.dirty == true)
+check("a non-finite box is refused", D.placeBox(base, { x = 0 / 0, y = 0, z = 0 }, 0, 768, 384) == nil)
+check("place box does not move the flags", clamped.good.pos.x == base.good.pos.x and clamped.bad.pos.x == base.bad.pos.x)
+local bare = D.copy(base)
+bare.box = nil
+check("missing box asks to be placed", D.readiness(bare) == "Both flags are placed. Place the firing squad box in Admin > Spawns.")
+
+local corners = D.boxCorners({ pos = { x = 0, y = 0, z = 64 }, yaw = 0, sx = 768, sy = 384 })
+check("the box has eight corners and twelve edges", corners and #corners == 8 and #D.BOX_EDGES == 12)
+check("yaw 0 puts a bottom corner at the near corner", corners and near(corners[1].x, -384, 1e-6) and near(corners[1].y, -192, 1e-6) and near(corners[1].z, 0, 1e-6) and near(corners[2].x, 384, 1e-6))
+local turned = D.boxCorners({ pos = { x = 0, y = 0, z = 64 }, yaw = 90, sx = 768, sy = 384 })
+check("yaw 90 turns local +X onto world +Y", turned and near(turned[2].x, 192, 1e-4) and near(turned[2].y, 384, 1e-4))
+
 local pts = {}
 for slot = 1, 5 do
 	pts[slot] = D.ringCandidates(slot, 5, 40)[1]
@@ -196,6 +237,7 @@ end
 
 local loaded = snap()
 check("server loads construct defaults and snaps them to the ground", loaded.source == "defaults" and loaded.dirty == false and D.hasBoth(loaded) and loaded.good.pos.z == 7 and near(loaded.good.pos.x, defs.gm_construct.good.pos.x, 1e-6))
+check("the default box snaps to ground plus half its height", loaded.box and BALLISTICS.Spawns.HasBox() == true and near(loaded.box.pos.z, 71, 1e-6) and near(loaded.box.sx, 768, 1e-6))
 
 local pos, ang = BALLISTICS.Spawns.PlayerSpawn(TEAM_GOOD, 1)
 check("Good slot 1 stands 40 units east of its flag", pos and near(pos.x, loaded.good.pos.x + 40, 1e-4) and near(pos.y, loaded.good.pos.y, 1e-4) and near(pos.z, 9, 1e-6) and ang and ang.p == 0)
@@ -237,19 +279,26 @@ netPlace(admin, TEAM_GOOD, 50, 0, 0)
 check("places past the rate limit are dropped", near(snap().good.pos.x, 1000, 1e-6))
 clock = 5
 
+queue = { OP.OP_BOX, 0, 100, 200, 40, 0, 90, 0, 768, 384 }
+handlers.bal_spawn_place(nil, admin)
+check("an admin can place the firing squad box", snap().box and near(snap().box.pos.x, 100, 1e-6) and near(snap().box.pos.y, 200, 1e-6) and near(snap().box.pos.z, 71, 1e-6) and near(snap().box.yaw, 90, 1e-6) and near(snap().box.sx, 768, 1e-6) and snap().dirty == true)
+queue = { OP.OP_BOX, 0, 1, 2, 3, 0, 0, 0, 768, 384 }
+handlers.bal_spawn_place(nil, user)
+check("a non-admin cannot place the box", near(snap().box.pos.x, 100, 1e-6))
+
 queue = { OP.OP_SAVE, 0, 0, 0, 0, 0, 0, 0 }
 handlers.bal_spawn_place(nil, admin)
 local path = D.mapFile("gm_construct")
 local saved = D.fromJSON(disk[path] or "")
-check("save writes this map's JSON", saved and near(saved.good.pos.x, 1000) and saved.bad and snap().source == "file" and snap().dirty == false)
+check("save writes this map's JSON", saved and near(saved.good.pos.x, 1000) and saved.bad and saved.box and snap().source == "file" and snap().dirty == false)
 
 mapNow = "gm_construct"
 BALLISTICS.Spawns.Reload()
-check("reload reads the saved file back", near(snap().good.pos.x, 1000, 1e-6) and snap().source == "file" and D.hasBoth(snap()))
+check("reload reads the saved file back", near(snap().good.pos.x, 1000, 1e-6) and snap().source == "file" and D.hasBoth(snap()) and snap().box and near(snap().box.pos.x, 100, 1e-6) and near(snap().box.yaw, 90, 1e-6))
 
 disk[path] = '{"good":{"pos":{"x":12,"y":0,"z":1},"ang":{"p":0,"y":0,"r":0}},"bad":null}'
 BALLISTICS.Spawns.Reload()
-check("a partial file is not filled in from defaults", snap().source == "file" and snap().bad == nil and near(snap().good.pos.x, 12, 1e-6) and BALLISTICS.Spawns.HasBoth() == false)
+check("a partial file is not filled in from defaults", snap().source == "file" and snap().bad == nil and snap().box == nil and near(snap().good.pos.x, 12, 1e-6) and BALLISTICS.Spawns.HasBoth() == false and BALLISTICS.Spawns.HasBox() == false)
 
 disk[path] = "{broken"
 BALLISTICS.Spawns.Reload()
@@ -277,7 +326,7 @@ netPlace(admin, TEAM_BAD, 400, 0, 3)
 queue = { OP.OP_SAVE, 0, 0, 0, 0, 0, 0, 0 }
 handlers.bal_spawn_place(nil, admin)
 BALLISTICS.Spawns.Reload()
-check("saved flags for a map without defaults come back", BALLISTICS.Spawns.HasBoth() == true and near(snap().good.pos.x, -400, 1e-6) and near(snap().bad.pos.x, 400, 1e-6) and snap().source == "file")
+check("saved flags for a map without defaults come back", BALLISTICS.Spawns.HasBoth() == true and near(snap().good.pos.x, -400, 1e-6) and near(snap().bad.pos.x, 400, 1e-6) and snap().source == "file" and BALLISTICS.Spawns.HasBox() == false)
 
 concommand = { Add = function() end }
 dofile("gamemodes/ballistics/gamemode/core/sh_state.lua")
@@ -291,6 +340,12 @@ mapNow = "gm_empty"
 disk[D.mapFile("gm_empty")] = nil
 BALLISTICS.Spawns.Reload()
 check("with no flags the round reports them missing", BALLISTICS.HasBothFlags() == false and BALLISTICS.Round.SpawnTransform(TEAM_BAD, 2) == nil)
+
+local oldTrace = util.TraceLine
+util.TraceLine = function() return { Hit = false } end
+local missed = BALLISTICS.Spawns.Handle(admin, { op = D.OP_BOX, pos = { x = 5, y = 6, z = 80 }, ang = { y = 15 }, sx = 200, sy = 300 })
+check("a missed ground trace keeps the centre height", missed == true and snap().box and near(snap().box.pos.z, 80, 1e-6) and near(snap().box.yaw, 15, 1e-6))
+util.TraceLine = oldTrace
 
 local editor = loadfile("gamemodes/ballistics/gamemode/modules/spawns/cl_spawns_editor.lua")
 local tab = loadfile("gamemodes/ballistics/gamemode/modules/admin/cl_tab_spawns.lua")

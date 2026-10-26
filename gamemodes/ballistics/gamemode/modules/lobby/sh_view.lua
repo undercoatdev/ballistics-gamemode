@@ -66,6 +66,7 @@ function BALLISTICS.LobbyView.ReasonText(reason, minPer)
 	end
 	if reason == "not lobby" then return "The match is already running." end
 	if reason == "flags" then return "Both flags must be placed before the match can start." end
+	if reason == "box" then return "Place the firing squad box in Admin > Spawns" end
 	if reason == "admin" then return "Only an admin can start the match." end
 	if reason == "queue" or reason == "queued" then return "You will move next round." end
 	if reason == "player" then return "Pick a player first." end
@@ -265,6 +266,9 @@ function BALLISTICS.LobbyView.Build(input)
 		elseif input.flags == false then
 			start.enabled = false
 			start.reason = "flags"
+		elseif input.box == false then
+			start.enabled = false
+			start.reason = "box"
 		else
 			start.enabled = true
 		end
@@ -309,10 +313,10 @@ function BALLISTICS.LobbyView.Click(view, teamId, slot, input)
 	local phase = input.phase or view.phase or PHASE_LOBBY
 	local alive = input.alive
 	if alive == nil then alive = view.alive == true end
-	if (phase == PHASE_LIVE or phase == PHASE_POST) and alive then
+	if (phase == PHASE_LIVE or phase == PHASE_POST or phase == "squad") and alive then
 		return { action = "refuse", reason = "alive" }
 	end
-	if phase == PHASE_LIVE or phase == PHASE_POST then
+	if phase == PHASE_LIVE or phase == PHASE_POST or phase == "squad" then
 		return { action = "queue", team = teamId, slot = slot }
 	end
 	return { action = "take", team = teamId, slot = slot }

@@ -38,6 +38,7 @@ check("the clock formats", R.Clock(600) == "10:00" and R.Clock(90) == "1:30" and
 check("live shows phase and clock", R.Label("live", 600) == "LIVE  10:00")
 check("lobby has no countdown", R.Label("lobby", 10) == "LOBBY" and R.Label("lobby", nil) == "LOBBY")
 check("post and buy show a clock", R.Label("post", 5) == "POST  0:05" and R.Label("buy", 10) == "BUY  0:10")
+check("squad shows a clock", R.Label("squad", 30) == "SQUAD  0:30")
 check("an unknown phase is hidden", R.Label("LIVE", 10) == nil and R.Label(nil, 10) == nil)
 
 check("nothing is drawn before a sync", R.Line(0) == nil and R.Seen() == false)

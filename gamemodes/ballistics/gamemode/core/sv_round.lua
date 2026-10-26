@@ -29,6 +29,16 @@ function BALLISTICS.HasBothFlags()
 	return false
 end
 
+-- modules/spawns sets HasBox. With that module absent, or no box saved,
+-- the match cannot start.
+function BALLISTICS.HasSquadBox()
+	local spawns = BALLISTICS.Spawns
+	if type(spawns) == "table" and type(spawns.HasBox) == "function" then
+		return spawns.HasBox() == true
+	end
+	return false
+end
+
 local function broadcast(target)
 	if not (BALLISTICS.Net and BALLISTICS.Net.Send) then return end
 	local now = (CurTime and CurTime()) or 0
@@ -216,25 +226,31 @@ function BALLISTICS.Round.Tick(now)
 	return events
 end
 
-function BALLISTICS.Round.CanStart(ply)
-	if ply ~= nil and not BALLISTICS.IsAdmin(ply) then return false, "admin" end
+local function sideCounts()
 	local good, bad = 0, 0
 	if BALLISTICS.Slots and BALLISTICS.Slots.Count then
 		good = BALLISTICS.Slots.Count(GOOD)
 		bad = BALLISTICS.Slots.Count(BAD)
 	end
-	return state:CanStart(good, bad, BALLISTICS.HasBothFlags())
+	return good, bad
+end
+
+function BALLISTICS.Round.CanStart(ply)
+	if ply ~= nil and not BALLISTICS.IsAdmin(ply) then return false, "admin" end
+	local good, bad = sideCounts()
+	local ok, err = state:CanStart(good, bad, BALLISTICS.HasBothFlags())
+	if not ok then return false, err end
+	if not BALLISTICS.HasSquadBox() then return false, "box" end
+	return true
 end
 
 function BALLISTICS.StartMatch(ply)
-	if ply ~= nil and not BALLISTICS.IsAdmin(ply) then return false, "admin" end
-	local good, bad = 0, 0
-	if BALLISTICS.Slots and BALLISTICS.Slots.Count then
-		good = BALLISTICS.Slots.Count(GOOD)
-		bad = BALLISTICS.Slots.Count(BAD)
-	end
+	local ok, err = BALLISTICS.Round.CanStart(ply)
+	if not ok then return false, err end
+	local good, bad = sideCounts()
 	local now = (CurTime and CurTime()) or 0
-	local events, err = state:Transition({
+	local events
+	events, err = state:Transition({
 		type = "start",
 		good = good,
 		bad = bad,
@@ -250,6 +266,16 @@ local function tell(ply, msg)
 	if BALLISTICS.IsPlayer and BALLISTICS.IsPlayer(ply) and ply.ChatPrint then ply:ChatPrint(msg) end
 end
 
+local function startReason(err)
+	local view = BALLISTICS.LobbyView
+	local minPer = BALLISTICS.Config and BALLISTICS.Config.MinPerTeam
+	if view and type(view.ReasonText) == "function" then
+		local text = view.ReasonText(err, minPer)
+		if type(text) == "string" and text ~= "" then return text end
+	end
+	return tostring(err)
+end
+
 function BALLISTICS.DebugStart(ply)
 	local actor = nil
 	if isValid(ply) then actor = ply end
@@ -261,7 +287,7 @@ function BALLISTICS.DebugStart(ply)
 	if ok then
 		tell(actor, "Ballistics: match started")
 	else
-		tell(actor, "Ballistics: cannot start (" .. tostring(err) .. ")")
+		tell(actor, "Ballistics: cannot start (" .. startReason(err) .. ")")
 	end
 	return ok, err
 end

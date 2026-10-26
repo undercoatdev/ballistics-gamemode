@@ -31,6 +31,7 @@ function dmg:ScaleDamage(n) self.d = self.d * n end
 
 local E = events.EntityTakeDamage
 check("only buy is protected", BALLISTICS.GodMode.Active("buy") and not BALLISTICS.GodMode.Active("live") and not BALLISTICS.GodMode.Active("lobby"))
+check("squad is not god mode", BALLISTICS.GodMode.Active("squad") == false and BALLISTICS.GodMode.Protects("squad", true) == false)
 check("buy: our hook blocks damage", E.Ballistics_BuyGod(ply, dmg) == true and dmg.d == 0)
 E.BodyDamage_Track(ply, dmg)
 check("buy: Body Damage hook skipped for players", organHits == 0)

@@ -129,6 +129,13 @@ function BALLISTICS.Lobby.View()
 	end
 	local isAdmin = false
 	if BALLISTICS.ClientIsAdmin then isAdmin = BALLISTICS.ClientIsAdmin() end
+	local flags, box
+	local snap = BALLISTICS.Spawns and BALLISTICS.Spawns.Snapshot and BALLISTICS.Spawns.Snapshot()
+	local data = BALLISTICS.SpawnData
+	if type(snap) == "table" and type(snap.map) == "string" and snap.map ~= "" and type(data) == "table" then
+		if type(data.hasBoth) == "function" then flags = data.hasBoth(snap) == true end
+		if type(data.hasBox) == "function" then box = data.hasBox(snap) == true end
+	end
 	current = BALLISTICS.LobbyView.Build({
 		perTeam = per,
 		sides = state.sides,
@@ -140,6 +147,8 @@ function BALLISTICS.Lobby.View()
 		alive = localAlive(),
 		players = players,
 		names = names,
+		flags = flags,
+		box = box,
 	})
 	return current
 end
@@ -235,7 +244,7 @@ local function readRound()
 	}
 end
 
-local PHASES = { lobby = true, buy = true, live = true, post = true }
+local PHASES = { lobby = true, buy = true, live = true, post = true, squad = true }
 
 if BALLISTICS.Net and BALLISTICS.Net.Register then
 	BALLISTICS.Net.Register(msg("slots", "bal_slots_sync"), function(payload)

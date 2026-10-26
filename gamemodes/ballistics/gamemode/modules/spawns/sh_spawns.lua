@@ -11,6 +11,14 @@ D.MIN_SEPARATION = 64
 D.OP_PLACE = 1
 D.OP_SAVE = 2
 D.OP_RESET = 3
+D.OP_BOX = 4
+
+-- Oriented box. pos is the geometric centre. Height is fixed and not saved.
+D.BOX_HEIGHT = 128
+D.BOX_LENGTH = 768
+D.BOX_WIDTH = 384
+D.BOX_MIN = 128
+D.BOX_MAX = 8192
 
 local LIMIT = 200000
 
@@ -21,6 +29,7 @@ end
 local function wrapYaw(y)
 	y = y % 360
 	if y < 0 then y = y + 360 end
+	if y >= 360 then y = 0 end
 	return y
 end
 
@@ -85,15 +94,57 @@ local function normalizeFlag(raw)
 	return { pos = pos, ang = ang }
 end
 
+local function clampSize(n)
+	n = math.abs(n)
+	if n < D.BOX_MIN then n = D.BOX_MIN end
+	if n > D.BOX_MAX then n = D.BOX_MAX end
+	return n
+end
+
+-- A bad box is dropped. Callers keep the flags.
+local function normalizeBox(raw)
+	if type(raw) ~= "table" then return nil end
+	local pos = cleanPos(raw.pos)
+	if not pos then return nil end
+	local yaw = tonumber(raw.yaw)
+	if yaw == nil and type(raw.ang) == "table" then
+		yaw = tonumber(raw.ang.y) or tonumber(raw.ang.yaw)
+	end
+	if yaw == nil then yaw = 0 end
+	if not finite(yaw) then return nil end
+	local sx = tonumber(raw.sx)
+	local sy = tonumber(raw.sy)
+	if not finite(sx) or not finite(sy) then return nil end
+	return { pos = pos, yaw = wrapYaw(yaw), sx = clampSize(sx), sy = clampSize(sy) }
+end
+
+local function copyBox(box)
+	if type(box) ~= "table" or type(box.pos) ~= "table" then return nil end
+	return {
+		pos = { x = box.pos.x, y = box.pos.y, z = box.pos.z },
+		yaw = box.yaw or 0,
+		sx = box.sx,
+		sy = box.sy,
+	}
+end
+
 function D.decode(tbl)
 	if type(tbl) ~= "table" then return nil, "json" end
-	local state = { good = nil, bad = nil, source = "file", map = "", dirty = false }
+	local state = { good = nil, bad = nil, box = nil, source = "file", map = "", dirty = false }
 	local any = false
 	for _, side in ipairs({ "good", "bad" }) do
 		if tbl[side] ~= nil then
 			local flag, err = normalizeFlag(tbl[side])
 			if not flag then return nil, err end
 			state[side] = flag
+			any = true
+		end
+	end
+	-- A missing or invalid box does not throw away saved flags.
+	if tbl.box ~= nil then
+		local box = normalizeBox(tbl.box)
+		if box then
+			state.box = box
 			any = true
 		end
 	end
@@ -106,6 +157,7 @@ function D.copy(state)
 	return {
 		good = copyFlag(state.good),
 		bad = copyFlag(state.bad),
+		box = copyBox(state.box),
 		source = state.source or "none",
 		map = state.map or "",
 		dirty = state.dirty == true,
@@ -118,6 +170,14 @@ function D.hasBoth(state)
 		return type(flag) == "table" and type(flag.pos) == "table" and finite(flag.pos.x) and finite(flag.pos.y) and finite(flag.pos.z)
 	end
 	return ok(state.good) and ok(state.bad)
+end
+
+function D.hasBox(state)
+	if type(state) ~= "table" or type(state.box) ~= "table" or type(state.box.pos) ~= "table" then
+		return false
+	end
+	local box = state.box
+	return finite(box.pos.x) and finite(box.pos.y) and finite(box.pos.z) and finite(box.sx) and finite(box.sy)
 end
 
 local function dist2d(a, b)
@@ -142,11 +202,24 @@ function D.place(state, team, pos, ang)
 	return out
 end
 
+function D.placeBox(state, pos, yaw, sx, sy)
+	if type(yaw) == "table" then
+		yaw = tonumber(yaw.y) or tonumber(yaw.yaw)
+	end
+	local box = normalizeBox({ pos = pos, yaw = yaw, sx = sx, sy = sy })
+	if not box then return nil, "box" end
+	local out = D.copy(state)
+	out.box = box
+	out.dirty = true
+	return out
+end
+
 function D.reasonText(err)
 	if err == "team" then return "Pick Good or Bad." end
 	if err == "pos" or err == "flag" then return "That point is not on the map." end
 	if err == "ang" then return "That angle is not valid." end
 	if err == "close" then return "Flags must be at least 64 units apart." end
+	if err == "box" then return "That firing squad box is not valid." end
 	if err == "empty" then return "Place a flag first." end
 	if err == "admin" then return "Only an admin can edit spawns." end
 	return "Could not update spawns."
@@ -165,13 +238,16 @@ function D.statusText(state)
 end
 
 function D.readiness(state)
-	if D.hasBoth(state) then
-		if state and state.dirty then
-			return "Both flags are placed. Save to keep them on this map."
-		end
-		return "Both flags are placed."
+	if not D.hasBoth(state) then
+		return "Both flags must be placed before the round can start."
 	end
-	return "Both flags must be placed before the round can start."
+	if not D.hasBox(state) then
+		return "Both flags are placed. Place the firing squad box in Admin > Spawns."
+	end
+	if state and state.dirty then
+		return "Both flags are placed. Save to keep them on this map."
+	end
+	return "Both flags are placed."
 end
 
 -- JSON subset: objects, arrays, numbers, strings, true/false/null. No comments.
@@ -376,11 +452,21 @@ local function flagJSON(flag)
 	)
 end
 
+local function boxJSON(box)
+	if not box or not box.pos then return "null" end
+	return string.format(
+		'{"pos":{"x":%s,"y":%s,"z":%s},"yaw":%s,"sx":%s,"sy":%s}',
+		num(box.pos.x), num(box.pos.y), num(box.pos.z),
+		num(box.yaw), num(box.sx), num(box.sy)
+	)
+end
+
 function D.toJSON(state)
-	if type(state) ~= "table" or (not state.good and not state.bad) then
+	local hasBox = type(state) == "table" and type(state.box) == "table" and type(state.box.pos) == "table"
+	if type(state) ~= "table" or (not state.good and not state.bad and not hasBox) then
 		return nil, "empty"
 	end
-	return '{"good":' .. flagJSON(state.good) .. ',"bad":' .. flagJSON(state.bad) .. '}'
+	return '{"good":' .. flagJSON(state.good) .. ',"bad":' .. flagJSON(state.bad) .. ',"box":' .. boxJSON(state.box) .. '}'
 end
 
 -- saved: JSON string, table, or nil. A bad file falls through to defaults, then none.
@@ -408,7 +494,46 @@ function D.resolve(saved, defaults, map)
 			return state
 		end
 	end
-	return { good = nil, bad = nil, source = "none", map = map, dirty = false }
+	return { good = nil, bad = nil, box = nil, source = "none", map = map, dirty = false }
+end
+
+-- Eight corners, bottom ring then top ring. Local +X/+Y follow the box yaw.
+D.BOX_EDGES = {
+	{ 1, 2 }, { 2, 3 }, { 3, 4 }, { 4, 1 },
+	{ 5, 6 }, { 6, 7 }, { 7, 8 }, { 8, 5 },
+	{ 1, 5 }, { 2, 6 }, { 3, 7 }, { 4, 8 },
+}
+
+function D.boxCorners(box)
+	if type(box) ~= "table" or type(box.pos) ~= "table" then return nil end
+	local sx = tonumber(box.sx)
+	local sy = tonumber(box.sy)
+	local yaw = tonumber(box.yaw) or 0
+	if not finite(sx) or not finite(sy) or not finite(yaw) then return nil end
+	if not finite(box.pos.x) or not finite(box.pos.y) or not finite(box.pos.z) then return nil end
+	local hx = sx * 0.5
+	local hy = sy * 0.5
+	local hz = D.BOX_HEIGHT * 0.5
+	local rad = math.rad(yaw)
+	local c = math.cos(rad)
+	local s = math.sin(rad)
+	local function world(lx, ly, lz)
+		return {
+			x = box.pos.x + lx * c - ly * s,
+			y = box.pos.y + lx * s + ly * c,
+			z = box.pos.z + lz,
+		}
+	end
+	local signs = {
+		{ -1, -1, -1 }, { 1, -1, -1 }, { 1, 1, -1 }, { -1, 1, -1 },
+		{ -1, -1, 1 }, { 1, -1, 1 }, { 1, 1, 1 }, { -1, 1, 1 },
+	}
+	local corners = {}
+	for i = 1, #signs do
+		local sg = signs[i]
+		corners[i] = world(sg[1] * hx, sg[2] * hy, sg[3] * hz)
+	end
+	return corners
 end
 
 function D.screenAxes(yaw)

@@ -88,6 +88,7 @@ check("an admin add keeps the free slot", decision and decision.action == "add" 
 
 check("lobby and buy take a slot now", B.JoinsNow("lobby") == true and B.JoinsNow("buy") == true and B.JoinsNow(nil) == true)
 check("live and post wait for the next buy", B.JoinsNow("live") == false and B.JoinsNow("post") == false)
+check("squad waits for the lobby", B.JoinsNow("squad") == false)
 check("only buy spawns immediately", B.SpawnNow("buy") == true and B.SpawnNow("lobby") == false and B.SpawnNow("live") == false and B.SpawnNow("post") == false)
 
 local tab = BALLISTICS.AdminTabs.Find("bots")
