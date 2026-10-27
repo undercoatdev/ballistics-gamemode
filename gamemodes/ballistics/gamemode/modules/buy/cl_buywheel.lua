@@ -526,21 +526,56 @@ end
 BALLISTICS.BuyWheel = BALLISTICS.BuyWheel or {}
 BALLISTICS.BuyWheel.DrawIcon = drawIcon
 
+local function freshCount(item)
+	if type(item) ~= "table" or type(item.key) ~= "string" or item.key == "" then return 0 end
+	local ply = localPly()
+	if not ply or type(ply.GetNW2String) ~= "function" then return 0 end
+	if not (BALLISTICS.Sell and type(BALLISTICS.Sell.Decode) == "function") then return 0 end
+	local raw = ply:GetNW2String("bal_fresh", "")
+	if type(raw) ~= "string" then raw = "" end
+	local map = BALLISTICS.Sell.Decode(raw)
+	if type(map) ~= "table" then return 0 end
+	local n = tonumber(map[item.key]) or 0
+	if n ~= n or n < 0 then return 0 end
+	return math.floor(n)
+end
+
+-- Bought this phase, still in hand, and not the knife.
+local function sellable(item)
+	if type(item) ~= "table" then return false end
+	local knife = (BALLISTICS.Sell and BALLISTICS.Sell.KNIFE) or "tacrp_knife"
+	if item.class == knife or item.key == knife then return false end
+	if freshCount(item) < 1 then return false end
+	local ply = localPly()
+	if item.kind == "weapon" then return owns(item.class) == true end
+	if item.kind == "nade" then return ammoCount(item.ammo) > 0 end
+	if item.kind == "med" then
+		local pb = PLAYER_BALLISTICS
+		if pb and type(pb.MedAvailable) == "function" and ply then
+			return (tonumber(pb.MedAvailable(ply, item.id)) or 0) > 0
+		end
+	end
+	return false
+end
+
 local function paintItem(self, w, h)
 	local item = self.balItem or {}
 	local price = BALLISTICS.Catalog and BALLISTICS.Catalog.Price and BALLISTICS.Catalog.Price(item.key) or nil
 	local owned = item.kind == "weapon" and owns(item.class)
 	local full = item.kind == "weapon" and not owned and slotsFull(item)
 	local afford = type(price) == "number" and moneyOf() >= price and not owned and not full
-	if owned or not afford then
+	local hover = self.Hovered == true
+	if hover then
+		surface.SetDrawColor(52, 64, 82, 255)
+	elseif owned or not afford then
 		surface.SetDrawColor(28, 28, 32, 255)
-	elseif self.Hovered then
-		surface.SetDrawColor(46, 54, 68, 255)
 	else
 		surface.SetDrawColor(36, 38, 46, 255)
 	end
 	surface.DrawRect(0, 0, w, h)
-	if afford then
+	if hover then
+		surface.SetDrawColor(156, 198, 236, 255)
+	elseif afford then
 		surface.SetDrawColor(90, 140, 190, 255)
 	else
 		surface.SetDrawColor(70, 70, 78, 255)
@@ -550,7 +585,12 @@ local function paintItem(self, w, h)
 	draw.SimpleText(name, "BallisticsBuy", 12, 18, Color(235, 235, 235), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
 	local priceText = "—"
 	local priceCol = Color(190, 80, 80)
-	if owned then
+	if sellable(item) then
+		local n = math.floor(tonumber(price) or 0)
+		if n < 0 then n = 0 end
+		priceText = "Sell  +$" .. tostring(n)
+		priceCol = Color(120, 210, 140)
+	elseif owned then
 		priceText = "Owned"
 	elseif full then
 		priceText = "Full"
@@ -583,6 +623,12 @@ local function refill()
 		btn.Paint = paintItem
 		if btn.SetKeyboardInputEnabled then btn:SetKeyboardInputEnabled(false) end
 		btn.DoClick = function()
+			if sellable(item) then
+				if BALLISTICS.Sell and type(BALLISTICS.Sell.Send) == "function" then
+					BALLISTICS.Sell.Send(item)
+				end
+				return
+			end
 			tryBuy(item)
 		end
 		-- Right-click sells an owned item back (buy phase, server checks).
@@ -732,7 +778,31 @@ local function ensureRoot()
 		draw.SimpleText("$" .. tostring(moneyOf()), "BallisticsBuyTitle", w / 2, h / 2, Color(120, 200, 140), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
 		local secs = math.ceil(timeLeft() - 1e-4)
 		if secs < 0 then secs = 0 end
-		draw.SimpleText(tostring(secs) .. "s", "BallisticsBuyTitle", w - 16, h / 2, Color(230, 220, 170), TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
+		-- Inventory button is 110 wide with a 12px right margin.
+		draw.SimpleText(tostring(secs) .. "s", "BallisticsBuyTitle", w - 134, h / 2, Color(230, 220, 170), TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
+	end
+
+	local headerInv = vgui.Create("DButton", header)
+	headerInv:SetText("")
+	headerInv:Dock(RIGHT)
+	headerInv:SetWide(110)
+	headerInv:DockMargin(8, 16, 12, 16)
+	if headerInv.SetKeyboardInputEnabled then headerInv:SetKeyboardInputEnabled(false) end
+	headerInv.Paint = function(self, w, h)
+		if self.Hovered then
+			surface.SetDrawColor(46, 54, 68, 255)
+		else
+			surface.SetDrawColor(32, 34, 40, 255)
+		end
+		surface.DrawRect(0, 0, w, h)
+		surface.SetDrawColor(90, 110, 132, 255)
+		surface.DrawOutlinedRect(0, 0, w, h)
+		draw.SimpleText("Inventory", "BallisticsBuySmall", w / 2, h / 2, Color(235, 235, 235), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+	end
+	headerInv.DoClick = function()
+		if BALLISTICS.Loot and type(BALLISTICS.Loot.ToggleSelf) == "function" then
+			BALLISTICS.Loot.ToggleSelf()
+		end
 	end
 
 	local tabs = vgui.Create("DPanel", card)

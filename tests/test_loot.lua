@@ -190,11 +190,53 @@ local selfAmmo = L.Transfer({
 	selfDrop = true,
 })
 check("ammo still cannot be dropped", selfAmmo.ok == false and selfAmmo.err == "kind")
+local function gunSlot(guns, class)
+	for i = 1, #(guns or {}) do
+		if guns[i].class == class then return guns[i].slot end
+	end
+	return nil
+end
+local landed = L.Transfer({
+	you = { guns = { { class = "tacrp_pistol", slot = 2 } }, nades = {}, meds = {}, ammo = {} },
+	them = { guns = { { class = "tacrp_mp5", slot = 1 } }, nades = {}, meds = {}, ammo = {} },
+	from = "them", kind = "gun", key = "tacrp_mp5", amount = 1, to = "you", slot = 0, caps = L.Caps(nil),
+})
+check("a gun with no slot lands in the first free slot", landed.ok == true and gunSlot(landed.you.guns, "tacrp_mp5") == 1 and gunSlot(landed.you.guns, "tacrp_pistol") == 2)
+local droppedSlot = L.Transfer({
+	you = {
+		guns = { { class = "tacrp_mp5", slot = 1 }, { class = "tacrp_pistol", slot = 2 } },
+		nades = {}, meds = {}, ammo = {},
+	},
+	them = L.Blank(), from = "you", kind = "gun", key = "tacrp_mp5", amount = 1, to = "drop",
+})
+local droppedView = L.SideView(droppedSlot.you, L.Caps(nil), true)
+check("dropping slot 1 keeps the other gun in slot 2", droppedSlot.ok == true and droppedView.guns[1].class == nil and droppedView.guns[1].slot == 1 and droppedView.guns[2].class == "tacrp_pistol" and droppedView.guns[2].slot == 2)
+local reslot = L.Transfer({
+	you = { guns = { { class = "tacrp_mp5", slot = 1 } }, nades = {}, meds = {}, ammo = {} },
+	them = L.Blank(), from = "you", kind = "gun", key = "tacrp_mp5", amount = 1, to = "you", slot = 2,
+})
+check("re-slot moves a gun into an empty slot", reslot.ok == true and reslot.drop == nil and reslot.you.guns[1].class == "tacrp_mp5" and reslot.you.guns[1].slot == 2)
+local swap = L.Transfer({
+	you = {
+		guns = { { class = "tacrp_mp5", slot = 1 }, { class = "tacrp_pistol", slot = 2 } },
+		nades = {}, meds = {}, ammo = {},
+	},
+	them = L.Blank(), from = "you", kind = "gun", key = "tacrp_mp5", amount = 1, to = "you", slot = 2,
+})
+check("re-slot swaps the two gun slots", swap.ok == true and swap.drop == nil and gunSlot(swap.you.guns, "tacrp_mp5") == 2 and gunSlot(swap.you.guns, "tacrp_pistol") == 1)
+local sameNade = L.Transfer({
+	you = { guns = {}, nades = { nade_frag = 1 }, meds = {}, ammo = {} },
+	them = L.Blank(), from = "you", kind = "nade", key = "nade_frag", amount = 1, to = "you",
+})
+check("a non-gun cannot move on the same side", sameNade.ok == false and sameNade.err == "same")
 check("a double-click does nothing on your own inventory", L.WantsWhole(true, true) == false and L.WantsWhole(false, true) == true)
 local openSelf = L.CanOpenSelf({ phase = "live", alive = true, spectating = false, slotted = true, conscious = true })
 check("own inventory opens in live", openSelf == true)
-local shutSelf, shutWhy = L.CanOpenSelf({ phase = "buy", alive = true, spectating = false, slotted = true, conscious = true })
-check("own inventory is closed in buy", shutSelf == false and shutWhy == "phase")
+local shutSelf = L.CanOpenSelf({ phase = "buy", alive = true, spectating = false, slotted = true, conscious = true })
+check("own inventory opens in buy", shutSelf == true)
+local buyLoot, buyLootErr = L.CanOpen({ phase = "buy", alive = true, conscious = true, target = "player", dist = 10, range = 96, los = true })
+check("looting stays closed in buy", buyLoot == false and buyLootErr == "phase")
+check("buy does not close own inventory", L.ShouldCloseSelf({ phase = "buy", alive = true, spectating = false, slotted = true, conscious = true }) == false)
 local deadSelf, deadWhy = L.CanOpenSelf({ phase = "post", alive = false, spectating = false, slotted = true, conscious = false })
 check("a dead player cannot open their inventory", deadSelf == false and deadWhy == "alive")
 local specSelf, specWhy = L.CanOpenSelf({ phase = "live", alive = true, spectating = true, slotted = true, conscious = true })
@@ -224,6 +266,11 @@ check("a matching stack slot accepts the drag", L.Accepts(drag, slot, {
 check("the same side is not a target", L.Accepts(drag, { side = "you", kind = "med", key = "med_pills" }, {
 	you = { guns = {}, nades = {}, meds = { med_pills = 1 }, ammo = {} }, them = L.Blank(),
 }) == false)
+check("a gun accepts another slot on the same side", L.Accepts(
+	{ from = "you", kind = "gun", key = "tacrp_mp5", index = 1 },
+	{ side = "you", kind = "gun", index = 2 },
+	{ you = { guns = { { class = "tacrp_mp5", slot = 1 } }, nades = {}, meds = {}, ammo = {} }, them = L.Blank(), caps = L.Caps(nil) }
+) == true)
 check("a full slot does not accept the drag", L.Accepts(drag, slot, {
 	you = { guns = {}, nades = {}, meds = { med_pills = 1 }, ammo = {} },
 	them = { guns = {}, nades = {}, meds = { med_pills = 3 }, ammo = {} },
@@ -242,7 +289,9 @@ check("a stack released outside cancels", L.Release({ from = "you", kind = "nade
 check("own inventory drops a grenade released outside", L.Release({ from = "you", kind = "nade", key = "nade_frag", index = 0 }, nil, false, true) == "drop")
 check("own inventory drops a med released outside", L.Release({ from = "you", kind = "med", key = "med_small", index = 0 }, nil, false, true) == "drop")
 check("own inventory cancels ammo released outside", L.Release({ from = "you", kind = "ammo", key = "smg1", index = 0 }, nil, false, true) == "cancel")
-check("own inventory does not move between slots", L.Release({ from = "you", kind = "gun", key = "tacrp_mp5", index = 1 }, { side = "you", kind = "gun", key = "", index = 2 }, true, true) == "cancel")
+check("own inventory moves a gun onto another gun slot", L.Release({ from = "you", kind = "gun", key = "tacrp_mp5", index = 1 }, { side = "you", kind = "gun", key = "", index = 2 }, true, true) == "move")
+check("own inventory cancels a gun released on its own slot", L.Release({ from = "you", kind = "gun", key = "tacrp_mp5", index = 1 }, { side = "you", kind = "gun", key = "tacrp_mp5", index = 1 }, true, true) == "cancel")
+check("own inventory cancels a stack released on a slot", L.Release({ from = "you", kind = "nade", key = "nade_frag", index = 0 }, { side = "you", kind = "nade", key = "nade_frag", index = 0 }, true, true) == "cancel")
 
 local box = L.PanelBox(1280, 720)
 check("the two halves leave a gap", box.right.x == box.left.x + box.left.w + box.gap and box.gap == 16 and box.left.y == box.right.y and box.left.w == box.right.w)
@@ -815,7 +864,7 @@ check("an unslotted player cannot open their own inventory", ok == false and err
 seat(looter)
 phaseName = "buy"
 ok, err = L.OpenSelf(looter)
-check("own inventory is refused during buy", ok == false and err == "phase")
+check("own inventory opens during buy", ok == true and L.Last(looter).open == true and L.Last(looter).self == true)
 phaseName = "post"
 ok = L.OpenSelf(looter)
 check("own inventory opens after the round", ok == true and L.Last(looter).open == true and L.Last(looter).self == true and L.Last(looter).giveOnly == false)
@@ -938,11 +987,19 @@ type = function(v) if realType(v) == "userdata" then return "Vector" end return 
 check("distance reads userdata vectors", math.abs(L.Dist(uvec(0, 0, 0), uvec(30, 40, 0)) - 50) < 1e-6)
 check("a still body has not moved", L.Moved({ x = 10, y = 20, z = 30 }, uvec(10, 20, 30), 24) == false)
 type = realType
-local cat = { Get = function(k) return k == "nade_frag" and { key = k, entity = "tacrp_ammo_frag" } or nil end }
+local cat = {
+	Get = function(k)
+		if k == "nade_frag" then return { key = k, entity = "tacrp_ammo_frag" } end
+		if k == "med_small" then return { key = k, entity = "pb_med_small" } end
+		return nil
+	end,
+}
 check("gun slot icon by class", L.IconItem({ kind = "gun", class = "tacrp_mp5" }, cat).class == "tacrp_mp5")
 check("gun slot icon by key when class is absent", L.IconItem({ kind = "gun", key = "tacrp_mr96" }, cat).class == "tacrp_mr96")
 check("grenade slot icon from catalog", L.IconItem({ kind = "nade", key = "nade_frag" }, cat).entity == "tacrp_ammo_frag")
 check("empty and ammo slots have no icon", L.IconItem({ kind = "gun", empty = true }, cat) == nil and L.IconItem({ kind = "ammo", key = "pistol" }, cat) == nil)
+check("an empty grenade slot still has an icon", L.IconItem({ kind = "nade", key = "nade_frag", empty = true, count = 0 }, cat).entity == "tacrp_ammo_frag")
+check("an empty med slot still has an icon", L.IconItem({ kind = "med", key = "med_small", empty = true, count = 0 }, cat).entity == "pb_med_small")
 check("the held slot is the drag source", L.IsDragSource({ side = "you", kind = "gun", key = "tacrp_mr96", index = 1 }, { from = "you", kind = "gun", key = "tacrp_mr96", index = 1 }) == true)
 check("another slot is not the drag source", L.IsDragSource({ side = "you", kind = "gun", key = "tacrp_mr96", index = 2, empty = false }, { from = "you", kind = "gun", key = "tacrp_mr96", index = 1 }) == false and L.IsDragSource({ side = "you", kind = "gun", key = "tacrp_mr96", index = 1, empty = true }, { from = "you", kind = "gun", key = "tacrp_mr96", index = 1 }) == false)
 local graceWep = { BallisticsDropOwner = looter, BallisticsDropUntil = 1.5 }
@@ -1035,7 +1092,8 @@ check("escape sends the close", esc == false and #sent == 1 and sent[1] == "bal_
 resetGate()
 phaseNow = "buy"
 tap(10)
-check("5 does nothing during buy", #sent == 0)
+check("5 opens during buy", #sent == 1 and sent[1] == "bal_loot_self")
+resetGate()
 phaseNow = "post"
 tap(11)
 check("5 opens during the post round", #sent == 1 and sent[1] == "bal_loot_self")

@@ -53,8 +53,9 @@ local function carriedClasses(ply)
 		-- Noted guns stay in order even when GetWeapons has not caught up.
 		local remembered = id and gunsOf[id]
 		if type(remembered) == "table" then
-			for i = 1, #remembered do
-				if ply:HasWeapon(remembered[i]) == true then add(remembered[i]) end
+			for i = 1, L.MAX_GUNS or 2 do
+				local class = remembered[i]
+				if type(class) == "string" and class ~= "" and ply:HasWeapon(class) == true then add(class) end
 			end
 		end
 		if not sawWeapons and BALLISTICS.Catalog and BALLISTICS.Catalog.Weapons then
@@ -90,13 +91,25 @@ function L.Knife(ply)
 	return knifeOf[id]
 end
 
-function L.Guns(ply)
+local function copySlots(slots)
+	local out = {}
+	for i = 1, L.MAX_GUNS or 2 do out[i] = type(slots) == "table" and slots[i] or false end
+	return out
+end
+
+-- Fixed slot table: { [1] = slot-2 class or false, [2] = slot-3 class or false }.
+function L.Slots(ply)
 	local id = playerId(ply)
-	if not id then return {} end
-	local knife, guns = L.Resolve(storedGuns(id), carriedClasses(ply), knifeOf[id])
-	gunsOf[id] = guns
+	if not id then return copySlots(nil) end
+	local knife, _, slots = L.Resolve(storedGuns(id), carriedClasses(ply), knifeOf[id])
+	gunsOf[id] = slots
 	if knife and not knifeOf[id] then knifeOf[id] = knife end
-	return guns
+	return copySlots(slots)
+end
+
+-- Carried guns in slot order, empties skipped.
+function L.Guns(ply)
+	return L.Compact(L.Slots(ply))
 end
 
 function L.GunCount(ply)
@@ -113,20 +126,27 @@ function L.NoteGun(ply, class)
 		if carried[i] == class then found = true break end
 	end
 	if not found then carried[#carried + 1] = class end
-	local _, guns = L.Resolve(storedGuns(id), carried, knifeOf[id])
-	gunsOf[id] = guns
-	for i = 1, #guns do
-		if guns[i] == class then return true end
+	local _, _, slots = L.Resolve(storedGuns(id), carried, knifeOf[id])
+	gunsOf[id] = slots
+	for i = 1, L.MAX_GUNS do
+		if slots[i] == class then return true end
 	end
 	return false
 end
 
--- classes are already in slot order (slot 2, then slot 3).
+-- classes: a fixed slot table (false = empty) or a list in slot order.
 function L.Restore(ply, classes)
 	local id = playerId(ply)
 	if not id then return end
-	local _, guns = L.Resolve(nil, classes, knifeOf[id])
-	gunsOf[id] = guns
+	local carried = {}
+	if type(classes) == "table" then
+		for i = 1, math.max(#classes, L.MAX_GUNS) do
+			local class = classes[i]
+			if type(class) == "string" and class ~= "" then carried[#carried + 1] = class end
+		end
+	end
+	local _, _, slots = L.Resolve(classes, carried, knifeOf[id])
+	gunsOf[id] = slots
 end
 
 function L.ClassFor(ply, slot)
@@ -140,8 +160,10 @@ function L.ClassFor(ply, slot)
 		return knife
 	end
 	if slot ~= 2 and slot ~= 3 then return nil end
-	local guns = L.Guns(ply)
-	return guns[slot - 1]
+	local slots = L.Slots(ply)
+	local class = slots[slot - 1]
+	if type(class) ~= "string" or class == "" then return nil end
+	return class
 end
 
 function L.Equip(ply, class)

@@ -353,6 +353,22 @@ local function readGuns(ply)
 			end
 		end
 	end
+	local maxGuns = (L.Caps(BALLISTICS.Config).guns) or L.GUNS
+	if BALLISTICS.Loadout and type(BALLISTICS.Loadout.Slots) == "function" then
+		local slots = BALLISTICS.Loadout.Slots(ply)
+		if type(slots) == "table" then
+			local list = {}
+			for i = 1, maxGuns do
+				local class = slots[i]
+				local gun = type(class) == "string" and captured[class] or nil
+				if type(gun) == "table" then
+					gun.slot = i
+					list[#list + 1] = gun
+				end
+			end
+			return list
+		end
+	end
 	local order = {}
 	if BALLISTICS.Loadout and type(BALLISTICS.Loadout.Guns) == "function" then
 		local guns = BALLISTICS.Loadout.Guns(ply)
@@ -365,7 +381,6 @@ local function readGuns(ply)
 		table.sort(order)
 	end
 	local list = {}
-	local maxGuns = (L.Caps(BALLISTICS.Config).guns) or L.GUNS
 	for i = 1, #order do
 		local gun = captured[order[i]]
 		if gun and #list < maxGuns then
@@ -766,10 +781,35 @@ local function applyLive(ply, before, after, infinite)
 	for class in pairs(oldGuns) do
 		if not newGuns[class] then stripGun(ply, class) end
 	end
+	local maxGuns = L.GUNS
+	if BALLISTICS.Loadout and tonumber(BALLISTICS.Loadout.MAX_GUNS) then
+		maxGuns = math.floor(tonumber(BALLISTICS.Loadout.MAX_GUNS) or L.GUNS)
+	end
+	if maxGuns < 1 then maxGuns = 1 end
+	if maxGuns > L.GUNS then maxGuns = L.GUNS end
 	local order = {}
-	local guns = after.guns or {}
+	for i = 1, maxGuns do order[i] = false end
+	local function slotFree(idx)
+		local class = order[idx]
+		return type(class) ~= "string" or class == ""
+	end
+	local guns = type(after.guns) == "table" and after.guns or {}
 	for i = 1, #guns do
-		order[i] = guns[i].class
+		local gun = guns[i]
+		local class = type(gun) == "table" and gun.class or nil
+		if type(class) == "string" and class ~= "" then
+			local slot = math.floor(tonumber(gun.slot) or 0)
+			if slot < 1 or slot > maxGuns or not slotFree(slot) then
+				slot = nil
+				for j = 1, maxGuns do
+					if slotFree(j) then
+						slot = j
+						break
+					end
+				end
+			end
+			if slot ~= nil then order[slot] = class end
+		end
 	end
 	if BALLISTICS.Loadout and type(BALLISTICS.Loadout.Restore) == "function" then
 		BALLISTICS.Loadout.Restore(ply, order)
@@ -1012,7 +1052,37 @@ local function actSelf(ply, session, req)
 		L.Close(ply, why)
 		return false, why
 	end
-	-- Own slots do not move. Only a drop of a gun, grenade, or med.
+	-- A gun dragged onto another of your gun slots changes slots in place.
+	if req.from == "you" and req.to == "you" and req.kind == "gun" then
+		local infinite = L.InfiniteAmmo(BALLISTICS.Config, phase())
+		local you = L.ReadLive(ply)
+		local result = L.Transfer({
+			you = you,
+			them = L.Blank(),
+			from = "you",
+			kind = "gun",
+			key = req.key,
+			amount = req.amount,
+			to = "you",
+			slot = req.slot,
+			whole = false,
+			giveOnly = false,
+			caps = capsNow(),
+			infiniteAmmo = infinite,
+			knife = knifeOf(ply),
+		})
+		if not result.ok then
+			publishSelf(session, result.note or "")
+			return false, result.err
+		end
+		if not applyLive(ply, you, result.you, infinite) then
+			publishSelf(session, "Could not move that.")
+			return false, "give"
+		end
+		publishSelf(session, "")
+		return true
+	end
+	-- Anything else on your own side does not move. Only a drop of a gun, grenade, or med.
 	if req.from ~= "you" or req.to ~= "drop" then
 		publishSelf(session, "")
 		return false, "side"

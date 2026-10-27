@@ -70,11 +70,13 @@ local function coord(v, key)
 end
 
 -- Catalog-style item for a loot slot's icon (guns by class, meds/nades by
--- catalog key). Ammo and empty slots have none. Gun rows store the class on
--- key (the slot id); class is optional.
+-- catalog key). Ammo has none. An empty gun slot has none. An empty grenade
+-- or med slot still returns the catalog item so its icon shows at count 0.
+-- Gun rows store the class on key (the slot id); class is optional.
 function L.IconItem(slot, catalog)
-	if type(slot) ~= "table" or slot.empty then return nil end
+	if type(slot) ~= "table" then return nil end
 	if slot.kind == "gun" then
+		if slot.empty then return nil end
 		local class = slot.class
 		if type(class) ~= "string" or class == "" then class = slot.key end
 		if type(class) == "string" and class ~= "" then return { class = class } end
@@ -262,11 +264,11 @@ function L.AimOk(info)
 	return false
 end
 
--- Own inventory: live/post, alive, not spectating, slotted, conscious.
--- No target, range, or line of sight.
+-- Own inventory: buy, live, or post. Alive, not spectating, slotted, conscious.
+-- No target, range, or line of sight. Looting someone stays closed in buy.
 function L.CanOpenSelf(ctx)
 	ctx = type(ctx) == "table" and ctx or {}
-	if not L.PhaseOk(ctx.phase) then return false, "phase" end
+	if ctx.phase ~= "buy" and not L.PhaseOk(ctx.phase) then return false, "phase" end
 	if ctx.alive ~= true then return false, "alive" end
 	if ctx.spectating == true then return false, "spec" end
 	if ctx.slotted ~= true then return false, "slot" end
@@ -373,11 +375,20 @@ end
 -- does not move one item. A gun released outside both cards drops. A miss
 -- inside a card, or anything else released outside, cancels.
 -- Self mode (4th arg): outside the panel drops a gun, grenade, or med.
--- Ammo still cancels. A slot on your own panel is not a move.
+-- Ammo still cancels. A gun released on a different gun slot moves.
+-- Any other slot on your own panel cancels.
 function L.Release(drag, target, inside, selfMode)
 	if type(drag) ~= "table" then return "cancel" end
 	if selfMode == true then
-		if type(target) == "table" or inside == true then return "cancel" end
+		if type(target) == "table" then
+			if drag.kind == "gun" and target.kind == "gun" then
+				local fromIdx = tonumber(drag.index) or 0
+				local toIdx = tonumber(target.index) or 0
+				if fromIdx ~= toIdx then return "move" end
+			end
+			return "cancel"
+		end
+		if inside == true then return "cancel" end
 		if drag.kind == "gun" or drag.kind == "nade" or drag.kind == "med" then return "drop" end
 		return "cancel"
 	end
@@ -453,7 +464,7 @@ local function copyGun(gun)
 	if type(class) ~= "string" or class == "" then return nil end
 	local ammo = gun.ammo
 	if type(ammo) ~= "string" or ammo == "" or ammo == "none" then ammo = nil end
-	return {
+	local out = {
 		class = class,
 		name = type(gun.name) == "string" and gun.name or L.WeaponName(class),
 		clip1 = math.max(0, whole(gun.clip1, 0)),
@@ -461,6 +472,9 @@ local function copyGun(gun)
 		ammo = ammo,
 		attachments = copyAtts(gun.attachments),
 	}
+	local slot = whole(gun.slot, 0)
+	if slot >= 1 and slot <= L.GUNS then out.slot = slot end
+	return out
 end
 
 local function copyCounts(src)
@@ -476,6 +490,41 @@ local function copyCounts(src)
 	return out
 end
 
+-- True when a gun already occupies this fixed slot (1..L.GUNS).
+local function slotTaken(guns, idx)
+	idx = whole(idx, 0)
+	if type(guns) ~= "table" or idx < 1 then return false end
+	for i = 1, #guns do
+		local gun = guns[i]
+		if type(gun) == "table" and gun.slot == idx then return true end
+	end
+	return false
+end
+
+-- Guns without a valid slot, or with a slot another earlier gun kept, take
+-- the first free slot. List order is the tie-break.
+local function normaliseSlots(guns)
+	local used = {}
+	for i = 1, #guns do
+		local slot = guns[i].slot
+		if type(slot) ~= "number" or slot < 1 or slot > L.GUNS or used[slot] then
+			guns[i].slot = nil
+		else
+			used[slot] = true
+		end
+	end
+	for i = 1, #guns do
+		if guns[i].slot == nil then
+			for s = 1, L.GUNS do
+				if not slotTaken(guns, s) then
+					guns[i].slot = s
+					break
+				end
+			end
+		end
+	end
+end
+
 function L.Clone(inv)
 	inv = type(inv) == "table" and inv or {}
 	local guns = {}
@@ -486,6 +535,7 @@ function L.Clone(inv)
 			if gun then guns[#guns + 1] = gun end
 		end
 	end
+	normaliseSlots(guns)
 	return {
 		guns = guns,
 		nades = copyCounts(inv.nades),
@@ -545,13 +595,30 @@ local function findGun(guns, class)
 	return nil
 end
 
+-- Requested slot when it is inside 1..max and empty, otherwise the first
+-- free slot. The gun keeps that slot. Fails when every slot is taken or the
+-- class is already here.
 local function placeGun(guns, gun, slot, max)
+	if type(gun) ~= "table" then return false end
+	max = whole(max, L.GUNS)
+	if max < 1 then max = 1 end
+	if max > L.GUNS then max = L.GUNS end
 	if #guns >= max then return false end
 	if findGun(guns, gun.class) then return false end
-	local idx = whole(slot, 0)
-	if idx < 1 then idx = #guns + 1 end
-	if idx > #guns + 1 then idx = #guns + 1 end
-	if guns[idx] ~= nil then return false end
+	local want = whole(slot, 0)
+	local chosen = nil
+	if want >= 1 and want <= max and not slotTaken(guns, want) then
+		chosen = want
+	else
+		for i = 1, max do
+			if not slotTaken(guns, i) then
+				chosen = i
+				break
+			end
+		end
+	end
+	if not chosen then return false end
+	gun.slot = chosen
 	guns[#guns + 1] = gun
 	return true
 end
@@ -592,10 +659,11 @@ function L.Transfer(ctx)
 	if ctx.giveOnly == true and fromName == "them" then
 		return fail("giveonly", originYou, originThem)
 	end
-	if fromName == toName then
+	local kind = ctx.kind
+	-- Same side is a gun re-slot. Everything else still has nowhere to go.
+	if fromName == toName and kind ~= "gun" then
 		return fail("same", originYou, originThem)
 	end
-	local kind = ctx.kind
 	if kind ~= "gun" and kind ~= "nade" and kind ~= "med" and kind ~= "ammo" then
 		return fail("kind", originYou, originThem)
 	end
@@ -618,6 +686,30 @@ function L.Transfer(ctx)
 	end
 
 	if kind == "gun" then
+		-- Own side: ctx.slot is the target slot. The same slot, or one outside
+		-- 1..max, is not a move. A gun already there swaps slots.
+		if fromName == toName then
+			local _, gun = findGun(source.guns, key)
+			if not gun then return fail("empty", originYou, originThem) end
+			local maxGuns = whole(caps.guns, L.GUNS)
+			if maxGuns < 1 then maxGuns = 1 end
+			if maxGuns > L.GUNS then maxGuns = L.GUNS end
+			local target = whole(ctx.slot, 0)
+			local cur = whole(gun.slot, 0)
+			if target < 1 or target > maxGuns or target == cur then
+				return fail("same", originYou, originThem)
+			end
+			local old = gun.slot
+			for i = 1, #source.guns do
+				local other = source.guns[i]
+				if other ~= gun and other.slot == target then
+					other.slot = old
+					break
+				end
+			end
+			gun.slot = target
+			return { ok = true, you = you, them = them, drop = nil, moved = 1 }
+		end
 		local gun = takeGun(source.guns, key)
 		if not gun then return fail("empty", originYou, originThem) end
 		if toName == "drop" then
@@ -692,7 +784,13 @@ function L.Accepts(drag, slot, ctx)
 	if type(drag) ~= "table" or type(slot) ~= "table" then return false end
 	if drag.kind ~= slot.kind then return false end
 	if drag.kind ~= "gun" and drag.key ~= slot.key then return false end
-	if drag.from == slot.side then return false end
+	if drag.from == slot.side then
+		-- A gun may change slots on its own side. Transfer accepts or refuses.
+		if drag.kind ~= "gun" or slot.kind ~= "gun" then return false end
+		local fromIdx = tonumber(drag.index) or 0
+		local toIdx = tonumber(slot.index) or 0
+		if fromIdx == toIdx then return false end
+	end
 	if slot.side ~= "you" and slot.side ~= "them" then return false end
 	ctx = type(ctx) == "table" and ctx or {}
 	local result = L.Transfer({
@@ -770,10 +868,16 @@ function L.SideView(inv, caps, infinite, ammoKeys)
 	inv = L.Clone(inv)
 	caps = caps or L.Caps(nil)
 	local guns = {}
-	for i = 1, L.GUNS do
+	local held = {}
+	for i = 1, #inv.guns do
 		local gun = inv.guns[i]
+		local slot = type(gun) == "table" and tonumber(gun.slot) or nil
+		if slot and held[slot] == nil then held[slot] = gun end
+	end
+	for i = 1, L.GUNS do
+		local gun = held[i]
 		local row = { slot = i }
-		if gun then
+		if type(gun) == "table" and type(gun.class) == "string" and gun.class ~= "" then
 			row.class = gun.class
 			row.name = gun.name or L.WeaponName(gun.class)
 			row.clip1 = gun.clip1 or 0

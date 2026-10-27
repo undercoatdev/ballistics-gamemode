@@ -26,6 +26,8 @@ end
 local root
 local leftCard
 local rightCard
+local invButton
+local buyRestore = false
 local state = { open = false, note = "" }
 local drag
 local ghost
@@ -338,6 +340,12 @@ local function hideWindow()
 		if root.SetKeyboardInputEnabled then root:SetKeyboardInputEnabled(false) end
 	end
 	mark()
+	if buyRestore then
+		buyRestore = false
+		if BALLISTICS.BuyWheel and type(BALLISTICS.BuyWheel.Open) == "function" then
+			BALLISTICS.BuyWheel.Open()
+		end
+	end
 end
 
 local function closeWindow()
@@ -756,6 +764,20 @@ local function layout()
 	viewThem = selfMode and L.InvFromSide(nil) or L.InvFromSide(state.them)
 	fillCard(leftCard, "you", state.you, box.left)
 	if not selfMode then fillCard(rightCard, "them", state.them, box.right) end
+	if valid(invButton) then
+		if selfMode then
+			local bw, bh = 96, 22
+			local header = 34
+			invButton:SetSize(bw, bh)
+			invButton:SetPos(box.left.x + box.left.w - bw - 8, box.left.y + math.floor((header - bh) / 2))
+			invButton:SetVisible(true)
+			if invButton.SetMouseInputEnabled then invButton:SetMouseInputEnabled(true) end
+			if invButton.MoveToFront then invButton:MoveToFront() end
+		else
+			invButton:SetVisible(false)
+			if invButton.SetMouseInputEnabled then invButton:SetMouseInputEnabled(false) end
+		end
+	end
 	sizedW, sizedH = sw, sh
 end
 
@@ -801,6 +823,20 @@ local function ensureRoot()
 	end
 	leftCard = card("Your inventory", "you")
 	rightCard = card("Their inventory", "them")
+	invButton = vgui.Create("DButton", root)
+	invButton:SetText("")
+	invButton:SetVisible(false)
+	if invButton.SetKeyboardInputEnabled then invButton:SetKeyboardInputEnabled(false) end
+	invButton.Paint = function(_, w, h)
+		surface.SetDrawColor(32, 34, 40, 255)
+		surface.DrawRect(0, 0, w, h)
+		surface.SetDrawColor(80, 88, 102, 255)
+		surface.DrawOutlinedRect(0, 0, w, h)
+		draw.SimpleText("Inventory", "BallisticsLootSmall", w / 2, h / 2, Color(230, 230, 230), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+	end
+	invButton.DoClick = function()
+		closeWindow()
+	end
 	mark()
 	return root
 end
@@ -808,6 +844,10 @@ end
 local function showWindow()
 	local pnl = ensureRoot()
 	if not valid(pnl) then return end
+	if state.self == true and BALLISTICS.BuyWheel and type(BALLISTICS.BuyWheel.IsOpen) == "function" and BALLISTICS.BuyWheel.IsOpen() then
+		buyRestore = true
+		if type(BALLISTICS.BuyWheel.Hide) == "function" then BALLISTICS.BuyWheel.Hide() end
+	end
 	pnl:SetVisible(true)
 	pnl:SetMouseInputEnabled(true)
 	if pnl.MakePopup then pnl:MakePopup() end
@@ -878,6 +918,15 @@ local function sendSelf()
 	net.SendToServer()
 end
 
+function L.ToggleSelf()
+	if state.open == true and state.self == true then
+		closeWindow()
+		return
+	end
+	local ply = localPly()
+	if ply and selfAllowed(ply) then sendSelf() end
+end
+
 local function thinkInventoryKey()
 	local F = BALLISTICS.FKeys
 	if not F or type(F.Step) ~= "function" then return end
@@ -885,13 +934,7 @@ local function thinkInventoryKey()
 	local down = key > 0 and keyDownCode(key)
 	local t = (RealTime and RealTime()) or 0
 	if not F.Step(invEdge, down == true, t, typingBlocked()) then return end
-	if state.open == true and state.self == true then
-		closeWindow()
-		return
-	end
-	local ply = localPly()
-	if not ply or not selfAllowed(ply) then return end
-	sendSelf()
+	L.ToggleSelf()
 end
 
 local function applyState(nextState)

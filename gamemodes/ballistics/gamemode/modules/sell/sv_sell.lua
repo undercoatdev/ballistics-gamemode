@@ -4,6 +4,19 @@ local S = BALLISTICS.Sell
 local GOOD = TEAM_GOOD or 1
 local BAD = TEAM_BAD or 2
 
+-- Bought this buy phase, keyed by player id. Cleared when buy starts again.
+local freshOf = {}
+
+local function publishFresh(ply, map)
+	if ply == nil or type(ply.SetNW2String) ~= "function" then return end
+	local text = ""
+	if type(map) == "table" and type(S.Encode) == "function" then
+		text = S.Encode(map) or ""
+	end
+	if type(text) ~= "string" then text = "" end
+	pcall(ply.SetNW2String, ply, "bal_fresh", text)
+end
+
 local function valid(e) return e ~= nil and (not IsValid or IsValid(e)) end
 
 local function attRefund(wep)
@@ -53,6 +66,13 @@ function S.Request(ply, key)
 	local item = BALLISTICS.Catalog and BALLISTICS.Catalog.Get and BALLISTICS.Catalog.Get(key)
 	local teamId = BALLISTICS.Slots and BALLISTICS.Slots.TeamOf and BALLISTICS.Slots.TeamOf(ply)
 	local wep = item and item.kind == "weapon" and ply.GetWeapon and ply:GetWeapon(item.class) or nil
+	local id = BALLISTICS.PlayerId and BALLISTICS.PlayerId(ply) or nil
+	local map = id and freshOf[id] or nil
+	local fresh = 0
+	if type(map) == "table" and item and type(item.key) == "string" then
+		fresh = math.floor(tonumber(map[item.key]) or 0)
+		if fresh < 0 then fresh = 0 end
+	end
 	local plan = S.Plan({
 		phase = BALLISTICS.Round and BALLISTICS.Round.Phase and BALLISTICS.Round.Phase() or "lobby",
 		alive = ply:Alive() == true,
@@ -61,9 +81,14 @@ function S.Request(ply, key)
 		have = item and haveOf(ply, item) or 0,
 		price = item and BALLISTICS.Catalog.Price and BALLISTICS.Catalog.Price(item.key) or 0,
 		attRefund = attRefund(wep),
+		fresh = fresh,
 	})
 	if not plan.ok then return false, plan.err end
 	if not takeOne(ply, item) then return false, "take" end
+	if type(map) == "table" and item and type(item.key) == "string" then
+		S.FreshTake(map, item.key)
+		publishFresh(ply, map)
+	end
 	if BALLISTICS.Buy and BALLISTICS.Buy.Unrecord then BALLISTICS.Buy.Unrecord(ply, item) end
 	if plan.refund > 0 and BALLISTICS.Money and BALLISTICS.Money.Refund then
 		BALLISTICS.Money.Refund(ply, plan.refund)
@@ -78,4 +103,38 @@ if BALLISTICS.Net and BALLISTICS.Net.Register then
 		read = function() return net.ReadString() end,
 	})
 	BALLISTICS.Net.Register("bal_sell_ok", nil, { write = function(p) net.WriteUInt(math.Clamp(math.floor(p.amount or 0), 0, 65535), 16) end })
+end
+
+if hook and hook.Add then
+	hook.Add("Ballistics_Bought", "Ballistics_SellFresh", function(ply, item)
+		if not (BALLISTICS.IsPlayer and BALLISTICS.IsPlayer(ply)) then return end
+		if type(item) ~= "table" or type(item.key) ~= "string" or item.key == "" then return end
+		local id = BALLISTICS.PlayerId and BALLISTICS.PlayerId(ply)
+		if not id then return end
+		local map = freshOf[id]
+		if type(map) ~= "table" then
+			map = {}
+			freshOf[id] = map
+		end
+		S.FreshAdd(map, item.key, 1)
+		publishFresh(ply, map)
+	end)
+
+	hook.Add("Ballistics_PhaseChanged", "Ballistics_SellFreshClear", function(_, new)
+		if new ~= "buy" then return end
+		freshOf = {}
+		local all = {}
+		if player and type(player.GetAll) == "function" then
+			local ok, got = pcall(player.GetAll)
+			if ok and type(got) == "table" then all = got end
+		end
+		for i = 1, #all do
+			publishFresh(all[i], {})
+		end
+	end)
+
+	hook.Add("PlayerDisconnected", "Ballistics_SellFreshForget", function(ply)
+		local id = BALLISTICS.PlayerId and BALLISTICS.PlayerId(ply)
+		if id then freshOf[id] = nil end
+	end)
 end

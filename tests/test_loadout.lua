@@ -36,6 +36,14 @@ check("guns follow acquisition order", ordered[1] == "tacrp_pistol" and ordered[
 local _, shifted = L.Resolve({ "tacrp_ak", "tacrp_pistol" }, { "tacrp_pistol" }, "tacrp_knife")
 check("dropping the first gun shifts the other to slot 2", shifted[1] == "tacrp_pistol" and shifted[2] == nil and L.At("tacrp_knife", shifted, 2) == "tacrp_pistol" and L.At("tacrp_knife", shifted, 3) == nil and L.Full(shifted) == false)
 
+local keepKnife, kept = L.ResolveSlots({ "tacrp_ak", "tacrp_pistol" }, { "tacrp_pistol" }, "tacrp_knife")
+check("ResolveSlots keeps the remaining gun in its slot", keepKnife == "tacrp_knife" and kept[1] == false and kept[2] == "tacrp_pistol")
+local _, keptBoth = L.ResolveSlots({ "tacrp_ak", "tacrp_pistol" }, { "tacrp_ak", "tacrp_pistol" }, "tacrp_knife")
+check("ResolveSlots keeps both gun slots", keptBoth[1] == "tacrp_ak" and keptBoth[2] == "tacrp_pistol")
+local _, filled = L.ResolveSlots({ false, "tacrp_pistol" }, { "tacrp_ak", "tacrp_pistol" }, "tacrp_knife")
+check("ResolveSlots fills the first free slot", filled[1] == "tacrp_ak" and filled[2] == "tacrp_pistol")
+check("FreeSlot is the first empty gun slot", L.FreeSlot(nil) == 1 and L.FreeSlot({}) == 1 and L.FreeSlot(kept) == 1 and L.FreeSlot({ "tacrp_ak", false }) == 2 and L.FreeSlot(keptBoth) == nil)
+
 local _, stayed = L.Resolve({ "tacrp_ak", "tacrp_pistol" }, { "tacrp_ak" }, "tacrp_knife")
 check("dropping the second gun leaves the first in slot 2", stayed[1] == "tacrp_ak" and stayed[2] == nil)
 
@@ -87,7 +95,7 @@ ply.list = { "tacrp_knife", "tacrp_ak", "tacrp_pistol" }
 check("server slots follow buy order", BALLISTICS.Loadout.ClassFor(ply, 2) == "tacrp_ak" and BALLISTICS.Loadout.ClassFor(ply, 3) == "tacrp_pistol" and BALLISTICS.Loadout.GunCount(ply) == 2)
 check("a third noted gun is refused", BALLISTICS.Loadout.NoteGun(ply, "tacrp_spr") == false and BALLISTICS.Loadout.GunCount(ply) == 2)
 ply.list = { "tacrp_knife", "tacrp_pistol" }
-check("removing the first gun shifts the other down", BALLISTICS.Loadout.ClassFor(ply, 2) == "tacrp_pistol" and BALLISTICS.Loadout.ClassFor(ply, 3) == nil)
+check("removing the first gun leaves slot 2 empty", BALLISTICS.Loadout.ClassFor(ply, 2) == nil and BALLISTICS.Loadout.ClassFor(ply, 3) == "tacrp_pistol")
 ply.list = {}
 check("a dropped knife is an empty slot", BALLISTICS.Loadout.ClassFor(ply, 1) == nil)
 

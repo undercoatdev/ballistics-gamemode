@@ -407,6 +407,7 @@ function BALLISTICS.Buy.Request(ply, key)
 	})
 	if result.ok then
 		clearNote(ply)
+		if hook and hook.Run then hook.Run("Ballistics_Bought", ply, item) end
 		-- Cha-ching for the buyer only.
 		if BALLISTICS.Net and BALLISTICS.Net.Send then BALLISTICS.Net.Send("bal_buy_ok", ply, {}) end
 		if item.kind == "weapon" then
