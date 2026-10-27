@@ -56,7 +56,7 @@ BALLISTICS.Catalog.WeaponCategoryOrder = {
 
 -- Ordered non-empty groups. A category outside the list falls under "Other".
 -- Buy panel columns: light on the left, heavy on the right.
-BALLISTICS.Catalog.LIGHT = { Pistol = true, Magnum = true, ["Machine Pistol"] = true, SMG = true, Shotgun = true }
+BALLISTICS.Catalog.LIGHT = { Pistol = true, Magnum = true, ["Machine Pistol"] = true, SMG = true }
 
 function BALLISTICS.Catalog.IsHeavy(item)
 	local cat = type(item) == "table" and item.category or nil
