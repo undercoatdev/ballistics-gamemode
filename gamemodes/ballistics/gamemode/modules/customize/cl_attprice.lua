@@ -159,8 +159,11 @@ end
 local function hideDrop(pnl)
 	if pnl == nil or pnl.BallisticsDropHidden == true then return end
 	if type(BALLISTICS.AttPrice.IsDropButton) ~= "function" then return end
-	local className
-	if type(pnl.GetClassName) == "function" then
+	-- GetClassName is the engine class ("Label" for a DButton); the Lua class
+	-- is pnl.ClassName. Checking only GetClassName never matched, so the
+	-- button was never hidden.
+	local className = type(pnl.ClassName) == "string" and pnl.ClassName or nil
+	if className == nil and type(pnl.GetClassName) == "function" then
 		local ok, name = pcall(pnl.GetClassName, pnl)
 		if ok then className = name end
 	end
@@ -210,7 +213,22 @@ function BALLISTICS.AttPrice.ApplyHUD(panel)
 	end
 end
 
+-- TacRP only builds the Drop Weapon button while its client convar
+-- tacrp_cust_drop is on; keep it off in this gamemode.
+local function dropOff()
+	local cv = GetConVar and GetConVar("tacrp_cust_drop")
+	if cv and cv:GetBool() and RunConsoleCommand then RunConsoleCommand("tacrp_cust_drop", "0") end
+end
+
 if CLIENT and hook and hook.Add then
+	hook.Add("InitPostEntity", "Ballistics_NoCustDrop", function() dropOff() end)
+	local nextDrop = 0
+	hook.Add("Think", "Ballistics_NoCustDrop", function()
+		local now = RealTime and RealTime() or 0
+		if now < nextDrop then return end
+		nextDrop = now + 2
+		dropOff()
+	end)
 	hook.Add("TacRP_CreateCustomizeHUD", "Ballistics_AttPrice", function(_, panel)
 		BALLISTICS.AttPrice.ApplyHUD(panel)
 	end)

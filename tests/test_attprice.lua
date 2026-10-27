@@ -214,6 +214,7 @@ check("detach refunds nothing", P.RefundOnDetach(700) == 0 and P.RefundOnDetach(
 check("the drop button is the bottom centre DButton", P.IsDropButton("DButton", 934, 700, 52, 20, 1920, 720) == true)
 check("the news button is not the drop button", P.IsDropButton("DButton", 8, 8, 24, 24, 1920, 720) == false)
 check("a slot is not the drop button", P.IsDropButton("TacRPAttSlot", 934, 700, 52, 20, 1920, 720) == false)
+check("the engine class of a DButton (Label) is matched too", P.IsDropButton("Label", 934, 700, 52, 20, 1920, 720) == true)
 local mx, my = P.MoneyPlace(1920, 1080, 160, 24)
 check("customize money sits bottom centre", mx == 880 and my == 1048)
 check("refund stays off in config", BALLISTICS.Config.AttRefundOnDetach == false)
@@ -609,5 +610,18 @@ check("an allowed replace detaches then installs", fake.Attachments[1].Installed
 check("melee_tech costs 300", BALLISTICS.AttPrice.Cost({ Category = "melee_tech" }) == 300)
 check("melee_spec costs 500", BALLISTICS.AttPrice.Cost({ Category = "melee_spec" }) == 500)
 check("melee_boost costs 500", BALLISTICS.AttPrice.Cost({ Category = "melee_boost" }) == 500)
+
+do
+	local saved = TacRP
+	local dropped = false
+	TacRP = { DropWeapon = function() dropped = true end }
+	BALLISTICS.AttPrice.BlockTacDrop()
+	TacRP.DropWeapon({}, {})
+	check("TacRP's weapon drop is blocked on the server", dropped == false and TacRP.BallisticsNoDrop == true)
+	TacRP = saved
+	local cl = readAll("gamemodes/ballistics/gamemode/modules/customize/cl_attprice.lua")
+	check("the client turns tacrp_cust_drop off", cl:find('RunConsoleCommand("tacrp_cust_drop", "0")', 1, true) ~= nil)
+	check("the drop button is matched by its Lua class", cl:find("pnl.ClassName", 1, true) ~= nil)
+end
 
 if failed then os.exit(1) end

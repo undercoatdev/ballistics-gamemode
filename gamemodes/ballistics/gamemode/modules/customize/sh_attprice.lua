@@ -164,7 +164,7 @@ end
 -- The Drop Weapon button is the DButton centred on the bottom of the customize
 -- screen. The news button sits at the top left, so it does not match.
 function P.IsDropButton(className, x, y, w, h, screenW, screenH)
-	if className ~= "DButton" then return false end
+	if className ~= "DButton" and className ~= "Label" then return false end
 	x = tonumber(x) or 0
 	y = tonumber(y) or 0
 	w = tonumber(w) or 0

@@ -184,3 +184,16 @@ if hook and hook.Add then
 		onEquip(wep, ply)
 	end)
 end
+
+-- No weapon drops through TacRP in this gamemode (its customize-menu Drop
+-- button / tacrp_drop). Guns leave a player only through our loot/inventory.
+local function blockTacDrop()
+	if type(TacRP) ~= "table" or type(TacRP.DropWeapon) ~= "function" or TacRP.BallisticsNoDrop then return end
+	TacRP.BallisticsNoDrop = true
+	TacRP.DropWeapon = function() return end
+end
+BALLISTICS.AttPrice.BlockTacDrop = blockTacDrop
+if hook and hook.Add then
+	hook.Add("InitPostEntity", "Ballistics_NoTacDrop", function() blockTacDrop() end)
+	hook.Add("Think", "Ballistics_NoTacDrop", function() blockTacDrop() end)
+end
