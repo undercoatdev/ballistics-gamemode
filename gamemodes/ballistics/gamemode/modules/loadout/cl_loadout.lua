@@ -1,5 +1,6 @@
--- Keys 1, 2, 3 select loadout slots. The scroll wheel does not switch weapons.
--- Slot 4 is not handled here: that bind belongs to the throwables key.
+-- Keys 1 and 2 select gun slots. Pressing the active gun's key holsters the
+-- knife. The scroll wheel does not switch weapons. Slot 3 is throwables,
+-- slot 4 inventory; those binds are swallowed by the keys module.
 -- The spawn editor zooms with invnext/invprev while it is open, so those
 -- binds are left for it. TacRP menus that read the wheel themselves are
 -- not binds and are left alone. Spectate uses attack, not these binds.

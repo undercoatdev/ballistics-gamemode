@@ -1,6 +1,6 @@
 -- Snapshot a living winner's gear when the round ends and put it back after
 -- the next buy spawn's ApplyLoadout. Guns are restored in loadout slot order
--- (slot 2, then slot 3). Attachments go through the weapon's
+-- (key 1, then key 2). Attachments go through the weapon's
 -- original Attach (saved by the price wrapper) with BallisticsAttRestore set,
 -- so the price wrapper does not charge. A death before that spawn drops the
 -- snapshot. Match start clears every snapshot.

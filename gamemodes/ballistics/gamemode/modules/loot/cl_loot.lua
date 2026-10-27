@@ -2,7 +2,7 @@
 -- The use button is only watched. It is not consumed, so doors, body drag,
 -- and weapon binds keep working. The ring starts only while the crosshair
 -- is on a lootable player or body.
--- bal_inventory_key (default 5) toggles the same window in self mode: only
+-- bal_inventory_key (default 4) toggles the same window in self mode: only
 -- "Your inventory". The key is polled, because the popup owns the keyboard.
 
 if not CLIENT then return end
@@ -875,7 +875,7 @@ local function inventoryKey()
 	if BALLISTICS.Keys and type(BALLISTICS.Keys.InventoryKey) == "function" then
 		return BALLISTICS.Keys.InventoryKey()
 	end
-	return (BALLISTICS.Keys and BALLISTICS.Keys.KEY_5) or 6
+	return (BALLISTICS.Keys and BALLISTICS.Keys.KEY_4) or 5
 end
 
 local function keyDownCode(code)

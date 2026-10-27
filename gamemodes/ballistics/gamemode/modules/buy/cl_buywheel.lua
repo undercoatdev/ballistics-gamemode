@@ -881,8 +881,8 @@ function BALLISTICS.BuyWheel.IsOpen()
 end
 
 -- The popup eats slot keys, so select loadout slots here. The scroll wheel is
--- left to the list. invnext/invprev are blocked in PlayerBindPress, and slot4
--- is left for the throwables key.
+-- left to the list. invnext/invprev are blocked in PlayerBindPress. slot1/slot2
+-- pick guns; slot3 is throwables and slot4 is inventory.
 function BALLISTICS.BuyWheel.HookWeaponPick(pnl)
 	if not valid(pnl) or pnl.balWeaponPick then return end
 	pnl.balWeaponPick = true

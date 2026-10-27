@@ -1005,7 +1005,7 @@ check("another slot is not the drag source", L.IsDragSource({ side = "you", kind
 local graceWep = { BallisticsDropOwner = looter, BallisticsDropUntil = 1.5 }
 check("pickup grace blocks only the dropper", L.PickupBlocked(looter, graceWep, 0) == true and L.PickupBlocked(looter, graceWep, 1.5) == false and L.PickupBlocked(victim, graceWep, 0) == false and L.PickupBlocked(looter, {}, 0) == false)
 
--- Client: the 5 key toggles your inventory and stays quiet while blocked.
+-- Client: the 4 key toggles your inventory and stays quiet while blocked.
 CLIENT = true
 dofile("gamemodes/ballistics/gamemode/modules/fkeys/sh_fkeys.lua")
 local phaseNow, aliveNow, teamNow, obsNow, downNow = "live", true, 1, 0, false
@@ -1027,7 +1027,7 @@ gui = {
 	HideGameUI = function() end,
 }
 BALLISTICS.Keys = BALLISTICS.Keys or {}
-function BALLISTICS.Keys.InventoryKey() return 6 end
+function BALLISTICS.Keys.InventoryKey() return 5 end
 function LocalPlayer()
 	return {
 		IsValid = function() return true end,
@@ -1047,12 +1047,12 @@ function net.SendToServer() end
 dofile("gamemodes/ballistics/gamemode/modules/loot/cl_loot.lua")
 
 local function releaseKey()
-	keysDown[6] = false
+	keysDown[5] = false
 	hook.Run("Think")
 end
 local function tap(at)
 	clockRt = at
-	keysDown[6] = true
+	keysDown[5] = true
 	hook.Run("Think")
 	local n = #sent
 	releaseKey()
@@ -1067,7 +1067,7 @@ end
 
 resetGate()
 tap(1)
-check("5 asks the server to open your inventory", #sent == 1 and sent[1] == "bal_loot_self")
+check("4 asks the server to open your inventory", #sent == 1 and sent[1] == "bal_loot_self")
 tap(1.1)
 check("a second tap inside the debounce does nothing", #sent == 1)
 tap(2)
@@ -1081,7 +1081,7 @@ L.ApplyClientState({
 	them = { guns = {}, nades = {}, meds = {}, ammo = {} },
 })
 tap(5)
-check("5 again closes your inventory", #sent == 1 and sent[1] == "bal_loot_act")
+check("4 again closes your inventory", #sent == 1 and sent[1] == "bal_loot_act")
 
 resetGate()
 L.ApplyClientState({ open = true, self = true, note = "", you = {}, them = {} })
@@ -1092,11 +1092,11 @@ check("escape sends the close", esc == false and #sent == 1 and sent[1] == "bal_
 resetGate()
 phaseNow = "buy"
 tap(10)
-check("5 opens during buy", #sent == 1 and sent[1] == "bal_loot_self")
+check("4 opens during buy", #sent == 1 and sent[1] == "bal_loot_self")
 resetGate()
 phaseNow = "post"
 tap(11)
-check("5 opens during the post round", #sent == 1 and sent[1] == "bal_loot_self")
+check("4 opens during the post round", #sent == 1 and sent[1] == "bal_loot_self")
 resetGate()
 aliveNow = false
 tap(12)

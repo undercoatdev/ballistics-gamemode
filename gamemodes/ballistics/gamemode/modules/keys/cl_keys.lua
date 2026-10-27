@@ -25,8 +25,8 @@ local hintsRemembered = nil
 local hintsRunning = false
 
 if CreateClientConVar then
-	CreateClientConVar(THROW, tostring(K.KEY_4 or 5), true, false, "Throwables key (KEY_ enum). Tap quick throw, hold the menu. Default is 4.")
-	CreateClientConVar(INV, tostring(K.KEY_5 or 6), true, false, "Inventory key (KEY_ enum). Toggles your inventory. Default is 5.")
+	CreateClientConVar(THROW, tostring(K.KEY_3 or 4), true, false, "Throwables key (KEY_ enum). Tap quick throw, hold the menu. Default is 3.")
+	CreateClientConVar(INV, tostring(K.KEY_4 or 5), true, false, "Inventory key (KEY_ enum). Toggles your inventory. Default is 4.")
 end
 
 local function convar(name)
@@ -46,13 +46,13 @@ local function convarInt(name, fallback)
 end
 
 function BALLISTICS.Keys.ThrowKey()
-	local n = convarInt(THROW, K.KEY_4 or 5)
+	local n = convarInt(THROW, K.KEY_3 or 4)
 	if n < 0 then n = 0 end
 	return n
 end
 
 function BALLISTICS.Keys.InventoryKey()
-	local n = convarInt(INV, K.KEY_5 or 6)
+	local n = convarInt(INV, K.KEY_4 or 5)
 	if n < 0 then n = 0 end
 	return n
 end
@@ -259,8 +259,8 @@ function BALLISTICS.Keys.HintRows()
 	if type(K.Rows) ~= "function" then return {} end
 	return K.Rows({
 		customize = bindLabel("+menu_context", "C"),
-		throw = keyLabel(throw, "4"),
-		inventory = keyLabel(BALLISTICS.Keys.InventoryKey(), "5"),
+		throw = keyLabel(throw, "3"),
+		inventory = keyLabel(BALLISTICS.Keys.InventoryKey(), "4"),
 		inspect = keyLabel(inspect, "G"),
 		blindfire = bindLabel("+zoom", "H"),
 		safety = bindLabel("+use", "E"),
@@ -323,7 +323,7 @@ local function paint()
 		return
 	end
 	-- Key column measured with GetTextSize and right-aligned, so wide keys
-	-- (F2, 1 2 3, MOUSE3) never start left of the panel.
+	-- (F2, 1 2, MOUSE3) never start left of the panel.
 	local keyRight = box.x + K.PAD + keyW
 	for i = 1, #rows do
 		local y = box.y + (i - 0.5) * box.row

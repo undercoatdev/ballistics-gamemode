@@ -1,4 +1,4 @@
--- Slot select from the buy wheel and from keys 1, 2, 3. Scroll does not pick.
+-- Slot select from the buy wheel and from keys 1 and 2. Scroll does not pick.
 -- Run: luajit tests/test_weaponpick.lua
 local failed = false
 local function check(name, ok)
@@ -9,7 +9,7 @@ dofile("tests/support/gmod_stub.lua")
 dofile("gamemodes/ballistics/gamemode/modules/loadout/sh_loadout.lua")
 local L = BALLISTICS.Loadout
 check("scroll is not a weapon pick", L.BindSlot("invnext") == nil and L.BindSlot("INVPREV") == nil and L.BlockScroll("invnext") == true and L.BlockScroll("invprev") == true)
-check("slot keys pick a loadout slot", L.BindSlot("slot2") == 2 and L.BindSlot("slot4") == nil and L.BindSlot("+jump") == nil)
+check("slot keys pick a loadout slot", L.BindSlot("slot2") == 2 and L.BindSlot("slot3") == nil and L.BindSlot("slot4") == nil and L.BindSlot("+jump") == nil)
 
 local cmds = {}
 concommand = { Add = function(name, fn) cmds[name] = fn end }
@@ -28,20 +28,33 @@ if okLoad and cmds.bal_select and cmds.bal_slot then
 	cmds.bal_select(ply, "bal_select", { "tacrp_m1911" })
 	check("owned weapon selected", ply.picked == "tacrp_m1911")
 
+	function ply:GetActiveWeapon()
+		if not self.picked then return nil end
+		local class = self.picked
+		return { GetClass = function() return class end }
+	end
 	ply.picked = nil
 	BALLISTICS.Loadout.Reset(ply, "tacrp_knife")
 	cmds.bal_slot(ply, "bal_slot", { "1" })
-	check("an empty knife slot does nothing", ply.picked == nil)
+	check("an empty gun slot does nothing", ply.picked == nil)
 	ply.held.tacrp_knife = true
 	cmds.bal_slot(ply, "bal_slot", { "1" })
-	check("slot 1 selects the knife", ply.picked == "tacrp_knife")
+	check("the knife has no key", ply.picked == nil)
 	BALLISTICS.Loadout.NoteGun(ply, "tacrp_m1911")
 	ply.picked = nil
+	cmds.bal_slot(ply, "bal_slot", { "1" })
+	check("slot 1 selects the first gun", ply.picked == "tacrp_m1911")
+	cmds.bal_slot(ply, "bal_slot", { "1" })
+	check("pressing the active gun holsters the knife", ply.picked == "tacrp_knife")
+	ply.held.tacrp_spr = true
+	BALLISTICS.Loadout.NoteGun(ply, "tacrp_spr")
 	cmds.bal_slot(ply, "bal_slot", { "2" })
-	check("slot 2 selects the first gun", ply.picked == "tacrp_m1911")
+	check("slot 2 selects the second gun", ply.picked == "tacrp_spr")
+	cmds.bal_slot(ply, "bal_slot", { "1" })
+	check("the other gun key switches straight to it", ply.picked == "tacrp_m1911")
 	ply.picked = nil
 	cmds.bal_slot(ply, "bal_slot", { "3" })
-	check("an empty gun slot does nothing", ply.picked == nil)
+	check("slot 3 does not select a weapon", ply.picked == nil)
 	cmds.bal_slot(ply, "bal_slot", { "4" })
 	check("slot 4 does not select a weapon", ply.picked == nil)
 else

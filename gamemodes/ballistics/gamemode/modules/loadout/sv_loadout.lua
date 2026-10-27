@@ -97,7 +97,7 @@ local function copySlots(slots)
 	return out
 end
 
--- Fixed slot table: { [1] = slot-2 class or false, [2] = slot-3 class or false }.
+-- Fixed slot table: { [1] = key-1 class or false, [2] = key-2 class or false }.
 function L.Slots(ply)
 	local id = playerId(ply)
 	if not id then return copySlots(nil) end
@@ -153,15 +153,9 @@ function L.ClassFor(ply, slot)
 	local id = playerId(ply)
 	if not id or ply == nil then return nil end
 	slot = tonumber(slot)
-	if slot == 1 then
-		local knife = knifeOf[id]
-		if type(knife) ~= "string" or knife == "" then return nil end
-		if type(ply.HasWeapon) == "function" and ply:HasWeapon(knife) ~= true then return nil end
-		return knife
-	end
-	if slot ~= 2 and slot ~= 3 then return nil end
+	if slot ~= 1 and slot ~= 2 then return nil end
 	local slots = L.Slots(ply)
-	local class = slots[slot - 1]
+	local class = slots[slot]
 	if type(class) ~= "string" or class == "" then return nil end
 	return class
 end
@@ -177,8 +171,15 @@ function L.Equip(ply, class)
 	if timer and timer.Simple then timer.Simple(0, go) end
 end
 
+local function activeClass(ply)
+	if ply == nil or type(ply.GetActiveWeapon) ~= "function" then return nil end
+	local ok, wep = pcall(ply.GetActiveWeapon, ply)
+	if not ok then return nil end
+	return weaponClass(wep)
+end
+
 local function selectSlot(ply, slot)
-	local class = L.ClassFor(ply, slot)
+	local class = L.Toggle(L.Slots(ply), activeClass(ply), L.Knife(ply), slot)
 	if not class then return end
 	if type(ply.HasWeapon) == "function" and ply:HasWeapon(class) ~= true then return end
 	if type(ply.SelectWeapon) == "function" then ply:SelectWeapon(class) end
@@ -195,7 +196,7 @@ if concommand and concommand.Add then
 	concommand.Add("bal_slot", function(ply, _, args)
 		if not (BALLISTICS.IsPlayer and BALLISTICS.IsPlayer(ply)) then return end
 		local n = tonumber(args and args[1])
-		if n ~= 1 and n ~= 2 and n ~= 3 then return end
+		if n ~= 1 and n ~= 2 then return end
 		selectSlot(ply, n)
 	end)
 end

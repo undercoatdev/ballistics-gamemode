@@ -27,14 +27,14 @@ local knife, guns = L.Resolve({}, {
 	{ class = "med_pills", role = "med" },
 	"tacrp_ex_m1911",
 }, nil)
-check("the melee is slot 1", knife == "tacrp_knife" and L.At(knife, guns, 1) == "tacrp_knife")
-check("a med and a throwable take no slot", #guns == 1 and guns[1] == "tacrp_ex_m1911" and L.At(knife, guns, 2) == "tacrp_ex_m1911" and L.At(knife, guns, 3) == nil)
+check("the melee is remembered", knife == "tacrp_knife")
+check("a med and a throwable take no slot", #guns == 1 and guns[1] == "tacrp_ex_m1911" and L.At(knife, guns, 1) == "tacrp_ex_m1911" and L.At(knife, guns, 2) == nil)
 
 local _, ordered = L.Resolve(nil, { "tacrp_knife", "tacrp_pistol", "tacrp_ak" }, "tacrp_knife")
 check("guns follow acquisition order", ordered[1] == "tacrp_pistol" and ordered[2] == "tacrp_ak" and L.Full(ordered) == true)
 
 local _, shifted = L.Resolve({ "tacrp_ak", "tacrp_pistol" }, { "tacrp_pistol" }, "tacrp_knife")
-check("dropping the first gun shifts the other to slot 2", shifted[1] == "tacrp_pistol" and shifted[2] == nil and L.At("tacrp_knife", shifted, 2) == "tacrp_pistol" and L.At("tacrp_knife", shifted, 3) == nil and L.Full(shifted) == false)
+check("dropping the first gun leaves the other on key 1", shifted[1] == "tacrp_pistol" and shifted[2] == nil and L.At("tacrp_knife", shifted, 1) == "tacrp_pistol" and L.At("tacrp_knife", shifted, 2) == nil and L.Full(shifted) == false)
 
 local keepKnife, kept = L.ResolveSlots({ "tacrp_ak", "tacrp_pistol" }, { "tacrp_pistol" }, "tacrp_knife")
 check("ResolveSlots keeps the remaining gun in its slot", keepKnife == "tacrp_knife" and kept[1] == false and kept[2] == "tacrp_pistol")
@@ -45,10 +45,10 @@ check("ResolveSlots fills the first free slot", filled[1] == "tacrp_ak" and fill
 check("FreeSlot is the first empty gun slot", L.FreeSlot(nil) == 1 and L.FreeSlot({}) == 1 and L.FreeSlot(kept) == 1 and L.FreeSlot({ "tacrp_ak", false }) == 2 and L.FreeSlot(keptBoth) == nil)
 
 local _, stayed = L.Resolve({ "tacrp_ak", "tacrp_pistol" }, { "tacrp_ak" }, "tacrp_knife")
-check("dropping the second gun leaves the first in slot 2", stayed[1] == "tacrp_ak" and stayed[2] == nil)
+check("dropping the second gun leaves the first on key 1", stayed[1] == "tacrp_ak" and stayed[2] == nil)
 
 local _, appended = L.Resolve({ "tacrp_ak" }, { "tacrp_ak", "tacrp_pistol" }, "tacrp_knife")
-check("a new gun fills slot 3", appended[1] == "tacrp_ak" and appended[2] == "tacrp_pistol")
+check("a new gun fills key 2", appended[1] == "tacrp_ak" and appended[2] == "tacrp_pistol")
 
 local _, capped = L.Resolve({ "tacrp_ak", "tacrp_pistol" }, { "tacrp_ak", "tacrp_pistol", "tacrp_spr" }, "tacrp_knife")
 check("a third gun does not take a slot", #capped == 2 and capped[1] == "tacrp_ak" and capped[2] == "tacrp_pistol")
@@ -57,8 +57,14 @@ local _, once = L.Resolve(nil, { "tacrp_pistol", "tacrp_pistol", "tacrp_ak" }, "
 check("a repeated gun is one slot", #once == 2 and once[1] == "tacrp_pistol" and once[2] == "tacrp_ak")
 
 check("empty hands have no slots", L.At(nil, {}, 1) == nil and L.At("tacrp_knife", {}, 2) == nil)
-check("slot binds are 1, 2 and 3", L.BindSlot("slot1") == 1 and L.BindSlot("SLOT2") == 2 and L.BindSlot("slot3") == 3)
-check("slot4 is not a loadout slot", L.BindSlot("slot4") == nil and L.BindSlot("slot10") == nil)
+check("slot binds are key 1 and key 2", L.BindSlot("slot1") == 1 and L.BindSlot("SLOT2") == 2 and L.BindSlot("slot3") == nil)
+check("slot3 and slot4 are not loadout slots", L.BindSlot("slot3") == nil and L.BindSlot("slot4") == nil and L.BindSlot("slot10") == nil)
+check("Toggle equips the gun in that slot", L.Toggle({ "tacrp_ak", "tacrp_pistol" }, "tacrp_knife", "tacrp_knife", 1) == "tacrp_ak")
+check("Toggle holsters the active gun to the knife", L.Toggle({ "tacrp_ak", "tacrp_pistol" }, "tacrp_ak", "tacrp_knife", 1) == "tacrp_knife")
+check("Toggle on the other gun switches to it", L.Toggle({ "tacrp_ak", "tacrp_pistol" }, "tacrp_ak", "tacrp_knife", 2) == "tacrp_pistol")
+check("Toggle on an empty slot does nothing", L.Toggle({ "tacrp_ak", false }, "tacrp_ak", "tacrp_knife", 2) == nil)
+check("Toggle without a knife returns nil when holstering", L.Toggle({ "tacrp_ak" }, "tacrp_ak", nil, 1) == nil)
+check("Toggle ignores a bad index", L.Toggle({ "tacrp_ak" }, nil, "tacrp_knife", 3) == nil and L.Toggle(nil, nil, "tacrp_knife", 1) == nil)
 check("scroll is not a slot", L.BindSlot("invnext") == nil and L.BindSlot("invprev") == nil and L.BindSlot("+attack") == nil and L.BindSlot(nil) == nil)
 check("scroll binds are blocked", L.BlockScroll("invnext") == true and L.BlockScroll("INVPREV") == true and L.BlockScroll("slot1") == false and L.BlockScroll("+attack") == false and L.BlockScroll(nil) == false)
 
@@ -86,18 +92,18 @@ function ply:SelectWeapon(class) self.selected = class end
 dofile("gamemodes/ballistics/gamemode/modules/loadout/sv_loadout.lua")
 BALLISTICS.Loadout.Reset(ply, "tacrp_knife")
 check("the knife noted", BALLISTICS.Loadout.NoteGun(ply, "tacrp_knife") == false)
-check("slot 1 is the knife", BALLISTICS.Loadout.ClassFor(ply, 1) == "tacrp_knife")
-check("empty gun slots do nothing", BALLISTICS.Loadout.ClassFor(ply, 2) == nil and BALLISTICS.Loadout.ClassFor(ply, 3) == nil)
+check("the knife is remembered", BALLISTICS.Loadout.Knife(ply) == "tacrp_knife")
+check("empty gun slots do nothing", BALLISTICS.Loadout.ClassFor(ply, 1) == nil and BALLISTICS.Loadout.ClassFor(ply, 2) == nil)
 BALLISTICS.Loadout.NoteGun(ply, "tacrp_ak")
 ply.list = { "tacrp_knife", "tacrp_ak" }
 BALLISTICS.Loadout.NoteGun(ply, "tacrp_pistol")
 ply.list = { "tacrp_knife", "tacrp_ak", "tacrp_pistol" }
-check("server slots follow buy order", BALLISTICS.Loadout.ClassFor(ply, 2) == "tacrp_ak" and BALLISTICS.Loadout.ClassFor(ply, 3) == "tacrp_pistol" and BALLISTICS.Loadout.GunCount(ply) == 2)
+check("server slots follow buy order", BALLISTICS.Loadout.ClassFor(ply, 1) == "tacrp_ak" and BALLISTICS.Loadout.ClassFor(ply, 2) == "tacrp_pistol" and BALLISTICS.Loadout.GunCount(ply) == 2)
 check("a third noted gun is refused", BALLISTICS.Loadout.NoteGun(ply, "tacrp_spr") == false and BALLISTICS.Loadout.GunCount(ply) == 2)
 ply.list = { "tacrp_knife", "tacrp_pistol" }
-check("removing the first gun leaves slot 2 empty", BALLISTICS.Loadout.ClassFor(ply, 2) == nil and BALLISTICS.Loadout.ClassFor(ply, 3) == "tacrp_pistol")
+check("removing the first gun leaves key 1 empty", BALLISTICS.Loadout.ClassFor(ply, 1) == nil and BALLISTICS.Loadout.ClassFor(ply, 2) == "tacrp_pistol")
 ply.list = {}
-check("a dropped knife is an empty slot", BALLISTICS.Loadout.ClassFor(ply, 1) == nil)
+check("dropped guns leave empty slots", BALLISTICS.Loadout.ClassFor(ply, 1) == nil and BALLISTICS.Loadout.ClassFor(ply, 2) == nil)
 
 local ran = {}
 timer.Simple = function(delay, fn) ran[#ran + 1] = { delay = delay, fn = fn } end
@@ -126,6 +132,7 @@ dofile("gamemodes/ballistics/gamemode/modules/loadout/cl_loadout.lua")
 check("slot1 selects that slot", hook.Run("PlayerBindPress", nil, "slot1", true) == true and calls[1][1] == "bal_slot" and calls[1][2] == "1")
 local n = #calls
 check("a slot release is swallowed and does not select again", hook.Run("PlayerBindPress", nil, "slot2", false) == true and #calls == n)
+check("slot3 is not swallowed by the loadout hook", hook.Run("PlayerBindPress", nil, "slot3", true) == nil)
 check("slot4 is not swallowed by the loadout hook", hook.Run("PlayerBindPress", nil, "slot4", true) == nil)
 check("attack is not swallowed", hook.Run("PlayerBindPress", nil, "+attack", true) == nil)
 check("scroll is swallowed", hook.Run("PlayerBindPress", nil, "invnext", true) == true and hook.Run("PlayerBindPress", nil, "INVPREV", true) == true)
