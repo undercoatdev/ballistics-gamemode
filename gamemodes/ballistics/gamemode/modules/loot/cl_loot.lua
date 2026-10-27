@@ -28,6 +28,7 @@ local leftCard
 local rightCard
 local state = { open = false, note = "" }
 local drag
+local ghost
 local hold
 -- E closes an open window; after that (or after opening) E must be released
 -- before a new hold can start.
@@ -321,9 +322,16 @@ local function sendAct(req)
 	net.SendToServer()
 end
 
+local function destroyGhost()
+	local pnl = ghost
+	ghost = nil
+	if type(pnl) == "table" and type(pnl.Remove) == "function" then pcall(pnl.Remove, pnl) end
+end
+
 local function hideWindow()
 	drag = nil
 	rightWas = false
+	destroyGhost()
 	if valid(root) then
 		root:SetVisible(false)
 		root:SetMouseInputEnabled(false)
@@ -420,26 +428,28 @@ end
 
 local function paintSlot(pnl, w, h)
 	local slot = pnl.balSlot or {}
-	local tone = slotTone(slot)
+	local ghosting = pnl.balGhost == true
+	local tone = ghosting and "idle" or slotTone(slot)
 	local giveDim = state.giveOnly == true and slot.side == "them"
 	local bgR, bgG, bgB = 32, 34, 40
 	if giveDim then bgR, bgG, bgB = 26, 26, 28 end
 	if tone == "yes" then bgR, bgG, bgB = 64, 56, 22 end
 	if tone == "no" then bgR, bgG, bgB = 42, 42, 46 end
-	surface.SetDrawColor(bgR, bgG, bgB, 255)
+	local a = ghosting and 190 or 255
+	surface.SetDrawColor(bgR, bgG, bgB, a)
 	surface.DrawRect(0, 0, w, h)
 	if tone == "yes" then
-		surface.SetDrawColor(220, 190, 60, 255)
+		surface.SetDrawColor(220, 190, 60, a)
 	elseif tone == "no" then
-		surface.SetDrawColor(90, 90, 96, 255)
+		surface.SetDrawColor(90, 90, 96, a)
 	else
-		surface.SetDrawColor(70, 78, 92, 255)
+		surface.SetDrawColor(70, 78, 92, a)
 	end
 	surface.DrawOutlinedRect(0, 0, w, h)
 	local text = slot.name or ""
 	if slot.kind == "gun" and slot.empty then text = "Empty" end
 	if text == "" then text = slot.key or "" end
-	local col = giveDim and Color(140, 140, 146) or Color(235, 235, 235)
+	local col = giveDim and Color(140, 140, 146, a) or Color(235, 235, 235, a)
 	local sub = ""
 	if slot.kind == "gun" and not slot.empty then
 		sub = tostring(slot.clip or 0) .. " in mag"
@@ -455,16 +465,54 @@ local function paintSlot(pnl, w, h)
 	end
 	draw.SimpleText(text, "BallisticsLoot", 8, h / 2 - 8, col, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
 	if sub ~= "" then
-		draw.SimpleText(sub, "BallisticsLootSmall", 8, h / 2 + 10, Color(170, 186, 204), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+		draw.SimpleText(sub, "BallisticsLootSmall", 8, h / 2 + 10, Color(170, 186, 204, a), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
 	end
-	-- Spawn-menu icon on the right, same as the buy panel.
+	-- Spawn-menu icon on the right, same as the buy panel. The panel is the
+	-- parent for a model fallback, and for the ghost copy of this slot.
 	local iconItem = L.IconItem(slot, BALLISTICS.Catalog)
 	if iconItem and BALLISTICS.BuyWheel and BALLISTICS.BuyWheel.DrawIcon then
-		BALLISTICS.BuyWheel.DrawIcon(iconItem, w, h)
+		BALLISTICS.BuyWheel.DrawIcon(iconItem, w, h, pnl)
 	end
 end
 
-local function onSlotPress(slot)
+local function placeGhost()
+	if not valid(ghost) or type(drag) ~= "table" then return end
+	local slot = ghost.balSlot
+	if type(slot) == "table" and slot.kind ~= "gun" then
+		slot.count = drag.amount or slot.count
+	end
+	local mx, my = cursor()
+	ghost:SetPos(mx - (tonumber(drag.ox) or 0), my - (tonumber(drag.oy) or 0))
+end
+
+local function ensureGhost(slot, wide, tall)
+	if not vgui or type(vgui.Create) ~= "function" then return end
+	if not valid(ghost) then
+		local pnl = vgui.Create("DPanel")
+		if not valid(pnl) then return end
+		ghost = pnl
+		pnl.balGhost = true
+		if pnl.SetPaintedManually then pnl:SetPaintedManually(true) end
+		pnl:SetMouseInputEnabled(false)
+		if pnl.SetKeyboardInputEnabled then pnl:SetKeyboardInputEnabled(false) end
+		if pnl.SetAlpha then pnl:SetAlpha(210) end
+		if pnl.SetZPos then pnl:SetZPos(32767) end
+		pnl.Paint = function(self, w, h)
+			paintSlot(self, w, h)
+		end
+	end
+	local copy = {}
+	if type(slot) == "table" then
+		for k, v in pairs(slot) do copy[k] = v end
+	end
+	ghost.balSlot = copy
+	ghost.balGhost = true
+	ghost:SetSize(wide or 96, tall or 48)
+	if ghost.SetVisible then ghost:SetVisible(true) end
+	placeGhost()
+end
+
+local function onSlotPress(slot, pnl)
 	if type(slot) ~= "table" or slot.empty then return end
 	if state.giveOnly == true and slot.side == "them" then
 		state.note = L.Note("giveonly") or ""
@@ -475,6 +523,7 @@ local function onSlotPress(slot)
 	if L.DoubleClick(lastClick, t, id, DOUBLE) then
 		lastClick = nil
 		drag = nil
+		destroyGhost()
 		if type(L.WantsWhole) == "function" and not L.WantsWhole(state.self == true, true) then return end
 		local other = L.OtherSide(slot.side)
 		if not other then return end
@@ -492,6 +541,20 @@ local function onSlotPress(slot)
 	lastClick = { t = t, id = id }
 	local have = slot.count or 1
 	if slot.kind == "gun" then have = 1 end
+	local wide, tall = 96, 48
+	local ox, oy = 16, 16
+	if valid(pnl) then
+		if type(pnl.GetWide) == "function" then wide = tonumber(pnl:GetWide()) or wide end
+		if type(pnl.GetTall) == "function" then tall = tonumber(pnl:GetTall()) or tall end
+		if type(pnl.LocalToScreen) == "function" then
+			local ok, sx, sy = pcall(pnl.LocalToScreen, pnl, 0, 0)
+			if ok and sx ~= nil then
+				local mx, my = cursor()
+				ox = mx - (tonumber(sx) or 0)
+				oy = my - (tonumber(sy) or 0)
+			end
+		end
+	end
 	drag = {
 		from = slot.side,
 		kind = slot.kind,
@@ -501,14 +564,20 @@ local function onSlotPress(slot)
 		clicks = 0,
 		amount = 1,
 		name = slot.name or slot.key,
+		w = wide,
+		h = tall,
+		ox = ox,
+		oy = oy,
 	}
+	ensureGhost(slot, wide, tall)
 end
 
 local function finishDrag()
 	local current = drag
-	if type(current) ~= "table" then return end
 	drag = nil
 	rightWas = false
+	destroyGhost()
+	if type(current) ~= "table" then return end
 	local x, y = cursor()
 	local box = activeBox()
 	local insideCards = inside(x, y, box.left) or inside(x, y, box.right)
@@ -555,9 +624,16 @@ local function addSlot(parent, slot, x, y, w, h, originX, originY)
 	pnl:SetMouseInputEnabled(true)
 	if pnl.SetKeyboardInputEnabled then pnl:SetKeyboardInputEnabled(false) end
 	pnl.Paint = paintSlot
+	-- After the icon child, so the source slot reads as grey while it is held.
+	function pnl:PaintOver(pw, ph)
+		if not surface or not surface.DrawRect then return end
+		if not L.IsDragSource or not L.IsDragSource(self.balSlot, drag) then return end
+		surface.SetDrawColor(12, 12, 16, 150)
+		surface.DrawRect(0, 0, pw, ph)
+	end
 	function pnl:OnMousePressed(code)
 		if code == MOUSE_RIGHT_CODE then return end
-		onSlotPress(self.balSlot)
+		onSlotPress(self.balSlot, self)
 	end
 	function pnl:OnMouseReleased()
 		if drag then finishDrag() end
@@ -626,6 +702,7 @@ local function fillCard(card, side, view, box)
 				side = side,
 				kind = kind,
 				key = key,
+				class = (kind == "gun" and not empty) and key or nil,
 				index = kind == "gun" and i or 0,
 				count = count,
 				empty = empty,
@@ -931,6 +1008,7 @@ local function thinkDrag()
 	-- The press frame can report the button up. Wait until it has been seen down.
 	if left == true then drag.seenDown = true end
 	if left == false and drag.seenDown == true then finishDrag() end
+	placeGhost()
 end
 
 if BALLISTICS.Net and BALLISTICS.Net.Register then
@@ -975,14 +1053,21 @@ if hook and hook.Add then
 		paintRing(sw / 2, sh / 2, 28, 5, ring)
 	end)
 
-	hook.Add("HUDPaint", "Ballistics_LootDrag", function()
-		if type(drag) ~= "table" then return end
-		local x, y = cursor()
-		local text = drag.name or ""
-		if (drag.amount or 1) > 1 then
-			text = text .. "  x" .. tostring(drag.amount)
+	-- HUDPaint draws under the loot popup. The ghost is the whole slot, painted
+	-- after VGUI so it stays on top of the window while the button is held.
+	hook.Add("PostRenderVGUI", "Ballistics_LootDrag", function()
+		if type(drag) ~= "table" or not valid(ghost) then return end
+		placeGhost()
+		if ghost.PaintManual then ghost:PaintManual() end
+		if type(ghost.GetChildren) ~= "function" then return end
+		local kids = ghost:GetChildren()
+		if type(kids) ~= "table" then return end
+		for i = 1, #kids do
+			local kid = kids[i]
+			if valid(kid) and kid.PaintManual and (not kid.IsVisible or kid:IsVisible() ~= false) then
+				kid:PaintManual()
+			end
 		end
-		draw.SimpleText(text, "BallisticsLoot", x + 16, y + 16, Color(240, 220, 140), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
 	end)
 
 	-- Escape closes the window and does not open the pause menu.

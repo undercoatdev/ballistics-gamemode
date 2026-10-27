@@ -296,6 +296,28 @@ check("closing releases the lock", locks["ply:a"] == nil)
 
 local pos = L.DropPos({ x = 0, y = 0, z = 0 }, { x = 0, y = 1, z = 0 }, 40)
 check("a drop sits in front of the looter", pos.x == 0 and pos.y == 40 and pos.z == 8)
+local down = L.DropPos({ x = 0, y = 0, z = 0 }, { x = 0, y = 0.6, z = -0.8 }, 40)
+check("looking down still drops a full step ahead", math.abs(down.y - 40) < 1e-6 and down.x == 0 and down.z == 8)
+local sky = L.DropPos({ x = 5, y = 0, z = 0 }, { x = 0, y = 0, z = 1 }, 40, L.DROP_UP)
+check("looking straight up still steps forward at chest height", sky.x == 45 and sky.y == 0 and sky.z == L.DROP_UP)
+local realDropType = type
+type = function(v)
+	if realDropType(v) == "userdata" then return "Vector" end
+	return realDropType(v)
+end
+local function dropVec(x, y, z)
+	local u = newproxy(true)
+	getmetatable(u).__index = function(_, k)
+		if k == "x" then return x end
+		if k == "y" then return y end
+		if k == "z" then return z end
+		return nil
+	end
+	return u
+end
+local ahead = L.DropPos(dropVec(10, 20, 30), dropVec(0, 1, 0), 40, L.DROP_UP)
+type = realDropType
+check("drop position reads gmod vectors", ahead.x == 10 and ahead.y == 60 and ahead.z == 78)
 
 local clientSrc = readAll("gamemodes/ballistics/gamemode/modules/loot/cl_loot.lua")
 local serverSrc = readAll("gamemodes/ballistics/gamemode/modules/loot/sv_loot.lua")
@@ -306,6 +328,8 @@ check("the server does not hook the use button", not serverSrc:find("PlayerButto
 check("loot has no init hook", not clientSrc:find('hook.Add("Initialize"', 1, true) and not clientSrc:find('hook.Add("InitPostEntity"', 1, true) and not serverSrc:find('hook.Add("Initialize"', 1, true) and not serverSrc:find('hook.Add("InitPostEntity"', 1, true))
 check("the inventory key is polled", clientSrc:find("bal_loot_self", 1, true) ~= nil and clientSrc:find("IsKeyDown", 1, true) ~= nil and clientSrc:find("IsGameUIVisible", 1, true) ~= nil)
 check("the server opens a self session", serverSrc:find("function L.OpenSelf", 1, true) ~= nil and serverSrc:find("bal_loot_self", 1, true) ~= nil)
+check("the drag ghost paints the whole slot above the window", clientSrc:find("PostRenderVGUI", 1, true) ~= nil and clientSrc:find("PaintManual", 1, true) ~= nil and clientSrc:find("balGhost", 1, true) ~= nil and clientSrc:find('hook.Add("HUDPaint", "Ballistics_LootDrag"', 1, true) == nil)
+check("the held slot is greyed from the drag source", clientSrc:find("IsDragSource", 1, true) ~= nil and clientSrc:find("PaintOver", 1, true) ~= nil)
 
 -- Server session. Players are tables; the server only calls methods.
 local phaseName = "live"
@@ -429,7 +453,20 @@ function ents.Create(class)
 	e.nw = {}
 	function e:SetPos(pos) self.pos = pos end
 	function e:SetAngles(ang) self.ang = ang end
-	function e:Spawn() end
+	e.touches = 0
+	function e:StartTouch(who)
+		self.touches = (self.touches or 0) + 1
+		self.lastTouch = who
+	end
+	-- Scripted Spawn puts the ENT touch method back, which drops a wrap made
+	-- before Spawn. The drop must arm grace again afterwards.
+	function e:Spawn()
+		function self:StartTouch(who)
+			self.touches = (self.touches or 0) + 1
+			self.lastTouch = who
+		end
+	end
+	function e:DropToFloor() self.fell = true end
 	function e:Activate() end
 	function e:Remove() self.removed = true end
 	function e:SetNW2Bool(key, value) self.nw[key] = value end
@@ -566,8 +603,12 @@ L.Open(looter, victim)
 ok = L.Act(looter, { from = "you", kind = "gun", key = "tacrp_mp5", amount = 1, to = "drop", slot = 0 })
 local drop = droppedEnts[#droppedEnts]
 check("dropping a gun spawns it in front of the looter", ok == true and drop ~= nil and drop.class == "tacrp_mp5" and drop.BallisticsLootDrop == true and drop.nw.bal_loot_drop == true)
-check("the dropped gun keeps its mag and attachment", drop.clip1 == 3 and drop.Attachments[1].Installed == "supp" and drop.pos.x == 40 and drop.pos.z == 8)
+check("the dropped gun keeps its mag and attachment", drop.clip1 == 3 and drop.Attachments[1].Installed == "supp" and drop.pos.x == 40 and drop.pos.z == L.DROP_UP and drop.fell == true)
 check("the dropped gun leaves the looter", looter.weapons.tacrp_mp5 == nil)
+check("the dropper cannot take the gun back yet", drop.BallisticsDropOwner == looter and drop.BallisticsDropUntil == L.DROP_GRACE and L.PickupBlocked(looter, drop, 0) == true and L.PickupBlocked(looter, drop, L.DROP_GRACE) == false and L.PickupBlocked(victim, drop, 0) == false)
+drop:StartTouch(looter)
+drop:StartTouch(victim)
+check("touch from the dropper is ignored", drop.touches == 1 and drop.lastTouch == victim)
 
 settle()
 arm(looter, "tacrp_mp5", { clip = 1 })
@@ -810,7 +851,7 @@ check("someone else can loot that body", ok == true)
 L.Act(other, { kind = "close" })
 ok = L.Act(looter, { from = "you", kind = "gun", key = "tacrp_mp5", amount = 1, to = "drop", slot = 0 })
 local selfGun = liveDrops()[1]
-check("dropping your gun keeps the mag and the attachment", ok == true and selfGun ~= nil and selfGun.class == "tacrp_mp5" and selfGun.clip1 == 3 and selfGun.Attachments[1].Installed == "supp" and selfGun.BallisticsLootDrop == true and selfGun.pos.x == 40 and selfGun.pos.z == 8)
+check("dropping your gun keeps the mag and the attachment", ok == true and selfGun ~= nil and selfGun.class == "tacrp_mp5" and selfGun.clip1 == 3 and selfGun.Attachments[1].Installed == "supp" and selfGun.BallisticsLootDrop == true and selfGun.pos.x == 40 and selfGun.pos.z == L.DROP_UP and selfGun.fell == true and selfGun.BallisticsDropOwner == looter and selfGun.BallisticsDropUntil == L.DROP_GRACE)
 check("the dropped gun leaves your inventory", looter.weapons.tacrp_mp5 == nil and classes(L.Last(looter).you)[1] == nil)
 
 settle()
@@ -822,7 +863,7 @@ local nades = liveDrops()
 check("a whole-stack flag still drops one grenade", ok == true and looter.ammo.grenade == 2 and #nades == 1 and nades[1].class == "tacrp_ammo_frag" and nades[1].BallisticsLootDrop == true and nades[1].nw.bal_loot_drop == true)
 ok = L.Act(looter, { from = "you", kind = "nade", key = "nade_frag", amount = 2, to = "drop", slot = 0 })
 nades = liveDrops()
-check("each grenade is its own pickup", ok == true and looter.ammo.grenade == 0 and #nades == 3 and nades[3].class == "tacrp_ammo_frag" and nades[3].pos.y == 8 and nades[3].BallisticsLootDrop == true)
+check("each grenade is its own pickup", ok == true and looter.ammo.grenade == 0 and #nades == 3 and nades[3].class == "tacrp_ammo_frag" and nades[3].pos.y == 8 and nades[3].pos.z == L.DROP_UP and nades[3].fell == true and nades[3].BallisticsDropOwner == looter and nades[3].BallisticsLootDrop == true)
 
 settle()
 seat(looter)
@@ -849,7 +890,7 @@ L.OpenSelf(looter)
 medCalls = {}
 ok = L.Act(looter, { from = "you", kind = "med", key = "med_small", amount = 2, to = "drop", slot = 0 })
 local meds = liveDrops()
-check("each med is its own pickup", ok == true and #meds == 2 and meds[1].class == "pb_med_small" and meds[2].class == "pb_med_small" and meds[1].BallisticsLootDrop == true and meds[2].pos.y == 8)
+check("each med is its own pickup", ok == true and #meds == 2 and meds[1].class == "pb_med_small" and meds[2].class == "pb_med_small" and meds[1].BallisticsLootDrop == true and meds[2].pos.y == 8 and meds[2].pos.z == L.DROP_UP and meds[1].fell == true and meds[1].BallisticsDropOwner == looter)
 check("meds leave through GiveMed", looter.pbMed.counts[2] == 0 and #medCalls == 1 and medCalls[1].id == 2 and medCalls[1].n == -2)
 
 settle()
@@ -899,8 +940,13 @@ check("a still body has not moved", L.Moved({ x = 10, y = 20, z = 30 }, uvec(10,
 type = realType
 local cat = { Get = function(k) return k == "nade_frag" and { key = k, entity = "tacrp_ammo_frag" } or nil end }
 check("gun slot icon by class", L.IconItem({ kind = "gun", class = "tacrp_mp5" }, cat).class == "tacrp_mp5")
+check("gun slot icon by key when class is absent", L.IconItem({ kind = "gun", key = "tacrp_mr96" }, cat).class == "tacrp_mr96")
 check("grenade slot icon from catalog", L.IconItem({ kind = "nade", key = "nade_frag" }, cat).entity == "tacrp_ammo_frag")
 check("empty and ammo slots have no icon", L.IconItem({ kind = "gun", empty = true }, cat) == nil and L.IconItem({ kind = "ammo", key = "pistol" }, cat) == nil)
+check("the held slot is the drag source", L.IsDragSource({ side = "you", kind = "gun", key = "tacrp_mr96", index = 1 }, { from = "you", kind = "gun", key = "tacrp_mr96", index = 1 }) == true)
+check("another slot is not the drag source", L.IsDragSource({ side = "you", kind = "gun", key = "tacrp_mr96", index = 2, empty = false }, { from = "you", kind = "gun", key = "tacrp_mr96", index = 1 }) == false and L.IsDragSource({ side = "you", kind = "gun", key = "tacrp_mr96", index = 1, empty = true }, { from = "you", kind = "gun", key = "tacrp_mr96", index = 1 }) == false)
+local graceWep = { BallisticsDropOwner = looter, BallisticsDropUntil = 1.5 }
+check("pickup grace blocks only the dropper", L.PickupBlocked(looter, graceWep, 0) == true and L.PickupBlocked(looter, graceWep, 1.5) == false and L.PickupBlocked(victim, graceWep, 0) == false and L.PickupBlocked(looter, {}, 0) == false)
 
 -- Client: the 5 key toggles your inventory and stays quiet while blocked.
 CLIENT = true

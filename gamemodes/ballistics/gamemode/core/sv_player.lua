@@ -439,9 +439,25 @@ function GM:ShouldDropWeapon()
 	return false
 end
 
-function GM:PlayerCanPickupWeapon(ply)
+function GM:PlayerCanPickupWeapon(ply, wep)
 	if not isPlayer(ply) then return false end
 	if ply.Alive and ply:Alive() == false then return false end
+	-- The dropper's own gun, grenade-weapon, or any SWEP we just spawned must
+	-- not snap back into their hands. Other players can take it immediately.
+	local loot = BALLISTICS.Loot
+	local now = (CurTime and CurTime()) or 0
+	if loot and type(loot.PickupBlocked) == "function" then
+		if loot.PickupBlocked(ply, wep, now) then return false end
+		return true
+	end
+	if wep ~= nil then
+		local kind = type(wep)
+		if kind ~= "number" and kind ~= "string" and kind ~= "boolean" and kind ~= "function" then
+			local owner = wep.BallisticsDropOwner
+			local untilT = tonumber(wep.BallisticsDropUntil)
+			if owner == ply and untilT ~= nil and now < untilT then return false end
+		end
+	end
 	return true
 end
 

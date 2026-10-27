@@ -52,6 +52,7 @@ check("buy wheel does not switch weapons on the scroll wheel", buySrc:find("bal_
 
 local compiled = loadfile("gamemodes/ballistics/gamemode/modules/buy/cl_buywheel.lua")
 check("client wheel compiles", compiled ~= nil)
+check("icons resolve through catalog candidates", buySrc:find("IconCandidates", 1, true) ~= nil and buySrc:find("IconRetry", 1, true) ~= nil and buySrc:find("SpawnIcon", 1, true) ~= nil)
 
 local function ctx(over)
 	local base = {
@@ -702,5 +703,155 @@ do
 	timer.Simple = oldTimer
 	BALLISTICS.Net.Send = realSend
 end
+
+-- Client icon resolution: unflagged materials, no permanent miss, model fallback.
+local asked, lines, drawn = {}, {}, {}
+local mounted = {}
+local clock = 0
+function CurTime() return clock end
+function file.Exists(path) return mounted[path] == true end
+function IsValid(v) return type(v) == "table" and v.dead ~= true end
+function Material(path, flags)
+	asked[#asked + 1] = tostring(path) .. "|" .. tostring(flags)
+	if path == "entities/pb_med_large.png" then
+		if flags == nil then
+			return { GetName = function() return "___error" end, IsError = function() return true end }
+		end
+		if flags == "smooth" then
+			return { GetName = function() return path end, IsError = function() return false end }
+		end
+	end
+	if path == "entities/tacrp_ammo_flashbang.png" then
+		return {
+			GetName = function() return "___error" end,
+			IsError = function() return true end,
+			GetTexture = function(_, key)
+				if key == "$basetexture" then
+					return { GetName = function() return "entities/tacrp_ammo_flashbang" end }
+				end
+			end,
+		}
+	end
+	if flags ~= nil then
+		return { GetName = function() return "___error" end, IsError = function() return true end }
+	end
+	return { GetName = function() return path end, IsError = function() return false end }
+end
+list = {
+	Get = function(kind)
+		if kind == "SpawnableEntities" then
+			return {
+				pb_med_extrasmall = { IconOverride = "entities/pb_med_extrasmall.png", Model = "models/pb/pill.mdl" },
+				pb_med_small = { Model = "models/pb/small.mdl" },
+			}
+		end
+		if kind == "Weapon" then
+			return { tacrp_mr96 = { WorldModel = "models/weapons/tacint/mr96.mdl" } }
+		end
+		return {}
+	end,
+}
+weapons = {
+	GetStored = function(class)
+		if class == "tacrp_mr96" then return { WepSelectIcon = 9, WorldModel = "models/weapons/tacint/mr96.mdl" } end
+		return nil
+	end,
+}
+scripted_ents = {
+	GetStored = function(class)
+		if class == "pb_med_small" then return { t = { Model = "models/pb/small.mdl" } } end
+		if class == "tacrp_ammo_frag" then return { t = { Model = "models/weapons/tacint/frag.mdl" } } end
+		return nil
+	end,
+}
+surface = {
+	SetDrawColor = function() end,
+	SetMaterial = function(mat) drawn.mat = mat end,
+	SetTexture = function(id) drawn.tex = id end,
+	DrawTexturedRect = function() drawn.rect = true end,
+	DrawRect = function() end,
+	DrawOutlinedRect = function() end,
+}
+vgui = {
+	Create = function(class, parent)
+		local panel = { class = class, parent = parent, mouse = true, visible = true }
+		function panel:IsValid() return self.dead ~= true end
+		function panel:SetMouseInputEnabled(v) self.mouse = v end
+		function panel:SetKeyboardInputEnabled() end
+		function panel:SetPos() end
+		function panel:SetSize() end
+		function panel:SetModel(model) self.model = model end
+		function panel:SetVisible(v) self.visible = v end
+		function panel:SetPaintedManually() end
+		function panel:SetAlpha() end
+		function panel:IsVisible() return self.visible ~= false end
+		return panel
+	end,
+}
+local oldPrint = print
+print = function(...)
+	local parts = {}
+	for i = 1, select("#", ...) do parts[i] = tostring(select(i, ...)) end
+	local line = table.concat(parts, "\t")
+	lines[#lines + 1] = line
+	if not string.find(line, "[Ballistics icon]", 1, true) then oldPrint(...) end
+end
+local host = {}
+function host:IsValid() return true end
+dofile("gamemodes/ballistics/gamemode/modules/buy/cl_buywheel.lua")
+
+local function resetDraw()
+	asked, lines, drawn = {}, {}, {}
+end
+
+mounted["materials/entities/tacrp_ammo_frag.png"] = true
+resetDraw()
+BALLISTICS.BuyWheel.DrawIcon({ entity = "tacrp_ammo_frag", key = "nade_frag" }, 220, 64, host)
+check("grenade icon is the entity png with no material flags", #asked == 1 and asked[1] == "entities/tacrp_ammo_frag.png|nil" and drawn.mat ~= nil and drawn.rect == true)
+check("grenade icon says where it resolved", lines[1] == "[Ballistics icon] tacrp_ammo_frag via entities entities/tacrp_ammo_frag.png")
+
+mounted["materials/entities/pb_med_extrasmall.png"] = true
+resetDraw()
+BALLISTICS.BuyWheel.DrawIcon(BALLISTICS.Catalog.Get("med_pills"), 220, 64, host)
+check("med icon uses the spawnmenu override", #asked == 1 and asked[1] == "entities/pb_med_extrasmall.png|nil" and lines[1] == "[Ballistics icon] pb_med_extrasmall via spawnable entities/pb_med_extrasmall.png")
+resetDraw()
+BALLISTICS.BuyWheel.DrawIcon(BALLISTICS.Catalog.Get("med_pills"), 220, 64, host)
+check("a resolved icon is not looked up again", #asked == 0 and #lines == 0 and drawn.mat ~= nil)
+
+resetDraw()
+BALLISTICS.BuyWheel.DrawIcon({ class = "tacrp_mr96" }, 220, 64, host)
+check("a gun with no mounted png uses the weapon select texture", #asked == 0 and drawn.tex == 9 and drawn.rect == true)
+check("weapon select icon is reported once", lines[1] == "[Ballistics icon] tacrp_mr96 via wepselect")
+
+local modelHost = {}
+function modelHost:IsValid() return true end
+resetDraw()
+BALLISTICS.BuyWheel.DrawIcon({ entity = "pb_med_small" }, 180, 48, modelHost)
+check("a med with no material falls back to the world model", modelHost.balModel ~= nil and modelHost.balModel.class == "SpawnIcon" and modelHost.balModel.model == "models/pb/small.mdl" and modelHost.balModel.mouse == false)
+check("model fallback is reported", lines[1] == "[Ballistics icon] pb_med_small via model models/pb/small.mdl")
+
+mounted["materials/entities/tacrp_ammo_flashbang.png"] = true
+resetDraw()
+BALLISTICS.BuyWheel.DrawIcon({ entity = "tacrp_ammo_flashbang" }, 200, 48, host)
+check("an error material with a real basetexture still draws", #asked == 1 and asked[1] == "entities/tacrp_ammo_flashbang.png|nil" and drawn.mat ~= nil)
+
+mounted["materials/entities/pb_med_large.png"] = true
+resetDraw()
+BALLISTICS.BuyWheel.DrawIcon({ entity = "pb_med_large" }, 200, 64, host)
+check("a mounted png retries once without mip flags", #asked == 2 and asked[1] == "entities/pb_med_large.png|nil" and asked[2] == "entities/pb_med_large.png|smooth" and drawn.mat ~= nil)
+
+resetDraw()
+BALLISTICS.BuyWheel.DrawIcon({ entity = "tacrp_ammo_smoke" }, 200, 48, host)
+check("a missing icon does not call Material", #asked == 0 and #lines == 0)
+mounted["materials/entities/tacrp_ammo_smoke.png"] = true
+clock = 2
+resetDraw()
+BALLISTICS.BuyWheel.DrawIcon({ entity = "tacrp_ammo_smoke" }, 200, 48, host)
+check("a miss waits before it is tried again", #asked == 0)
+clock = 3
+resetDraw()
+BALLISTICS.BuyWheel.DrawIcon({ entity = "tacrp_ammo_smoke" }, 200, 48, host)
+check("a miss retries once the content can be mounted", #asked == 1 and asked[1] == "entities/tacrp_ammo_smoke.png|nil" and lines[1] == "[Ballistics icon] tacrp_ammo_smoke via entities entities/tacrp_ammo_smoke.png")
+print = oldPrint
 
 if failed then os.exit(1) end

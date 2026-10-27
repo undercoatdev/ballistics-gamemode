@@ -22,6 +22,9 @@ L.WATCH = 0.2
 L.KNIFE = "tacrp_knife"
 L.FIT = "Can't fit any more of this item"
 L.GUNS = 2
+L.DROP_DIST = 40
+L.DROP_UP = 48
+L.DROP_GRACE = 1.5
 
 local NOTES = {
 	fit = L.FIT,
@@ -67,16 +70,45 @@ local function coord(v, key)
 end
 
 -- Catalog-style item for a loot slot's icon (guns by class, meds/nades by
--- catalog key). Ammo and empty slots have none.
+-- catalog key). Ammo and empty slots have none. Gun rows store the class on
+-- key (the slot id); class is optional.
 function L.IconItem(slot, catalog)
 	if type(slot) ~= "table" or slot.empty then return nil end
 	if slot.kind == "gun" then
-		if type(slot.class) == "string" and slot.class ~= "" then return { class = slot.class } end
+		local class = slot.class
+		if type(class) ~= "string" or class == "" then class = slot.key end
+		if type(class) == "string" and class ~= "" then return { class = class } end
 		return nil
 	end
 	if slot.kind == "ammo" then return nil end
 	if catalog and catalog.Get and type(slot.key) == "string" then return catalog.Get(slot.key) end
 	return nil
+end
+
+-- The slot the pointer picked up. Its panel is greyed while the ghost follows
+-- the cursor.
+function L.IsDragSource(slot, drag)
+	if type(slot) ~= "table" or type(drag) ~= "table" or slot.empty then return false end
+	if slot.side ~= drag.from or slot.kind ~= drag.kind then return false end
+	if tostring(slot.key or "") ~= tostring(drag.key or "") then return false end
+	return (tonumber(slot.index) or 0) == (tonumber(drag.index) or 0)
+end
+
+-- True while this player must not auto-collect a drop they just let go of.
+function L.PickupBlocked(ply, wep, now)
+	if ply == nil or wep == nil then return false end
+	local kind = type(wep)
+	if kind == "number" or kind == "string" or kind == "boolean" or kind == "function" then return false end
+	local owner, untilT
+	local okO, gotO = pcall(function() return wep.BallisticsDropOwner end)
+	local okU, gotU = pcall(function() return wep.BallisticsDropUntil end)
+	if okO then owner = gotO end
+	if okU then untilT = tonumber(gotU) end
+	if owner == nil or owner ~= ply or untilT == nil then return false end
+	now = tonumber(now)
+	if now == nil and CurTime then now = CurTime() end
+	now = tonumber(now) or 0
+	return now < untilT
 end
 
 function L.Note(err)
@@ -162,15 +194,26 @@ function L.Moved(a, b, limit)
 	return L.Dist(a, b) > limit
 end
 
--- In front of the looter, a little off the floor so the gun can settle.
-function L.DropPos(origin, forward, dist)
-	dist = tonumber(dist) or 40
-	origin = type(origin) == "table" and origin or {}
-	forward = type(forward) == "table" and forward or { x = 1, y = 0, z = 0 }
+-- In front of the looter. origin and forward are often Vectors: type() is
+-- "Vector", not "table", so they must be indexed, not replaced with {}.
+-- Pitch is ignored and a straight-up look still steps forward, otherwise the
+-- entity spawns inside the player. up defaults to a few units; the server
+-- passes chest height and then drops the entity to the floor.
+function L.DropPos(origin, forward, dist, up)
+	dist = tonumber(dist) or L.DROP_DIST or 40
+	if up == nil then up = 8 end
+	up = tonumber(up) or 8
+	local fx, fy = coord(forward, "x"), coord(forward, "y")
+	local len = math.sqrt(fx * fx + fy * fy)
+	if len < 1e-6 then
+		fx, fy = 1, 0
+	else
+		fx, fy = fx / len, fy / len
+	end
 	return {
-		x = coord(origin, "x") + coord(forward, "x") * dist,
-		y = coord(origin, "y") + coord(forward, "y") * dist,
-		z = coord(origin, "z") + 8,
+		x = coord(origin, "x") + fx * dist,
+		y = coord(origin, "y") + fy * dist,
+		z = coord(origin, "z") + up,
 	}
 end
 

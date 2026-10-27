@@ -415,6 +415,9 @@ check("dead player stays slotted", BALLISTICS.Slots.TeamOf(good) == TEAM_GOOD)
 check("dead player spectates a living teammate", good.spec == (OBS_MODE_IN_EYE or 4) and good.specTarget == mate)
 check("dead player cannot pick weapons up", GM:PlayerCanPickupWeapon(good, {}) == false)
 check("living player can pick a dropped gun up", GM:PlayerCanPickupWeapon(mate, {}) == true)
+check("the dropper cannot pick their gun up during grace", GM:PlayerCanPickupWeapon(mate, { BallisticsDropOwner = mate, BallisticsDropUntil = 10 }) == false)
+check("someone else can pick a fresh drop up", GM:PlayerCanPickupWeapon(mate, { BallisticsDropOwner = good, BallisticsDropUntil = 10 }) == true)
+check("grace expiry lets the dropper pick it up", GM:PlayerCanPickupWeapon(mate, { BallisticsDropOwner = mate, BallisticsDropUntil = -1 }) == true)
 PLAYER_BALLISTICS = nil
 check("wipe without player ballistics still strips", (function()
 	mate.weapons = { "tacrp_mp5" }

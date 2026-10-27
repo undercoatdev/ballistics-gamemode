@@ -126,5 +126,20 @@ check("gun icon path", BALLISTICS.Catalog.IconPath(BALLISTICS.Catalog.Get("tacrp
 check("grenade icon path", BALLISTICS.Catalog.IconPath(BALLISTICS.Catalog.Get("nade_frag")) == "entities/tacrp_ammo_frag.png")
 check("med icon path", BALLISTICS.Catalog.IconPath(BALLISTICS.Catalog.Get("med_pills")) == "entities/pb_med_extrasmall.png")
 
+local dup = BALLISTICS.Catalog.IconCandidates("tacrp_ammo_frag", {
+	spawnable = "entities/tacrp_ammo_frag.png",
+	sent = "entities/custom_frag.png",
+	weapon = "",
+})
+check("icon candidates prefer overrides and skip blanks and duplicates", dup[1].source == "spawnable" and dup[1].path == "entities/tacrp_ammo_frag.png" and dup[2].source == "sent" and dup[2].path == "entities/custom_frag.png" and dup[3].source == "vgui" and dup[3].path == "vgui/entities/tacrp_ammo_frag" and #dup == 3)
+local plainIcon = BALLISTICS.Catalog.IconCandidates("pb_med_small", {})
+check("icon candidates include the entity png", plainIcon[1].source == "entities" and plainIcon[1].path == "entities/pb_med_small.png" and plainIcon[2].path == "vgui/entities/pb_med_small")
+local storedIcon = BALLISTICS.Catalog.IconCandidates("tacrp_mr96", { weaponStored = "entities/tacrp_mr96.png" })
+check("a stored weapon override replaces the default entity png", storedIcon[1].source == "weaponstored" and storedIcon[2].source == "vgui" and #storedIcon == 2)
+check("a blank class has no icon candidates", #BALLISTICS.Catalog.IconCandidates("", {}) == 0 and #BALLISTICS.Catalog.IconCandidates(nil, {}) == 0)
+check("a resolved icon is not retried", BALLISTICS.Catalog.IconRetry({ ok = true }, 100, 3) == false)
+check("a miss retries after a few seconds", BALLISTICS.Catalog.IconRetry({ ok = false, at = 10 }, 13, 3) == true and BALLISTICS.Catalog.IconRetry({ ok = false, at = 10 }, 12, 3) == false)
+check("no cache and a cached false are tried", BALLISTICS.Catalog.IconRetry(nil, 0, 3) == true and BALLISTICS.Catalog.IconRetry(false, 0, 3) == true)
+
 check("column height counts title, headers and rows", BALLISTICS.Catalog.ColumnHeight(cols.heavy, 26, 24, 72) == 26 + 4 * 24 + 4 * 72)
 if failed then os.exit(1) end

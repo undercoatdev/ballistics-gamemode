@@ -92,6 +92,41 @@ function BALLISTICS.Catalog.IconPath(item)
 	return "entities/" .. class .. ".png"
 end
 
+-- Material paths to try, in order. Blank overrides are skipped. A path that
+-- already appeared (IconOverride often is entities/<class>.png) is not repeated.
+-- WepSelectIcon is not a path; the client tries it after these miss.
+function BALLISTICS.Catalog.IconCandidates(class, sources)
+	if type(class) ~= "string" or class == "" then return {} end
+	sources = type(sources) == "table" and sources or {}
+	local out = {}
+	local seen = {}
+	local function add(source, path)
+		if type(path) ~= "string" or path == "" then return end
+		if seen[path] then return end
+		seen[path] = true
+		out[#out + 1] = { source = source, path = path }
+	end
+	add("spawnable", sources.spawnable)
+	add("sent", sources.sent)
+	add("weapon", sources.weapon)
+	add("weaponstored", sources.weaponStored)
+	add("entities", "entities/" .. class .. ".png")
+	add("vgui", "vgui/entities/" .. class)
+	return out
+end
+
+-- A hit stays. A miss is tried again after a few seconds so a lookup that
+-- ran before the addon mounted is not permanent.
+function BALLISTICS.Catalog.IconRetry(cached, now, interval)
+	if type(cached) ~= "table" then return true end
+	if cached.ok == true then return false end
+	interval = tonumber(interval) or 3
+	if interval < 0 then interval = 0 end
+	now = tonumber(now) or 0
+	local at = tonumber(cached.at) or 0
+	return now >= at + interval
+end
+
 function BALLISTICS.Catalog.WeaponGroups(list)
 	if list == nil then list = weapons end
 	if type(list) ~= "table" then return {} end

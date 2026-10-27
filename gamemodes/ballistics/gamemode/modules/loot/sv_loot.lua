@@ -797,52 +797,126 @@ local function markDrop(ent)
 	end
 end
 
+-- Weapons auto-pickup on touch, and Player Ballistics meds do it in StartTouch.
+-- StripWeapon also drops the held gun and deletes it; if the new entity was
+-- already back in the player's hands, that delete removes the only copy.
+local function armGrace(ply, ent)
+	if ent == nil then return end
+	local grace = tonumber(L.DROP_GRACE) or 1.5
+	local nowT = (CurTime and CurTime()) or 0
+	ent.BallisticsDropOwner = ply
+	ent.BallisticsDropUntil = nowT + grace
+	-- Instance methods shadow the scripted table. Spawn can copy the ENT
+	-- method back over a wrap done before it, so this is safe to call again.
+	local function wrap(name)
+		local old = ent[name]
+		if type(old) ~= "function" then return end
+		-- The saved function is the wrap itself. Spawn replacing the method
+		-- makes them differ, so the new method gets wrapped too.
+		if ent["balWrapFn" .. name] == old then return end
+		local function wrapped(self, toucher)
+			local t = (CurTime and CurTime()) or 0
+			if L.PickupBlocked(toucher, self, t) then return end
+			return old(self, toucher)
+		end
+		ent["balWrapFn" .. name] = wrapped
+		ent[name] = wrapped
+	end
+	wrap("StartTouch")
+	wrap("Touch")
+	wrap("Use")
+end
+
 local function dropSpot(ply, nudge)
-	local origin = type(ply.GetPos) == "function" and ply:GetPos() or { x = 0, y = 0, z = 0 }
-	local forward = { x = 1, y = 0, z = 0 }
+	local origin = { x = 0, y = 0, z = 0 }
+	if type(ply.GetPos) == "function" then
+		local ok, got = pcall(ply.GetPos, ply)
+		if ok and got ~= nil then origin = got end
+	end
+	local forward = nil
 	if type(ply.GetForward) == "function" then
 		local ok, got = pcall(ply.GetForward, ply)
 		if ok and got ~= nil then forward = got end
 	end
-	local pos = L.DropPos(origin, forward, 40)
+	local pos = L.DropPos(origin, forward, L.DROP_DIST or 40, L.DROP_UP or 48)
 	nudge = tonumber(nudge) or 0
 	if nudge ~= 0 then pos.y = (tonumber(pos.y) or 0) + nudge end
 	return pos
 end
 
 local function placeDrop(ply, ent, nudge)
+	if not valid(ent) then return false end
+	-- Before Spawn, so a touch during Spawn cannot re-equip it.
+	armGrace(ply, ent)
 	local pos = dropSpot(ply, nudge)
-	if type(ent.SetPos) == "function" then pcall(ent.SetPos, ent, asVector(pos)) end
+	local function put()
+		if not valid(ent) or type(ent.SetPos) ~= "function" then return end
+		pcall(ent.SetPos, ent, asVector(pos))
+	end
+	put()
 	if type(ply.EyeAngles) == "function" and type(ent.SetAngles) == "function" then
 		local ok, ang = pcall(ply.EyeAngles, ply)
 		if ok and ang ~= nil then pcall(ent.SetAngles, ent, ang) end
 	end
+	if COLLISION_GROUP_WEAPON and type(ent.SetCollisionGroup) == "function" then
+		pcall(ent.SetCollisionGroup, ent, COLLISION_GROUP_WEAPON)
+	end
 	if type(ent.Spawn) == "function" then
 		local ok = pcall(ent.Spawn, ent)
-		if not ok then
-			if type(ent.Remove) == "function" then pcall(ent.Remove, ent) end
+		if not ok or not valid(ent) then
+			if valid(ent) and type(ent.Remove) == "function" then pcall(ent.Remove, ent) end
 			return false
 		end
 	end
 	if not valid(ent) then return false end
+	-- Spawn resets the origin on a lot of weapons. Put it back at chest
+	-- height, then let it fall to the floor in front of the player.
+	put()
 	if type(ent.Activate) == "function" then pcall(ent.Activate, ent) end
-	return true
+	if not valid(ent) then return false end
+	put()
+	if type(ent.DropToFloor) == "function" then pcall(ent.DropToFloor, ent) end
+	if not valid(ent) then return false end
+	-- Spawn may have replaced the touch methods. Block the dropper again.
+	armGrace(ply, ent)
+	if type(ent.GetPhysicsObject) == "function" then
+		local ok, phys = pcall(ent.GetPhysicsObject, ent)
+		if ok and phys ~= nil and type(phys.Wake) == "function" then
+			if not phys.IsValid or phys:IsValid() ~= false then pcall(phys.Wake, phys) end
+		end
+	end
+	return valid(ent)
 end
 
 local function spawnDrop(ply, gun)
-	if not (ents and type(ents.Create) == "function") then return false end
-	if type(gun) ~= "table" or type(gun.class) ~= "string" or gun.class == "" then return false end
+	if not (ents and type(ents.Create) == "function") then return nil end
+	if type(gun) ~= "table" or type(gun.class) ~= "string" or gun.class == "" then return nil end
+	local held = nil
+	if type(ply.GetWeapon) == "function" then
+		local ok, got = pcall(ply.GetWeapon, ply, gun.class)
+		if ok then held = got end
+	end
 	local ent = ents.Create(gun.class)
-	if not valid(ent) then return false end
-	if not placeDrop(ply, ent, 0) then return false end
+	if not valid(ent) or ent == held then return nil end
+	if not placeDrop(ply, ent, 0) then
+		-- A failed spawn must not leave a half-made weapon, and must not be
+		-- the gun the player is still holding.
+		if valid(ent) and ent ~= held and type(ent.Remove) == "function" then pcall(ent.Remove, ent) end
+		return nil
+	end
 	local atts = gun.attachments or {}
 	for i = 1, #atts do
 		installAtt(ent, atts[i].slot, atts[i].att)
 	end
 	if type(ent.SetClip1) == "function" then pcall(ent.SetClip1, ent, tonumber(gun.clip1) or 0) end
 	if type(ent.SetClip2) == "function" then pcall(ent.SetClip2, ent, tonumber(gun.clip2) or 0) end
+	if type(ent.NetworkWeapon) == "function" then pcall(ent.NetworkWeapon, ent) end
+	if not valid(ent) then
+		if ent ~= held and type(ent) == "table" and type(ent.Remove) == "function" then pcall(ent.Remove, ent) end
+		return nil
+	end
 	markDrop(ent)
-	return true
+	return ent
 end
 
 -- A pickup that stores a count can take the whole stack. TacRP grenade ammo
@@ -878,7 +952,10 @@ local function spawnPickup(ply, class, nudge)
 	if type(class) ~= "string" or class == "" then return nil end
 	local ent = ents.Create(class)
 	if not valid(ent) then return nil end
-	if not placeDrop(ply, ent, nudge) then return nil end
+	if not placeDrop(ply, ent, nudge) then
+		if valid(ent) and type(ent.Remove) == "function" then pcall(ent.Remove, ent) end
+		return nil
+	end
 	markDrop(ent)
 	return ent
 end
@@ -985,16 +1062,23 @@ local function actSelf(ply, session, req)
 		publishSelf(session, result.note or "")
 		return false, result.err
 	end
+	-- The world entity has to exist before StripWeapon. StripWeapon drops the
+	-- held gun and then deletes it; a spawn that failed must leave the gun on
+	-- the player, and a spawn that landed back in their hands would be deleted
+	-- with it.
 	local spawned, made
 	if req.kind == "gun" then
 		spawned = spawnDrop(ply, result.drop)
+		if spawned then made = { spawned } end
 	else
 		spawned, made = spawnStack(ply, result.drop)
 	end
-	if not spawned then
+	if not spawned or (req.kind == "gun" and not valid(spawned)) then
+		rollback(made)
 		publishSelf(session, "Could not drop that.")
 		return false, "drop"
 	end
+	if req.kind == "gun" then armGrace(ply, ply.GetWeapon and select(2, pcall(ply.GetWeapon, ply, req.key)) or nil) end
 	-- Same writes as a loot transfer: StripWeapon, SetAmmo down to the
 	-- remainder (grenades), GiveMed(ply, id, -n) for meds.
 	if not applyLive(ply, you, result.you, infinite) then
@@ -1066,49 +1150,57 @@ function L.Act(ply, req)
 		publishSession(session, result.note or "")
 		return false, result.err
 	end
-	if result.drop and not spawnDrop(ply, result.drop) then
-		publishSession(session, "Could not drop that.")
-		return false, "drop"
+	-- Spawn and keep the world entity first. StripWeapon (inside the commit)
+	-- drops the held gun and then deletes it; if that delete is the only copy,
+	-- or the commit fails, the player must still have their item.
+	local dropped = nil
+	if result.drop then
+		dropped = spawnDrop(ply, result.drop)
+		if not valid(dropped) then
+			if dropped then rollback({ dropped }) end
+			publishSession(session, "Could not drop that.")
+			return false, "drop"
+		end
+		if req.kind == "gun" then
+			local holder = req.from == "you" and ply or session.owner
+			if type(holder) == "table" and type(holder.GetWeapon) == "function" then
+				local okW, heldW = pcall(holder.GetWeapon, holder, req.key)
+				if okW then armGrace(holder, heldW) end
+			end
+		end
 	end
 	-- The side that receives the item is applied first. A failed Give leaves
 	-- the source untouched. A corpse has no Give: its snapshot is the record.
 	local function commitLive(who, before, after)
 		return applyLive(who, before, after, infinite)
 	end
+	local function failGive()
+		if dropped then rollback({ dropped }) end
+		publishSession(session, "Could not move that.")
+		return false, "give"
+	end
 	local to = req.to
 	if to == "you" then
-		if not commitLive(ply, you, result.you) then
-			publishSession(session, "Could not move that.")
-			return false, "give"
-		end
+		if not commitLive(ply, you, result.you) then return failGive() end
 		if corpse then
 			snaps[session.ownerId] = L.Clone(result.them)
 		elseif not commitLive(session.owner, them, result.them) then
-			publishSession(session, "Could not move that.")
-			return false, "give"
+			return failGive()
 		end
 	elseif to == "them" then
 		if corpse then
 			snaps[session.ownerId] = L.Clone(result.them)
 		elseif not commitLive(session.owner, them, result.them) then
-			publishSession(session, "Could not move that.")
-			return false, "give"
+			return failGive()
 		end
-		if not commitLive(ply, you, result.you) then
-			publishSession(session, "Could not move that.")
-			return false, "give"
-		end
+		if not commitLive(ply, you, result.you) then return failGive() end
 	elseif to == "drop" then
 		if req.from == "you" then
-			if not commitLive(ply, you, result.you) then
-				publishSession(session, "Could not move that.")
-				return false, "give"
-			end
+			if not commitLive(ply, you, result.you) then return failGive() end
 		elseif corpse then
 			snaps[session.ownerId] = L.Clone(result.them)
 		elseif not commitLive(session.owner, them, result.them) then
-			publishSession(session, "Could not move that.")
-			return false, "give"
+			return failGive()
 		end
 	end
 	session.mode = modeOf(session)

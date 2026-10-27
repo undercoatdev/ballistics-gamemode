@@ -28,8 +28,9 @@ local localUntil = 0
 local nextClick = 0
 
 local function valid(pnl)
-	if pnl == nil then return false end
+	if pnl == nil or pnl == false then return false end
 	if IsValid then return IsValid(pnl) == true end
+	if type(pnl) == "table" and type(pnl.IsValid) == "function" then return pnl:IsValid() == true end
 	return false
 end
 
@@ -211,39 +212,314 @@ local function tryBuy(item)
 	sendBuy(item.key)
 end
 
+-- A miss is { ok = false, at = CurTime }. It is tried again every few seconds.
+-- `false` is never stored: Material() before the addon mounts caches the
+-- engine error material for that name, and a permanent false hid every icon.
 local iconCache = {}
-local function iconFor(item)
-	local path = BALLISTICS.Catalog and BALLISTICS.Catalog.IconPath and BALLISTICS.Catalog.IconPath(item)
-	if not path then return nil end
-	local hit = iconCache[path]
-	if hit == nil then
-		hit = false
-		if Material then
-			local ok, mat = pcall(Material, path, "smooth mips")
-			if ok and mat and not (mat.IsError and mat:IsError()) then hit = { mat = mat } end
-		end
-		if not hit and item.class and weapons and weapons.GetStored then
-			local stored = weapons.GetStored(item.class)
-			if stored and type(stored.WepSelectIcon) == "number" then hit = { tex = stored.WepSelectIcon } end
-		end
-		iconCache[path] = hit
-	end
-	return hit or nil
+local iconSaid = {}
+
+local function iconNow()
+	if CurTime then return tonumber(CurTime()) or 0 end
+	return 0
 end
 
-local function drawIcon(item, w, h)
-	local icon = iconFor(item)
-	if not icon then return end
-	local size = h - 8
-	local x = w - size - 4
-	surface.SetDrawColor(255, 255, 255, 255)
-	if icon.mat then
-		surface.SetMaterial(icon.mat)
-		surface.DrawTexturedRect(x, 4, size, size)
-	elseif icon.tex then
-		surface.SetTexture(icon.tex)
-		surface.DrawTexturedRect(x - size, 4, size * 2, size)
+local function iconClass(item)
+	if type(item) ~= "table" then return nil end
+	local class = item.class or item.entity
+	if type(class) ~= "string" or class == "" then return nil end
+	return class
+end
+
+local function sayIcon(class, source, extra)
+	local id = tostring(class) .. " " .. tostring(source)
+	if iconSaid[id] then return end
+	iconSaid[id] = true
+	local line = "[Ballistics icon] " .. tostring(class) .. " via " .. tostring(source)
+	if type(extra) == "string" and extra ~= "" then line = line .. " " .. extra end
+	print(line)
+end
+
+local function rowTable(row)
+	if type(row) ~= "table" then return nil end
+	return row
+end
+
+local function listRow(kind, class)
+	if not list or type(list.Get) ~= "function" then return nil end
+	local ok, rows = pcall(list.Get, kind)
+	if not ok or type(rows) ~= "table" then return nil end
+	return rowTable(rows[class])
+end
+
+local function storedEnt(class)
+	if not scripted_ents or type(scripted_ents.GetStored) ~= "function" then return nil end
+	local ok, stored = pcall(scripted_ents.GetStored, class)
+	if not ok or stored == nil then return nil end
+	local kind = type(stored)
+	if kind == "number" or kind == "string" or kind == "boolean" or kind == "function" then return nil end
+	if type(stored.t) == "table" then return stored.t end
+	return stored
+end
+
+local function storedWep(class)
+	if not weapons or type(weapons.GetStored) ~= "function" then return nil end
+	local ok, stored = pcall(weapons.GetStored, class)
+	if not ok or stored == nil then return nil end
+	local kind = type(stored)
+	if kind == "number" or kind == "string" or kind == "boolean" or kind == "function" then return nil end
+	return stored
+end
+
+local function pathOf(row, key)
+	if type(row) ~= "table" then return nil end
+	local path = row[key]
+	if type(path) ~= "string" or path == "" then return nil end
+	return path
+end
+
+-- file.Exists false: do not call Material. An early miss stores ___error for
+-- that name for the rest of the session. nil means file.Exists is missing.
+local function fileMounted(path)
+	if not file or type(file.Exists) ~= "function" then return nil end
+	local function has(p)
+		local ok, yes = pcall(file.Exists, p, "GAME")
+		if not ok then return nil end
+		return yes == true
 	end
+	local bases = {}
+	if string.sub(path, 1, 10) == "materials/" then
+		bases[1] = path
+	else
+		bases[1] = "materials/" .. path
+		bases[2] = path
+	end
+	local saw = false
+	for i = 1, #bases do
+		local base = bases[i]
+		local opts = { base }
+		if not string.find(base, "%.png$", 1) and not string.find(base, "%.vmt$", 1) then
+			opts[#opts + 1] = base .. ".png"
+			opts[#opts + 1] = base .. ".vmt"
+		end
+		for j = 1, #opts do
+			local yes = has(opts[j])
+			if yes == nil then return nil end
+			saw = true
+			if yes then return true end
+		end
+	end
+	if saw then return false end
+	return nil
+end
+
+local function badTexName(name)
+	return name == "" or name == "error" or name == "___error"
+end
+
+-- Flag words are not a VMT. Material() turns them into bits and builds a
+-- different material than the unflagged png the spawn menu draws.
+-- IsError on that result used to be cached forever. A png can also report
+-- IsError while $basetexture is a real texture; that one still draws.
+local function matUsable(mat)
+	local kind = type(mat)
+	if mat == nil or kind == "nil" or kind == "boolean" or kind == "number" or kind == "string" or kind == "function" then
+		return false
+	end
+	local name = ""
+	if mat.GetName then
+		local ok, n = pcall(mat.GetName, mat)
+		if ok and type(n) == "string" then name = n end
+	end
+	local base = ""
+	if mat.GetTexture then
+		local ok, tex = pcall(mat.GetTexture, mat, "$basetexture")
+		if ok and tex ~= nil then
+			local tk = type(tex)
+			if tk ~= "number" and tk ~= "string" and tk ~= "boolean" and tk ~= "function" and tex.GetName then
+				local okN, n = pcall(tex.GetName, tex)
+				if okN and type(n) == "string" then base = n end
+			end
+		end
+	end
+	if not badTexName(base) then return true end
+	if badTexName(name) then return false end
+	if mat.IsError then
+		local ok, err = pcall(mat.IsError, mat)
+		if ok and err == true then return false end
+	end
+	return true
+end
+
+local function tryMaterial(path)
+	if type(path) ~= "string" or path == "" or not Material then return nil end
+	local mounted = fileMounted(path)
+	if mounted == false then return nil end
+	local function load(flags)
+		local ok, mat
+		if flags then
+			ok, mat = pcall(Material, path, flags)
+		else
+			ok, mat = pcall(Material, path)
+		end
+		if ok and matUsable(mat) then return mat end
+		return nil
+	end
+	local mat = load(nil)
+	if mat then return mat end
+	if mounted == true then
+		mat = load("smooth")
+		if mat then return mat end
+	end
+	return nil
+end
+
+local function modelOf(row)
+	return pathOf(row, "WorldModel") or pathOf(row, "Model")
+end
+
+local function fromSelect(icon)
+	if type(icon) == "string" and icon ~= "" then
+		local mat = tryMaterial(icon)
+		if mat then return { ok = true, mat = mat, source = "wepselect", path = icon } end
+	elseif type(icon) == "number" and icon > 0 then
+		return { ok = true, tex = icon, source = "wepselect" }
+	end
+	return nil
+end
+
+local function resolveIcon(class)
+	local spawnRow = listRow("SpawnableEntities", class)
+	local sent = storedEnt(class)
+	local wepRow = listRow("Weapon", class)
+	local wep = storedWep(class)
+	local sources = {
+		spawnable = pathOf(spawnRow, "IconOverride"),
+		sent = pathOf(sent, "IconOverride"),
+		weapon = pathOf(wepRow, "IconOverride"),
+		weaponStored = pathOf(wep, "IconOverride"),
+	}
+	local candidates = {}
+	if BALLISTICS.Catalog and type(BALLISTICS.Catalog.IconCandidates) == "function" then
+		candidates = BALLISTICS.Catalog.IconCandidates(class, sources) or {}
+	end
+	for i = 1, #candidates do
+		local row = candidates[i]
+		local mat = tryMaterial(row.path)
+		if mat then
+			sayIcon(class, row.source, row.path)
+			return { ok = true, mat = mat, source = row.source, path = row.path }
+		end
+	end
+	local hit = fromSelect(wep and wep.WepSelectIcon) or fromSelect(wepRow and wepRow.WepSelectIcon)
+	if hit then
+		sayIcon(class, "wepselect", hit.path)
+		return hit
+	end
+	return nil, modelOf(wep) or modelOf(wepRow) or modelOf(sent) or modelOf(spawnRow)
+end
+
+local function iconFor(item)
+	local class = iconClass(item)
+	if not class then return nil end
+	local cached = iconCache[class]
+	local due = true
+	if BALLISTICS.Catalog and type(BALLISTICS.Catalog.IconRetry) == "function" then
+		due = BALLISTICS.Catalog.IconRetry(cached, iconNow(), 3) == true
+	elseif type(cached) == "table" and cached.ok == true then
+		due = false
+	end
+	if not due then return cached end
+	local hit, model = resolveIcon(class)
+	if hit then
+		iconCache[class] = hit
+		return hit
+	end
+	local miss = { ok = false, at = iconNow(), model = model }
+	iconCache[class] = miss
+	if type(model) == "string" and model ~= "" then sayIcon(class, "model", model) end
+	return miss
+end
+
+local function hideModel(panel)
+	local child = panel and panel.balModel
+	if not valid(child) then return end
+	if child.SetVisible then child:SetVisible(false) end
+end
+
+local function showModel(panel, model, w, h)
+	if not valid(panel) or type(model) ~= "string" or model == "" then return false end
+	if not vgui or type(vgui.Create) ~= "function" then return false end
+	local x, y, size = w, h, h
+	do
+		local sizeN = (tonumber(h) or 0) - 8
+		if sizeN < 8 then sizeN = 8 end
+		local wide = tonumber(w) or 0
+		if wide > 16 and sizeN > wide - 8 then sizeN = wide - 8 end
+		local left = wide - sizeN - 4
+		if left < 0 then left = 0 end
+		x, y, size = left, 4, sizeN
+	end
+	local child = panel.balModel
+	if not valid(child) then
+		child = vgui.Create("SpawnIcon", panel)
+		if not valid(child) then child = vgui.Create("ModelImage", panel) end
+		if not valid(child) then return false end
+		panel.balModel = child
+		child:SetMouseInputEnabled(false)
+		if child.SetKeyboardInputEnabled then child:SetKeyboardInputEnabled(false) end
+		child.DoClick = function() end
+		child.DoRightClick = function() end
+		child.OpenMenu = function() end
+	end
+	if panel.balGhost and child.SetPaintedManually then child:SetPaintedManually(true) end
+	if child.SetAlpha then child:SetAlpha(panel.balGhost and 190 or 255) end
+	if child.SetVisible then child:SetVisible(true) end
+	child:SetPos(x, y)
+	child:SetSize(size, size)
+	if child.SetModel and child.balModelPath ~= model then
+		-- SpawnIcon takes model, skin, bodygroups. ModelImage ignores the extra args.
+		pcall(child.SetModel, child, model, 0, 0)
+		child.balModelPath = model
+	end
+	return true
+end
+
+local function iconRect(w, h)
+	local size = (tonumber(h) or 0) - 8
+	if size < 8 then size = 8 end
+	local wide = tonumber(w) or 0
+	if wide > 16 and size > wide - 8 then size = wide - 8 end
+	local x = wide - size - 4
+	if x < 0 then x = 0 end
+	return x, 4, size
+end
+
+local function drawIcon(item, w, h, panel)
+	local icon = iconFor(item)
+	if type(icon) ~= "table" then
+		hideModel(panel)
+		return
+	end
+	local alpha = (panel and panel.balGhost) and 190 or 255
+	if icon.ok == true and icon.mat and surface and surface.SetMaterial and surface.DrawTexturedRect then
+		hideModel(panel)
+		local x, y, size = iconRect(w, h)
+		surface.SetDrawColor(255, 255, 255, alpha)
+		surface.SetMaterial(icon.mat)
+		surface.DrawTexturedRect(x, y, size, size)
+		return
+	end
+	if icon.ok == true and icon.tex and surface and surface.SetTexture and surface.DrawTexturedRect then
+		hideModel(panel)
+		local x, y, size = iconRect(w, h)
+		surface.SetDrawColor(255, 255, 255, alpha)
+		surface.SetTexture(icon.tex)
+		-- Weapon-select textures are authored at about 2:1.
+		surface.DrawTexturedRect(x - size, y, size * 2, size)
+		return
+	end
+	if type(icon.model) == "string" and showModel(panel, icon.model, w, h) then return end
+	hideModel(panel)
 end
 
 -- Shared with the loot window: same spawn-menu icon and fallback.
@@ -283,7 +559,7 @@ local function paintItem(self, w, h)
 		if afford then priceCol = Color(230, 210, 140) end
 	end
 	draw.SimpleText(priceText, "BallisticsBuySmall", 12, 42, priceCol, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
-	drawIcon(item, w, h)
+	drawIcon(item, w, h, self)
 end
 
 local function refill()
