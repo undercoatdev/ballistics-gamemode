@@ -52,6 +52,29 @@ function BALLISTICS.Buy.ReasonText(err)
 	return "Could not buy that."
 end
 
+-- Left click on the buy wheel. Guns sell when you own one bought this phase.
+-- Grenades and meds stay a buy until you hold the cap, and sell only then if
+-- at least one was bought this phase (fresh > 0). Right click is not this.
+function BALLISTICS.Buy.LeftAction(kind, have, max, fresh, owned)
+	fresh = countOf(fresh)
+	if kind == "weapon" then
+		if owned == true and fresh > 0 then return "sell" end
+		return "buy"
+	end
+	if kind ~= "nade" and kind ~= "med" then return "buy" end
+	have = countOf(have)
+	max = tonumber(max)
+	if max == nil or max ~= max or max == math.huge or max == -math.huge then return "buy" end
+	max = math.floor(max)
+	if max < 0 then max = 0 end
+	if have >= max and fresh > 0 then return "sell" end
+	return "buy"
+end
+
+function BALLISTICS.Buy.StackCount(have, max)
+	return tostring(countOf(have)) .. " / " .. tostring(countOf(max))
+end
+
 function BALLISTICS.Buy.List(kind)
 	local cat = BALLISTICS.Catalog
 	if not cat then return {} end

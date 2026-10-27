@@ -45,6 +45,10 @@ fire, state = C.Press(state, "nope", true)
 check("a bad clock is not an edge", fire == false and state.last == 0.25)
 check("closed wants open", C.NextOpen(false) == true and C.NextOpen(nil) == true)
 check("open wants closed", C.NextOpen(true) == false)
+check("own inventory hands the customize key off", C.InventoryHandoff(true, 13, 13) == true)
+check("someone else's loot does not hand off", C.InventoryHandoff(false, 13, 13) == false and C.InventoryHandoff(nil, 13, 13) == false)
+check("a different key does not hand off", C.InventoryHandoff(true, 5, 13) == false)
+check("a missing customize code does not hand off", C.InventoryHandoff(true, 13, 0) == false and C.InventoryHandoff(true, 13, nil) == false)
 
 local wheel, att = C.BuySwap(false)
 check("C during buy hides the wheel and opens attachments", wheel == false and att == true)
@@ -70,6 +74,8 @@ check("live outside the zone is refused", ok == false and err == "zone")
 check("zone text is the objective line", C.ReasonText("zone") == "Only at your objective")
 ok, err = allow({ phase = "buy", inZone = false })
 check("buy may open away from the flag", ok == true)
+ok, err = allow({ phase = "buy", inZone = true, inventory = true })
+check("buy in the zone may open while inventory is open", ok == true and err == nil)
 ok, err = allow({ phase = "lobby" })
 check("lobby cannot open", ok == false and err == "phase")
 ok, err = allow({ phase = "post" })
@@ -237,6 +243,13 @@ phaseName = "buy"
 now = 8
 ok = BALLISTICS.Customize.Request(ply, true)
 check("buy opens away from the flag", ok == true and ply.wep.custom == true)
+
+now = 8.25
+BALLISTICS.Customize.Request(ply, false)
+ply.pos = { x = 0, y = 0, z = 0 }
+now = 8.5
+ok, err = BALLISTICS.Customize.Request(ply, true)
+check("buy inside the zone opens", ok == true and err == nil and ply.wep.custom == true)
 
 hook.Run("Ballistics_PhaseChanged", "buy", "live")
 check("a phase change force-closes", ply.wep.custom == false)
@@ -544,5 +557,27 @@ local stripped
 local ccmd = { RemoveKey = function(_, key) stripped = key end }
 hook.Run("StartCommand", cp, ccmd)
 check("the client command also loses the customize bit", stripped == TacRP.IN_CUSTOMIZE)
+
+-- Own inventory is open. The poll still sends, and it closes that window first.
+clock = 200
+release()
+cp.phase = "buy"
+cp.pos = { x = 0, y = 0, z = 0 }
+cwep.custom = false
+BALLISTICS.CKeyClient.Ack({ open = false })
+local sentAtClose
+local closes = 0
+BALLISTICS.Loot = BALLISTICS.Loot or {}
+BALLISTICS.Loot.CloseSelf = function()
+	closes = closes + 1
+	sentAtClose = #sent
+	return true
+end
+keyDown = true
+before = #sent
+hook.Run("Think")
+check("the poll still sends while own inventory is open", #sent == before + 1 and sent[#sent].name == "bal_customize" and sent[#sent].want == true)
+check("the poll closes own inventory before the request", closes == 1 and sentAtClose == before)
+check("the customize key code follows the bind", BALLISTICS.CKeyClient.KeyCode() == 11)
 
 if failed then os.exit(1) end

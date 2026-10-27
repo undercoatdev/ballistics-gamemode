@@ -1,7 +1,10 @@
 -- Attachment ownership and price. TacRP's att inventory is bypassed.
 -- TacRP_CanCustomize gates the phase, the own-flag radius, and the balance.
--- WeaponEquip wraps that weapon's Attach: after a successful install,
--- Money.Spend charges the slot price. Detach is not wrapped and does not refund.
+-- An empty detach is refused. TacRP's menu replaces by Detach(slot, true, true)
+-- then Attach; the server net path is a bare Detach(slot, true) followed by
+-- Attach into a still-occupied slot, so Attach detaches with that pair first.
+-- WeaponEquip wraps Attach: a successful install spends the slot price.
+-- Detach does not refund.
 
 if not SERVER then return end
 
@@ -84,6 +87,7 @@ function BALLISTICS.AttPrice.Decide(ply, wep, att, slot, detach)
 	local slottbl = slotTable(wep, slot)
 	local price
 	if slottbl then price = BALLISTICS.AttPrice.Cost(slottbl) end
+	local replacing = detach == true and BALLISTICS.AttPrice.IsReplace(wep, slot)
 	return BALLISTICS.AttPrice.Gate({
 		phase = phaseOf(),
 		inZone = inZone(ply),
@@ -91,6 +95,7 @@ function BALLISTICS.AttPrice.Decide(ply, wep, att, slot, detach)
 		balance = balanceOf(ply),
 		price = price,
 		detach = detach == true,
+		replace = replacing,
 	})
 end
 
@@ -101,10 +106,33 @@ local function ownerOf(wep)
 	return got
 end
 
+local function installedOf(v)
+	return v ~= nil and v ~= false and v ~= ""
+end
+
+-- Detach(slot, true, true) is TacRP's replace (and gear restore). Mark it so
+-- the hook allows that detach. A bare Detach(slot) or Detach(slot, true) is
+-- an empty detach and the hook refuses it.
+local function wrapDetach(wep)
+	if wep == nil or wep.BallisticsDetWrapped == true then return end
+	if type(wep.Detach) ~= "function" then return end
+	wep.BallisticsDetWrapped = true
+	local original = wep.Detach
+	wep.BallisticsDetOriginal = original
+	wep.Detach = function(self, slot, silent, suppress)
+		local replacing = silent == true and suppress == true
+		if replacing then self.BallisticsAttReplacing = slot end
+		local r1, r2 = original(self, slot, silent, suppress)
+		if replacing then self.BallisticsAttReplacing = nil end
+		return r1, r2
+	end
+end
+
 local function wrapAttach(wep)
 	if wep == nil or wep.ArcticTacRP ~= true then return end
 	if wep.BallisticsAttWrapped == true then return end
 	if type(wep.Attach) ~= "function" then return end
+	wrapDetach(wep)
 	local original = wep.Attach
 	wep.BallisticsAttWrapped = true
 	-- Gear restore calls this, not the wrapper, so a kept gun is not charged.
@@ -112,6 +140,14 @@ local function wrapAttach(wep)
 	wep.Attach = function(self, slot, att, silent, suppress)
 		local slottbl = self.Attachments and self.Attachments[slot]
 		local before = slottbl and slottbl.Installed
+		-- The server hears a replace as Attach while the old attachment is
+		-- still in the slot (the detach net message was refused). Take it
+		-- off only when the new one is allowed, then let Attach install it.
+		if self.BallisticsAttRestore ~= true and installedOf(before) and before ~= att and type(self.CanAttach) == "function" then
+			local okCall, res = pcall(self.CanAttach, self, slot, att)
+			if not okCall or res == false then return end
+			if type(self.Detach) == "function" then self:Detach(slot, true, true) end
+		end
 		local r1, r2 = original(self, slot, att, silent, suppress)
 		if self.BallisticsAttRestore == true then return r1, r2 end
 		slottbl = self.Attachments and self.Attachments[slot]

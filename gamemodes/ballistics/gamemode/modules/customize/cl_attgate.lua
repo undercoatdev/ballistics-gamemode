@@ -1,6 +1,8 @@
 -- Client TacRP_CanCustomize. Predicted SWEP:Attach checks this before it
 -- installs anything or tells the server. A false answer is what stops that
--- prediction. Detach is always allowed here; the server still validates it.
+-- prediction. An empty detach is refused. TacRP's menu replaces with
+-- Detach(slot, true, true) then Attach; that detach is held until Attach
+-- confirms the new one is allowed, so a refused swap does not strip the slot.
 -- Balance is the local NW2 bal_money, not the server ledger.
 
 if not CLIENT then return end
@@ -81,18 +83,72 @@ local function slotTable(wep, slot)
 	return slottbl
 end
 
+-- The customize menu calls Detach(slot, true, true) and then Attach. Hold the
+-- detach until Attach, and only perform it when the new attachment is allowed.
+function BALLISTICS.AttPrice.WrapClient(wep)
+	if wep == nil or wep == false or wep.BallisticsClientAttWrapped == true then return end
+	if wep.ArcticTacRP ~= true then return end
+	if type(wep.Detach) ~= "function" or type(wep.Attach) ~= "function" then return end
+	wep.BallisticsClientAttWrapped = true
+	local originalDetach = wep.Detach
+	local originalAttach = wep.Attach
+	wep.Detach = function(self, slot, silent, suppress)
+		if silent == true and suppress == true then
+			self.BallisticsPendingReplace = slot
+			return
+		end
+		return originalDetach(self, slot, silent, suppress)
+	end
+	wep.Attach = function(self, slot, att, silent, suppress)
+		local pending = self.BallisticsPendingReplace
+		self.BallisticsPendingReplace = nil
+		local slottbl = self.Attachments and self.Attachments[slot]
+		local before = slottbl and slottbl.Installed
+		local occupied = before ~= nil and before ~= false and before ~= ""
+		if pending ~= nil and occupied and before ~= att then
+			local allowed = true
+			if type(self.CanAttach) == "function" then
+				local okCall, res = pcall(self.CanAttach, self, slot, att)
+				if not okCall or res == false then allowed = false end
+			end
+			if not allowed then return end
+			self.BallisticsAttReplacing = slot
+			originalDetach(self, slot, true, true)
+			self.BallisticsAttReplacing = nil
+		end
+		return originalAttach(self, slot, att, silent, suppress)
+	end
+end
+
+local function wrapActive()
+	if not LocalPlayer then return end
+	local ply = LocalPlayer()
+	if ply == nil then return end
+	local list
+	if type(ply.GetWeapons) == "function" then
+		local ok, got = pcall(ply.GetWeapons, ply)
+		if ok and type(got) == "table" then list = got end
+	end
+	if list == nil and type(ply.GetActiveWeapon) == "function" then
+		local ok, wep = pcall(ply.GetActiveWeapon, ply)
+		if ok and wep ~= nil then list = { wep } end
+	end
+	if type(list) ~= "table" then return end
+	for i = 1, #list do
+		BALLISTICS.AttPrice.WrapClient(list[i])
+	end
+end
+
 -- att is unused. The slot category sets the price, not the attachment.
 function BALLISTICS.AttPrice.Predict(ply, wep, att, slot, detach)
-	if detach == true then
-		return BALLISTICS.AttPrice.ClientDecide({ detach = true })
-	end
 	local slottbl = slotTable(wep, slot)
 	local price
-	if slottbl and type(BALLISTICS.AttPrice.Cost) == "function" then
+	if detach ~= true and slottbl and type(BALLISTICS.AttPrice.Cost) == "function" then
 		price = BALLISTICS.AttPrice.Cost(slottbl)
 	end
 	return BALLISTICS.AttPrice.ClientDecide({
-		detach = false,
+		detach = detach == true,
+		replace = detach == true and BALLISTICS.AttPrice.IsReplace(wep, slot) or false,
 		phase = phaseOf(ply),
 		inZone = inZone(ply),
 		alive = aliveOf(ply),
@@ -105,4 +161,8 @@ if hook and hook.Add then
 	hook.Add("TacRP_CanCustomize", "Ballistics_AttGateClient", function(ply, wep, att, slot, detach)
 		return BALLISTICS.AttPrice.Predict(ply, wep, att, slot, detach)
 	end)
+	hook.Add("TacRP_CreateCustomizeHUD", "Ballistics_AttWrapClient", function(wep)
+		BALLISTICS.AttPrice.WrapClient(wep)
+	end)
+	hook.Add("Think", "Ballistics_AttWrapClient", wrapActive)
 end

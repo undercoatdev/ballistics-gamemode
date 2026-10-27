@@ -52,8 +52,19 @@ function C.BuySwap(attOpen)
 	return false, true
 end
 
+-- Own inventory holds keyboard focus, so this press never reaches the bind.
+-- Only that window hands the customize key off. Someone else's loot stays.
+function C.InventoryHandoff(selfOpen, pressed, code)
+	if selfOpen ~= true then return false end
+	if type(pressed) ~= "number" or type(code) ~= "number" then return false end
+	if pressed <= 0 or code <= 0 then return false end
+	if pressed ~= pressed or code ~= code then return false end
+	return pressed == code
+end
+
 -- Opening needs a living player, an active TacRP weapon, and either BUY
--- (anywhere) or LIVE inside the own-flag radius. Closing is always allowed.
+-- (anywhere, including the buy zone) or LIVE inside the own-flag radius.
+-- An open inventory is not a reason to refuse. Closing is always allowed.
 function C.Allow(ctx)
 	if type(ctx) ~= "table" then return false, "phase" end
 	if ctx.want ~= true then return true end

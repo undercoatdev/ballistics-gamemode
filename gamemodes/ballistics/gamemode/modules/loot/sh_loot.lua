@@ -166,6 +166,51 @@ function L.UseDown(cmdDown, keyDown)
 	return cmdDown == true or keyDown == true
 end
 
+-- Bound key from LookupBinding("+use") then GetKeyCode. A missing or
+-- non-positive code uses fallback (KEY_E).
+function L.UseKeyCode(binding, code, fallback)
+	local n = tonumber(code)
+	if n ~= nil and n == n and n > 0 and n < math.huge then return math.floor(n) end
+	local fb = tonumber(fallback)
+	if fb ~= nil and fb == fb and fb > 0 and fb < math.huge then return math.floor(fb) end
+	return 0
+end
+
+-- While the loot window is open, a new use press closes it. The press that
+-- opened it, and the press that closes it, stay latched until that key is
+-- released so the same press cannot reopen the window.
+-- seen: the poll observed the key down at least once during this open.
+-- A swallowed poll (always up, never seen) must not look like a release.
+-- Returns close, latch, wasDown.
+function L.WindowUse(open, down, wasDown, latch, seen)
+	down = down == true
+	wasDown = wasDown == true
+	latch = latch == true
+	seen = seen == true
+	if open == true then
+		local edge = down and not wasDown
+		if edge and not latch then return true, true, true end
+		if seen and wasDown and not down then return false, false, false end
+		return false, latch, down
+	end
+	if latch then
+		if down then return false, true, true end
+		return false, false, false
+	end
+	return false, false, down
+end
+
+-- Key pressed while the loot window has focus.
+-- "use" closes any loot window. "inventory" closes only your own.
+function L.FocusClose(selfOpen, pressed, useCode, invCode)
+	if type(pressed) ~= "number" then return nil end
+	if type(useCode) == "number" and useCode > 0 and pressed == useCode then return "use" end
+	if selfOpen == true and type(invCode) == "number" and invCode > 0 and pressed == invCode then
+		return "inventory"
+	end
+	return nil
+end
+
 function L.Range(cfg)
 	cfg = type(cfg) == "table" and cfg or {}
 	return clamp(cfg.LootRange, 32, 512, 96)

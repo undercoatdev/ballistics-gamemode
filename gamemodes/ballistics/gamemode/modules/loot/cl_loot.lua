@@ -33,9 +33,13 @@ local drag
 local ghost
 local hold
 -- E closes an open window; after that (or after opening) E must be released
--- before a new hold can start.
+-- before a new hold can start. useSeen is true once the poll has observed
+-- the use key down during this open, so a swallowed poll is not a release.
 local useLatch = false
 local useWas = false
+local useSeen = false
+local onLootKeyPressed
+local onLootKeyReleased
 local ring = 0
 local hurtLatch = false
 local lastHp
@@ -361,7 +365,15 @@ local function closeWindow()
 		})
 	end
 	state = { open = false, note = "" }
+	useSeen = false
 	hideWindow()
+end
+
+-- Own inventory only. Looting someone else is left alone.
+function L.CloseSelf()
+	if state.open ~= true or state.self ~= true then return false end
+	closeWindow()
+	return true
 end
 
 local function inside(x, y, box)
@@ -815,6 +827,14 @@ local function ensureRoot()
 	function root:OnMouseReleased()
 		if drag then finishDrag() end
 	end
+	-- MakePopup keeps keyboard focus, so +use and the inventory bind never
+	-- reach PlayerBindPress. These run while the panel has that focus.
+	function root:OnKeyCodePressed(code)
+		if onLootKeyPressed then onLootKeyPressed(code) end
+	end
+	function root:OnKeyCodeReleased(code)
+		if onLootKeyReleased then onLootKeyReleased(code) end
+	end
 
 	local function card(title, side)
 		local pnl = vgui.Create("DPanel", root)
@@ -865,7 +885,8 @@ local function showWindow()
 	pnl:SetVisible(true)
 	pnl:SetMouseInputEnabled(true)
 	if pnl.MakePopup then pnl:MakePopup() end
-	if pnl.SetKeyboardInputEnabled then pnl:SetKeyboardInputEnabled(false) end
+	if pnl.SetKeyboardInputEnabled then pnl:SetKeyboardInputEnabled(true) end
+	if pnl.RequestFocus then pnl:RequestFocus() end
 	sizedW, sizedH = 0, 0
 	layout()
 	mark()
@@ -953,13 +974,16 @@ end
 
 local function applyState(nextState)
 	if type(nextState) ~= "table" then return end
+	local wasOpen = state.open == true
 	state = nextState
 	if state.open ~= true then
 		state.open = false
 		clearHold()
+		useSeen = false
 		hideWindow()
 		return
 	end
+	if not wasOpen then useSeen = false end
 	clearHold()
 	showWindow()
 end
@@ -968,9 +992,98 @@ function L.ApplyClientState(nextState)
 	applyState(nextState)
 end
 
+-- The popup eats +use and, while keyboard focus is held, input.IsKeyDown.
+-- Read the bound use key directly, and fall back to KEY_E (engine code 15).
+local function useCode()
+	local binding, code
+	if input and type(input.LookupBinding) == "function" then
+		local ok, name = pcall(input.LookupBinding, "+use", true)
+		if ok and type(name) == "string" then binding = name end
+	end
+	if input and type(input.GetKeyCode) == "function" and type(binding) == "string" and binding ~= "" then
+		local ok, got = pcall(input.GetKeyCode, binding)
+		if ok then code = got end
+	end
+	local fallback = KEY_E
+	if type(fallback) ~= "number" or fallback <= 0 then fallback = 15 end
+	return L.UseKeyCode(binding, code, fallback)
+end
+
+local function popupUseDown()
+	local code = useCode()
+	if code <= 0 or not input then return false end
+	if code >= (MOUSE_FIRST or 107) and code <= (MOUSE_LAST or 113) then
+		if type(input.IsMouseDown) ~= "function" then return false end
+		local ok, down = pcall(input.IsMouseDown, code)
+		return ok and down == true
+	end
+	if type(input.IsKeyDown) ~= "function" then return false end
+	local ok, down = pcall(input.IsKeyDown, code)
+	return ok and down == true
+end
+
+local function customizeCode()
+	local client = BALLISTICS.CKeyClient
+	if client and type(client.KeyCode) == "function" then
+		local code = client.KeyCode()
+		if type(code) == "number" and code > 0 then return code end
+	end
+	return KEY_C or 13
+end
+
+onLootKeyPressed = function(code)
+	if not windowOpen() then return end
+	-- Focus eats +menu_context and can eat IsKeyDown. Match the customize bind
+	-- here, close own inventory, then the same request the C key module sends.
+	if BALLISTICS.CKey and BALLISTICS.CKey.InventoryHandoff(state.self == true, code, customizeCode()) then
+		closeWindow()
+		local client = BALLISTICS.CKeyClient
+		if client and type(client.Press) == "function" then
+			client.Press((CurTime and CurTime()) or 0)
+		end
+		return
+	end
+	local which = L.FocusClose(state.self == true, code, useCode(), inventoryKey())
+	if which == "use" then
+		if useLatch then return end
+		useLatch = true
+		useWas = true
+		useSeen = true
+		closeWindow()
+		return
+	end
+	if which == "inventory" then
+		if invEdge then invEdge.down = true end
+		closeWindow()
+	end
+end
+
+onLootKeyReleased = function(code)
+	if not windowOpen() then return end
+	if code == useCode() then
+		useLatch = false
+		useWas = false
+	end
+	local inv = inventoryKey()
+	if invEdge and code == inv then invEdge.down = false end
+end
+
 local function thinkHold(ply)
+	if windowOpen() and type(L.WindowUse) == "function" then
+		local held = popupUseDown()
+		if held then useSeen = true end
+		local close, latch, was = L.WindowUse(true, held, useWas, useLatch, useSeen)
+		useLatch = latch
+		useWas = was
+		if close then
+			closeWindow()
+			useLatch = true
+			useWas = true
+		end
+		clearHold()
+		return
+	end
 	local useNow = useDown(ply)
-	local edge = useNow and not useWas
 	useWas = useNow
 	if useNow then
 		local tr0 = aimTrace(ply, L.Range(BALLISTICS.Config) + 16)
@@ -982,14 +1095,6 @@ local function thinkHold(ply)
 			valid(e0) and distTo(ply, e0) or -1, tostring(L.Range(BALLISTICS.Config))))
 	else
 		lastGate = nil
-	end
-	if windowOpen() then
-		if edge and not useLatch then
-			closeWindow()
-			useLatch = true
-		end
-		clearHold()
-		return
 	end
 	if useLatch then
 		if useNow then clearHold() return end
@@ -1097,7 +1202,7 @@ if hook and hook.Add then
 				layout()
 			end
 			if valid(root) then
-				if root.SetKeyboardInputEnabled then root:SetKeyboardInputEnabled(false) end
+				if root.SetKeyboardInputEnabled then root:SetKeyboardInputEnabled(true) end
 				root:SetMouseInputEnabled(true)
 			end
 			thinkDrag()

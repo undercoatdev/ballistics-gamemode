@@ -1,14 +1,17 @@
 -- Draw the slot price on TacRP's customize screen. TacRP_CreateCustomizeHUD
 -- walks the panel for TacRPAttSlot children and wraps PaintOver. Slots created
 -- later (the attachment list) are wrapped on the panel Think. Red means the
--- balance cannot cover that slot. A $balance label sits on the screen.
+-- balance cannot cover that slot.
+-- TacRP's Drop Weapon button is the bottom-centre DButton created in
+-- SWEP:CreateCustomizeHUD (cl_customize.lua). The hook runs after that button
+-- exists. Hide it and draw the live balance where it sat.
 
 BALLISTICS = BALLISTICS or {}
 BALLISTICS.AttPrice = BALLISTICS.AttPrice or {}
 
 if surface and surface.CreateFont then
 	surface.CreateFont("BallisticsAttPrice", { font = "Roboto", size = 14, weight = 700, antialias = true })
-	surface.CreateFont("BallisticsAttBalance", { font = "Roboto", size = 18, weight = 700, antialias = true })
+	surface.CreateFont("BallisticsAttBalance", { font = "Roboto", size = 22, weight = 700, antialias = true })
 end
 
 local COL_OK = Color(235, 235, 235)
@@ -119,12 +122,24 @@ local function moneyText()
 	return "$" .. tostring(balance())
 end
 
+local LABEL_W = 160
+local LABEL_H = 24
+
+local function placeMoney(lab)
+	if lab == nil or type(BALLISTICS.AttPrice.MoneyPlace) ~= "function" then return end
+	local sw = (ScrW and ScrW()) or 0
+	local sh = (ScrH and ScrH()) or 0
+	local x, y = BALLISTICS.AttPrice.MoneyPlace(sw, sh, LABEL_W, LABEL_H)
+	if type(lab.SetPos) == "function" then lab:SetPos(x, y) end
+	if type(lab.SetSize) == "function" then lab:SetSize(LABEL_W, LABEL_H) end
+end
+
 local function ensureLabel(root)
 	if not vgui or type(vgui.Create) ~= "function" then return end
 	if valid(root.BallisticsBalance) then
-		if type(root.BallisticsBalance.SetText) == "function" then
-			root.BallisticsBalance:SetText(moneyText())
-		end
+		local lab = root.BallisticsBalance
+		if type(lab.SetText) == "function" then lab:SetText(moneyText()) end
+		placeMoney(lab)
 		return
 	end
 	local lab = vgui.Create("DLabel", root)
@@ -133,18 +148,52 @@ local function ensureLabel(root)
 	if type(lab.SetFont) == "function" then lab:SetFont("BallisticsAttBalance") end
 	if type(lab.SetTextColor) == "function" then lab:SetTextColor(COL_BAL) end
 	if type(lab.SetText) == "function" then lab:SetText(moneyText()) end
-	local wide = 160
-	local x = 8
-	if ScrW then x = math.max(8, (tonumber(ScrW()) or 0) - wide - 16) end
-	if type(lab.SetPos) == "function" then lab:SetPos(x, 12) end
-	if type(lab.SetSize) == "function" then lab:SetSize(wide, 24) end
-	if type(lab.SetContentAlignment) == "function" then lab:SetContentAlignment(6) end
+	if type(lab.SetContentAlignment) == "function" then lab:SetContentAlignment(5) end
 	if type(lab.SetMouseInputEnabled) == "function" then lab:SetMouseInputEnabled(false) end
+	if type(lab.SetZPos) == "function" then lab:SetZPos(100) end
+	placeMoney(lab)
+end
+
+-- TacRP parents the Drop Weapon button on the customize panel. Hide it and
+-- drop its click so the weapon cannot be dropped from this screen.
+local function hideDrop(pnl)
+	if pnl == nil or pnl.BallisticsDropHidden == true then return end
+	if type(BALLISTICS.AttPrice.IsDropButton) ~= "function" then return end
+	local className
+	if type(pnl.GetClassName) == "function" then
+		local ok, name = pcall(pnl.GetClassName, pnl)
+		if ok then className = name end
+	end
+	local x, y, w, h = 0, 0, 0, 0
+	if type(pnl.GetPos) == "function" then
+		local ok, a, b = pcall(pnl.GetPos, pnl)
+		if ok then
+			x = tonumber(a) or 0
+			y = tonumber(b) or 0
+		end
+	end
+	if type(pnl.GetSize) == "function" then
+		local ok, a, b = pcall(pnl.GetSize, pnl)
+		if ok then
+			w = tonumber(a) or 0
+			h = tonumber(b) or 0
+		end
+	end
+	local sw = (ScrW and ScrW()) or 0
+	local sh = (ScrH and ScrH()) or 0
+	if not BALLISTICS.AttPrice.IsDropButton(className, x, y, w, h, sw, sh) then return end
+	pnl.BallisticsDropHidden = true
+	pnl.DoClick = function() end
+	pnl.DoRightClick = function() end
+	if type(pnl.SetVisible) == "function" then pcall(pnl.SetVisible, pnl, false) end
+	if type(pnl.SetMouseInputEnabled) == "function" then pcall(pnl.SetMouseInputEnabled, pnl, false) end
+	if type(pnl.SetKeyboardInputEnabled) == "function" then pcall(pnl.SetKeyboardInputEnabled, pnl, false) end
 end
 
 local function decorate(root)
 	walk(root, function(pnl)
 		if isSlot(pnl) then wrapSlot(pnl) end
+		hideDrop(pnl)
 	end, {})
 	ensureLabel(root)
 end

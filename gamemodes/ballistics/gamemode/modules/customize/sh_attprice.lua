@@ -2,6 +2,8 @@
 -- The price key is the first slot category that matches a prefix, not the
 -- attachment that is about to be installed. PrintName is only the fallback,
 -- so an Accessory slot that also lists perk_extendedmag stays an accessory.
+-- An empty detach is refused. A replace (detach that is part of fitting a
+-- different attachment in the same slot) is allowed and still costs the slot.
 -- Detach never refunds.
 
 BALLISTICS = BALLISTICS or {}
@@ -144,14 +146,66 @@ function P.Afford(price, balance)
 	return balance >= price
 end
 
--- ctx.detach skips the balance check. Location still applies:
--- BUY anywhere, or LIVE inside the own-flag radius.
+-- True when this customize call is the detach half of a replace.
+-- TacRP's menu does that as Detach(slot, true, true) before Attach. The hook
+-- itself only receives detach==true, so the weapon carries the mark.
+function P.IsReplace(wep, slot)
+	if wep == nil or wep == false then return false end
+	local kind = type(wep)
+	if kind ~= "table" and kind ~= "userdata" and kind ~= "Entity" and kind ~= "Weapon" then
+		return false
+	end
+	local mark = wep.BallisticsAttReplacing
+	if mark == true then return true end
+	if mark == nil or mark == false then return false end
+	return mark == slot
+end
+
+-- The Drop Weapon button is the DButton centred on the bottom of the customize
+-- screen. The news button sits at the top left, so it does not match.
+function P.IsDropButton(className, x, y, w, h, screenW, screenH)
+	if className ~= "DButton" then return false end
+	x = tonumber(x) or 0
+	y = tonumber(y) or 0
+	w = tonumber(w) or 0
+	h = tonumber(h) or 0
+	screenW = tonumber(screenW) or 0
+	screenH = tonumber(screenH) or 0
+	if w <= 0 or h <= 0 or screenW <= 0 or screenH <= 0 then return false end
+	local cx = x + w / 2
+	if math.abs(cx - screenW / 2) > 8 then return false end
+	if y < screenH * 0.75 then return false end
+	return true
+end
+
+-- Bottom-centre spot where the Drop Weapon button sat.
+function P.MoneyPlace(screenW, screenH, labelW, labelH)
+	local sw = tonumber(screenW) or 0
+	local sh = tonumber(screenH) or 0
+	local lw = tonumber(labelW) or 0
+	local lh = tonumber(labelH) or 0
+	if sw < 0 then sw = 0 end
+	if sh < 0 then sh = 0 end
+	if lw < 0 then lw = 0 end
+	if lh < 0 then lh = 0 end
+	local x = math.floor((sw - lw) / 2)
+	if x < 0 then x = 0 end
+	local y = math.floor(sh - lh - 8)
+	if y < 0 then y = 0 end
+	return x, y
+end
+
+-- ctx.detach with ctx.replace skips the balance check. Location still applies:
+-- BUY anywhere, or LIVE inside the own-flag radius. An empty detach is refused.
 function P.Gate(ctx)
 	if type(ctx) ~= "table" then return false, "Only at your objective" end
 	if ctx.alive == false then return false, "You are not alive." end
 	local place = ctx.phase == "buy" or (ctx.phase == "live" and ctx.inZone == true)
 	if not place then return false, "Only at your objective" end
-	if ctx.detach == true then return true end
+	if ctx.detach == true then
+		if ctx.replace ~= true then return false, "Can only replace" end
+		return true
+	end
 	local price = tonumber(ctx.price)
 	if price == nil or price ~= price or price < 0 or price == math.huge then
 		return false, "That slot has no price."
@@ -163,10 +217,9 @@ end
 
 -- Client prediction. TacRP calls CanCustomize from the shared CanAttach,
 -- which runs on the client before the predicted install and the net message.
--- Detach is always allowed here. Attach uses the same place and money rules
--- as Gate, with the balance taken from the local player's networked money.
+-- Empty detach is refused here too, so the menu does not strip a slot the
+-- server will keep. A replace detach uses the same place rules as Gate.
 function P.ClientDecide(ctx)
-	if type(ctx) == "table" and ctx.detach == true then return true end
 	return P.Gate(ctx)
 end
 

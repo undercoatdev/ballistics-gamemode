@@ -128,11 +128,29 @@ local function syncVisual(open)
 	attOpen = open == true
 end
 
+-- Code of +menu_context. Fallback is KEY_C when the bind lookup is empty.
+function BALLISTICS.CKeyClient.KeyCode()
+	local fallback = KEY_C
+	if type(fallback) ~= "number" or fallback <= 0 then fallback = 13 end
+	if input and type(input.LookupBinding) == "function" and type(input.GetKeyCode) == "function" then
+		local name = input.LookupBinding("+menu_context")
+		if type(name) == "string" and name ~= "" then
+			local code = input.GetKeyCode(name)
+			if type(code) == "number" and code > 0 then return code end
+		end
+	end
+	return fallback
+end
+
 function BALLISTICS.CKeyClient.Press(now)
 	if not (BALLISTICS.CKey and BALLISTICS.CKey.Press) then return false end
 	local fire, state = BALLISTICS.CKey.Press(pressState, now, true)
 	pressState = state
 	if not fire then return false end
+	-- The loot popup owns the keyboard. Close own inventory before the request
+	-- so the server is not asked while that window is up, and the menu can show.
+	local loot = BALLISTICS.Loot
+	if loot and type(loot.CloseSelf) == "function" then loot.CloseSelf() end
 	local wep = activeTac()
 	local open = menuOpen(wep)
 	local phase = clientPhase()
@@ -251,6 +269,9 @@ if CLIENT and hook and hook.Add then
 
 	hook.Add("Think", "Ballistics_CKey", function()
 		local now = (CurTime and CurTime()) or 0
+		-- Poll the key even while a loot window is open. MakePopup holds focus,
+		-- so PlayerBindPress does not run; IsKeyDown still can, and the panel
+		-- key handler is the path when focus swallows IsKeyDown.
 		BALLISTICS.CKeyClient.NoteKey(BALLISTICS.CKeyClient.ContextDown(), now)
 		BALLISTICS.CKeyClient.Monitor()
 	end)

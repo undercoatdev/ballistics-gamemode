@@ -141,11 +141,15 @@ check("a short balance cannot attach", ok == false and reason == "Not enough mon
 ok, reason = gate({ balance = 250 })
 check("an exact balance can attach", ok == true)
 ok, reason = gate({ balance = 0, detach = true })
-check("detach in the zone does not need money", ok == true and reason == nil)
+check("empty detach in the zone is refused", ok == false and reason == "Can only replace")
+ok, reason = gate({ balance = 0, detach = true, replace = true })
+check("replace detach in the zone does not need money", ok == true and reason == nil)
 ok, reason = gate({ inZone = false, detach = true, balance = 0 })
 check("detach outside the zone is refused", ok == false and reason == "Only at your objective")
 ok, reason = gate({ phase = "buy", inZone = false, detach = true, balance = 0 })
-check("detach during buy does not need money or the flag", ok == true)
+check("empty detach during buy is refused", ok == false and reason == "Can only replace")
+ok, reason = gate({ phase = "buy", inZone = false, detach = true, replace = true, balance = 0 })
+check("replace detach during buy does not need money or the flag", ok == true)
 ok, reason = gate({ alive = false })
 check("a dead player cannot attach", ok == false and reason == "You are not alive.")
 ok, reason = gate({ price = CLEAR })
@@ -172,9 +176,15 @@ local function client(over)
 end
 
 ok, reason = client({ inZone = false, balance = 0, detach = true })
-check("client detach is allowed outside the zone with no money", ok == true and reason == nil)
+check("client empty detach outside the zone is refused", ok == false and reason == "Only at your objective")
 ok, reason = client({ phase = "lobby", inZone = false, alive = false, balance = 0, price = 700, detach = true })
-check("client detach ignores phase, life, and price", ok == true and reason == nil)
+check("client empty detach while dead is refused", ok == false and reason == "You are not alive.")
+ok, reason = client({ phase = "live", inZone = true, alive = true, balance = 0, detach = true })
+check("client empty detach in the zone is refused", ok == false and reason == "Can only replace")
+ok, reason = client({ phase = "live", inZone = true, alive = true, balance = 0, detach = true, replace = true })
+check("client replace detach does not need money", ok == true and reason == nil)
+ok, reason = client({ phase = "buy", inZone = false, alive = true, balance = 0, detach = true, replace = true })
+check("client replace during buy does not need the flag", ok == true and reason == nil)
 ok, reason = P.Gate({ phase = "live", inZone = false, alive = true, balance = 0, price = 250, detach = true })
 check("the server still refuses that detach", ok == false and reason == "Only at your objective")
 ok, reason = client({ inZone = false, balance = 1000 })
@@ -201,6 +211,11 @@ check("a mismatched result does not charge", P.ShouldCharge(nil, "other", "optic
 check("charge amount is the slot price", P.ChargeAmount(nil, "optic_a", "optic_a", 250) == 250)
 check("no charge means zero", P.ChargeAmount("optic_a", "optic_a", "optic_a", 250) == 0)
 check("detach refunds nothing", P.RefundOnDetach(700) == 0 and P.RefundOnDetach(700, true) == 0)
+check("the drop button is the bottom centre DButton", P.IsDropButton("DButton", 934, 700, 52, 20, 1920, 720) == true)
+check("the news button is not the drop button", P.IsDropButton("DButton", 8, 8, 24, 24, 1920, 720) == false)
+check("a slot is not the drop button", P.IsDropButton("TacRPAttSlot", 934, 700, 52, 20, 1920, 720) == false)
+local mx, my = P.MoneyPlace(1920, 1080, 160, 24)
+check("customize money sits bottom centre", mx == 880 and my == 1048)
 check("refund stays off in config", BALLISTICS.Config.AttRefundOnDetach == false)
 check("unaffordable is the red case", P.Afford(250, 249) == false and P.Afford(250, 250) == true)
 
@@ -272,7 +287,10 @@ end
 ok, reason = BALLISTICS.AttPrice.Decide(ply, { Attachments = { [1] = optic } }, "optic_a", 1, false)
 check("decide allows a numbered slot in the zone", ok == true and reason == nil)
 ok, reason = BALLISTICS.AttPrice.Decide(ply, { Attachments = { [1] = optic } }, "optic_a", optic, true)
-check("decide allows detach when the slot is the table", ok == true)
+check("decide refuses an empty detach", ok == false and reason == "Can only replace")
+local replacing = { Attachments = { [1] = optic }, BallisticsAttReplacing = 1 }
+ok, reason = BALLISTICS.AttPrice.Decide(ply, replacing, "optic_a", 1, true)
+check("decide allows a marked replace detach", ok == true and reason == nil)
 check("the hook agrees", hook.Run("TacRP_CanCustomize", ply, { Attachments = { [1] = optic } }, "optic_a", 1, false) == true)
 
 ply.pos = { x = 250, y = 0, z = 0 }
@@ -302,7 +320,9 @@ BALLISTICS.Money.Spend(ply, 900)
 ok, reason = BALLISTICS.AttPrice.Decide(ply, { Attachments = { [1] = optic } }, "optic_a", 1, false)
 check("a broke player cannot attach", ok == false and reason == "Not enough money" and BALLISTICS.Money.Get(ply) == 100)
 ok, reason = BALLISTICS.AttPrice.Decide(ply, { Attachments = { [1] = optic } }, "optic_a", 1, true)
-check("a broke player can still detach in the zone", ok == true and BALLISTICS.Money.Get(ply) == 100)
+check("a broke player cannot detach to empty", ok == false and reason == "Can only replace" and BALLISTICS.Money.Get(ply) == 100)
+ok, reason = BALLISTICS.AttPrice.Decide(ply, replacing, "optic_a", 1, true)
+check("a broke player can replace in the zone", ok == true and reason == nil and BALLISTICS.Money.Get(ply) == 100)
 
 local brokeGun = gun({ [1] = { PrintName = "Optic", Category = "optic_cqb", Installed = nil } })
 hook.Run("WeaponEquip", brokeGun, ply)
@@ -345,6 +365,52 @@ ply.alive = false
 ok, reason = BALLISTICS.AttPrice.Decide(ply, opticGun, "optic_a", 1, false)
 check("decide blocks a dead player", ok == false and reason == "You are not alive.")
 ply.alive = true
+
+BALLISTICS.Money.Reset()
+ply.pos = { x = 0, y = 0, z = 0 }
+phaseName = "live"
+local function gatedGun(installed)
+	local wep = {
+		ArcticTacRP = true,
+		Attachments = {
+			[1] = { PrintName = "Optic", Category = "optic_cqb", Installed = installed },
+		},
+	}
+	function wep:IsValid() return true end
+	function wep:GetOwner() return ply end
+	function wep:CanAttach(slot, att)
+		return BALLISTICS.AttPrice.Decide(ply, self, att, slot, false) == true
+	end
+	function wep:CanDetach(slot)
+		local row = self.Attachments[slot]
+		return BALLISTICS.AttPrice.Decide(ply, self, row and row.Installed, slot, true) == true
+	end
+	function wep:Detach(slot)
+		if not self:CanDetach(slot) then return false end
+		self.Attachments[slot].Installed = nil
+		return true
+	end
+	function wep:Attach(slot, att)
+		if self.Attachments[slot].Installed then return end
+		if not self:CanAttach(slot, att) then return end
+		self.Attachments[slot].Installed = att
+	end
+	return wep
+end
+local gated = gatedGun("optic_a")
+hook.Run("WeaponEquip", gated, ply)
+local gatedBefore = BALLISTICS.Money.Get(ply)
+gated:Detach(1)
+check("plain detach leaves the attachment", gated.Attachments[1].Installed == "optic_a" and BALLISTICS.Money.Get(ply) == gatedBefore)
+gated:Detach(1, true)
+check("a silent detach is not a replace", gated.Attachments[1].Installed == "optic_a" and BALLISTICS.Money.Get(ply) == gatedBefore)
+gated:Attach(1, "optic_b")
+check("replacing an occupied slot installs and charges", gated.Attachments[1].Installed == "optic_b" and BALLISTICS.Money.Get(ply) == gatedBefore - 250)
+BALLISTICS.Money.Spend(ply, BALLISTICS.Money.Get(ply) - 50)
+local brokeReplace = BALLISTICS.Money.Get(ply)
+gated:Attach(1, "optic_c")
+check("a broke replace does not strip the slot", gated.Attachments[1].Installed == "optic_b" and BALLISTICS.Money.Get(ply) == brokeReplace)
+BALLISTICS.Money.Reset()
 
 local serverSrc = readAll("gamemodes/ballistics/gamemode/modules/customize/sv_attprice.lua")
 check("the server does not refund a detach", not serverSrc:find("Money.Refund", 1, true))
@@ -493,8 +559,17 @@ money = 0
 ply.alive = false
 nwPhase = "lobby"
 ok, reason = BALLISTICS.AttPrice.Predict(ply, { Attachments = { [1] = optic } }, "optic_a", 1, true)
-check("predicted detach is allowed when broke, dead, and outside", ok == true and reason == nil)
+check("predicted empty detach is refused when dead", ok == false and reason == "You are not alive.")
 ply.alive = true
+nwPhase = "live"
+ply.pos = { x = 0, y = 0, z = 0 }
+local marked = { Attachments = { [1] = optic }, BallisticsAttReplacing = 1 }
+ok, reason = BALLISTICS.AttPrice.Predict(ply, marked, "optic_a", 1, true)
+check("predicted replace detach is allowed in the zone with no money", ok == true and reason == nil)
+marked.BallisticsAttReplacing = nil
+ok, reason = BALLISTICS.AttPrice.Predict(ply, marked, "optic_a", 1, true)
+check("predicted empty detach is refused in the zone", ok == false and reason == "Can only replace")
+nwPhase = "lobby"
 ok, reason = BALLISTICS.AttPrice.Predict(ply, { Attachments = { [1] = optic } }, "optic_a", 1, false)
 check("predicted attach in the lobby does not happen", ok == false and reason == "Only at your objective")
 
@@ -502,6 +577,33 @@ local gateSrc = readAll("gamemodes/ballistics/gamemode/modules/customize/cl_attg
 check("the client hook is TacRP_CanCustomize", gateSrc:find("TacRP_CanCustomize", 1, true) ~= nil)
 check("the client hook reads bal_money", gateSrc:find("bal_money", 1, true) ~= nil)
 check("the client hook does not read the server ledger", not gateSrc:find("Money.Get", 1, true))
+check("the client holds a replace detach until attach", gateSrc:find("BallisticsPendingReplace", 1, true) ~= nil)
+
+local swaps = 0
+local sawReplace = false
+local fake = {
+	ArcticTacRP = true,
+	Attachments = { [1] = { Installed = "optic_a" } },
+}
+function fake:CanAttach() return self.allow == true end
+function fake:Detach(slot)
+	swaps = swaps + 1
+	sawReplace = self.BallisticsAttReplacing == slot
+	self.Attachments[slot].Installed = nil
+end
+function fake:Attach(slot, att)
+	if self.Attachments[slot].Installed then return end
+	self.Attachments[slot].Installed = att
+end
+BALLISTICS.AttPrice.WrapClient(fake)
+fake.allow = false
+fake:Detach(1, true, true)
+fake:Attach(1, "optic_b")
+check("a refused replace does not strip", fake.Attachments[1].Installed == "optic_a" and swaps == 0)
+fake.allow = true
+fake:Detach(1, true, true)
+fake:Attach(1, "optic_b")
+check("an allowed replace detaches then installs", fake.Attachments[1].Installed == "optic_b" and swaps == 1 and sawReplace == true)
 
 -- Knife slots: Technique 300, Special 500, Boost 500.
 check("melee_tech costs 300", BALLISTICS.AttPrice.Cost({ Category = "melee_tech" }) == 300)

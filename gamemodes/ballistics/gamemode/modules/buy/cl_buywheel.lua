@@ -138,6 +138,27 @@ local function configuredCap(name, fallback)
 	return n
 end
 
+local function medCap()
+	local max = configuredCap("MedsMax", 3)
+	if BALLISTICS.MedMax then
+		local pbMax = tonumber(BALLISTICS.MedMax()) or 0
+		if pbMax < max then max = pbMax end
+	end
+	if max < 0 then max = 0 end
+	return math.floor(max)
+end
+
+local function medHave(item)
+	local ply = localPly()
+	local pb = PLAYER_BALLISTICS
+	if pb and type(pb.MedAvailable) == "function" and ply and type(item) == "table" then
+		local n = tonumber(pb.MedAvailable(ply, item.id)) or 0
+		if n ~= n or n < 0 then return 0 end
+		return math.floor(n)
+	end
+	return 0
+end
+
 local function ammoCount(ammoType)
 	local ply = localPly()
 	if not ply or type(ply.GetAmmoCount) ~= "function" then return 0 end
@@ -153,15 +174,8 @@ local function clientCtx(item)
 	local medMax, medCount = 0, 0
 	local grenadeMax, grenadeCount = nil, 0
 	if item.kind == "med" then
-		medMax = configuredCap("MedsMax", 3)
-		if BALLISTICS.MedMax then
-			local pbMax = tonumber(BALLISTICS.MedMax()) or 0
-			if pbMax < medMax then medMax = pbMax end
-		end
-		local pb = PLAYER_BALLISTICS
-		if pb and type(pb.MedAvailable) == "function" and ply then
-			medCount = tonumber(pb.MedAvailable(ply, item.id)) or 0
-		end
+		medMax = medCap()
+		medCount = medHave(item)
 	elseif item.kind == "nade" then
 		grenadeMax = configuredCap("GrenadesMax", 3)
 		grenadeCount = ammoCount(item.ammo)
@@ -557,22 +571,31 @@ local function freshCount(item)
 	return math.floor(n)
 end
 
--- Bought this phase, still in hand, and not the knife.
-local function sellable(item)
-	if type(item) ~= "table" then return false end
-	local knife = (BALLISTICS.Sell and BALLISTICS.Sell.KNIFE) or "tacrp_knife"
-	if item.class == knife or item.key == knife then return false end
-	if freshCount(item) < 1 then return false end
-	local ply = localPly()
-	if item.kind == "weapon" then return owns(item.class) == true end
-	if item.kind == "nade" then return ammoCount(item.ammo) > 0 end
-	if item.kind == "med" then
-		local pb = PLAYER_BALLISTICS
-		if pb and type(pb.MedAvailable) == "function" and ply then
-			return (tonumber(pb.MedAvailable(ply, item.id)) or 0) > 0
+-- Left click: buy, unless a gun was bought this phase or a stack is at its cap
+-- and at least one of that stack was bought this phase.
+local function leftAction(item)
+	local have, cap = 0, 0
+	if type(item) ~= "table" then return "buy", 0, 0 end
+	if item.kind == "nade" then
+		have = ammoCount(item.ammo)
+		cap = configuredCap("GrenadesMax", 3)
+	elseif item.kind == "med" then
+		have = medHave(item)
+		cap = medCap()
+	end
+	local ownedGun = false
+	if item.kind == "weapon" then
+		local knife = (BALLISTICS.Sell and BALLISTICS.Sell.KNIFE) or "tacrp_knife"
+		if item.class ~= knife and item.key ~= knife then
+			ownedGun = owns(item.class) == true
 		end
 	end
-	return false
+	local action = "buy"
+	if BALLISTICS.Buy and type(BALLISTICS.Buy.LeftAction) == "function" then
+		action = BALLISTICS.Buy.LeftAction(item.kind, have, cap, freshCount(item), ownedGun)
+	end
+	if action ~= "sell" then action = "buy" end
+	return action, have, cap
 end
 
 local function paintItem(self, w, h)
@@ -580,7 +603,9 @@ local function paintItem(self, w, h)
 	local price = BALLISTICS.Catalog and BALLISTICS.Catalog.Price and BALLISTICS.Catalog.Price(item.key) or nil
 	local owned = item.kind == "weapon" and owns(item.class)
 	local full = item.kind == "weapon" and not owned and slotsFull(item)
-	local afford = type(price) == "number" and moneyOf() >= price and not owned and not full
+	local action, have, cap = leftAction(item)
+	local selling = action == "sell"
+	local afford = type(price) == "number" and moneyOf() >= price and not owned and not full and not selling
 	local hover = self.Hovered == true
 	if hover then
 		surface.SetDrawColor(52, 64, 82, 255)
@@ -600,9 +625,19 @@ local function paintItem(self, w, h)
 	surface.DrawOutlinedRect(0, 0, w, h)
 	local name = item.name or item.key or ""
 	draw.SimpleText(name, "BallisticsBuy", 12, 18, Color(235, 235, 235), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+	if item.kind == "nade" or item.kind == "med" then
+		local label = "0 / 0"
+		if BALLISTICS.Buy and type(BALLISTICS.Buy.StackCount) == "function" then
+			label = BALLISTICS.Buy.StackCount(have, cap)
+		end
+		local iconX = iconRect(w, h)
+		local alignR = TEXT_ALIGN_RIGHT or 2
+		local alignC = TEXT_ALIGN_CENTER or 1
+		draw.SimpleText(label, "BallisticsBuySmall", iconX - 8, 18, Color(186, 198, 214), alignR, alignC)
+	end
 	local priceText = "—"
 	local priceCol = Color(190, 80, 80)
-	if sellable(item) then
+	if selling then
 		local n = math.floor(tonumber(price) or 0)
 		if n < 0 then n = 0 end
 		priceText = "Sell  +$" .. tostring(n)
@@ -640,7 +675,8 @@ local function refill()
 		btn.Paint = paintItem
 		if btn.SetKeyboardInputEnabled then btn:SetKeyboardInputEnabled(false) end
 		btn.DoClick = function()
-			if sellable(item) then
+			local action = leftAction(item)
+			if action == "sell" then
 				if BALLISTICS.Sell and type(BALLISTICS.Sell.Send) == "function" then
 					BALLISTICS.Sell.Send(item)
 				end
@@ -648,7 +684,7 @@ local function refill()
 			end
 			tryBuy(item)
 		end
-		-- Right-click sells an owned item back (buy phase, server checks).
+		-- Right-click sells one any time (buy phase, server checks).
 		btn.DoRightClick = function()
 			if BALLISTICS.Sell and BALLISTICS.Sell.Send then BALLISTICS.Sell.Send(item) end
 		end
