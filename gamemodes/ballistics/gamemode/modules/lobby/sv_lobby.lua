@@ -52,16 +52,8 @@ if BALLISTICS.Net and BALLISTICS.Net.Register then
 		end
 	end, { rate = 2 })
 
-	-- F2 (gm_showteam) calls GM:ShowTeam server-side; tell that client to open the lobby.
-	BALLISTICS.Net.Register("bal_lobby_open")
-	function GM:ShowTeam(ply)
-		BALLISTICS.Net.Send("bal_lobby_open", ply)
-	end
-
-	-- F3 (gm_showspare1) toggles the ADMIN window. The client checks admin.
-	BALLISTICS.Net.Register("bal_admin_toggle")
-	function GM:ShowSpare1(ply)
-		if BALLISTICS.IsAdmin and not BALLISTICS.IsAdmin(ply) then return end
-		BALLISTICS.Net.Send("bal_admin_toggle", ply)
-	end
+	-- F2/F3 are polled on the client (modules/fkeys); these binds do nothing
+	-- here so a press never toggles a window twice.
+	function GM:ShowTeam(ply) end
+	function GM:ShowSpare1(ply) end
 end

@@ -174,9 +174,7 @@ function K.Rows(binds)
 		line(binds.blindfire or "H", "Blindfire menu"),
 		line(binds.safety or "E", "Safety / melee"),
 		line(binds.teams or "F2", "Teams (lobby)"),
-		line("1", "Knife"),
-		line("2", "Gun"),
-		line("3", "Gun"),
+		line("1 2 3", "Weapons"),
 	}
 	if binds.isAdmin == true then
 		rows[#rows + 1] = line(binds.admin or "F3", "Admin")
