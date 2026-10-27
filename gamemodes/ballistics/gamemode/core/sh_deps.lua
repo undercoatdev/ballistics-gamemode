@@ -66,5 +66,5 @@ end
 -- once Initialize has run; at file load just record the current state.
 BALLISTICS.BuyDisabled = (TacRP == nil)
 if hook and hook.Add then
-	hook.Add("Initialize", "Ballistics_Deps", checkTacRP)
+	hook.Add("Initialize", "Ballistics_Deps", function() checkTacRP() end) -- never return a value: it would stop later hooks (TacRP indexes quick nades here)
 end

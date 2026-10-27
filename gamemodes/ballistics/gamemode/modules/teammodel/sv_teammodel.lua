@@ -36,7 +36,7 @@ end
 
 T.Wrap()
 if hook and hook.Add then
-	hook.Add("InitPostEntity", "Ballistics_TeamModel", T.Wrap)
+	hook.Add("InitPostEntity", "Ballistics_TeamModel", function() T.Wrap() end) -- never return a value: it would stop later hooks (TacRP indexes quick nades here)
 	-- Belt and braces: re-apply just after PB's own next-tick timer.
 	hook.Add("PlayerSpawn", "Ballistics_TeamModel", function(ply)
 		T.Wrap()

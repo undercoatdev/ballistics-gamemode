@@ -94,8 +94,8 @@ if cvars and type(cvars.AddChangeCallback) == "function" then
 end
 
 if hook and hook.Add then
-	hook.Add("Initialize", "Ballistics_AmmoMode", arm)
-	hook.Add("InitPostEntity", "Ballistics_AmmoMode", arm)
+	hook.Add("Initialize", "Ballistics_AmmoMode", function() arm() end) -- never return a value: it would stop later hooks (TacRP indexes quick nades here)
+	hook.Add("InitPostEntity", "Ballistics_AmmoMode", function() arm() end) -- never return a value: it would stop later hooks (TacRP indexes quick nades here)
 	hook.Add("ShutDown", "Ballistics_AmmoMode", restore)
 	hook.Add("Ballistics_PhaseChanged", "Ballistics_AmmoMode", function()
 		BALLISTICS.Ammo.ApplyConVar()

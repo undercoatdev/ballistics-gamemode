@@ -36,7 +36,7 @@ end
 function N.Running() return running end
 
 if hook and hook.Add then
-	hook.Add("InitPostEntity", "Ballistics_NoAutosave", N.Force)
+	hook.Add("InitPostEntity", "Ballistics_NoAutosave", function() N.Force() end) -- never return a value: it would stop later hooks (TacRP indexes quick nades here)
 	hook.Add("ShutDown", "Ballistics_NoAutosave", N.Restore)
 end
 if timer and timer.Create then

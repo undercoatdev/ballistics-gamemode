@@ -36,7 +36,7 @@ function H.Wrap()
 end
 
 if hook and hook.Add then
-	hook.Add("InitPostEntity", "Ballistics_HudHideWrap", H.Wrap)
+	hook.Add("InitPostEntity", "Ballistics_HudHideWrap", function() H.Wrap() end) -- never return a value: it would stop later hooks (TacRP indexes quick nades here)
 end
 -- Mods add HUDPaint hooks late or re-add them; rewrap every second.
 if timer and timer.Create then

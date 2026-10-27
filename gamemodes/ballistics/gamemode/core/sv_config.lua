@@ -51,7 +51,7 @@ applyHealthMode()
 -- Addon autoruns (Body Damage) load after the gamemode, so its convar may not
 -- exist yet at file load. Apply again once everything is up.
 if hook and hook.Add then
-	hook.Add("InitPostEntity", "Ballistics_HealthMode", applyHealthMode)
+	hook.Add("InitPostEntity", "Ballistics_HealthMode", function() applyHealthMode() end) -- never return a value: it would stop later hooks (TacRP indexes quick nades here)
 end
 
 if BALLISTICS.Net and BALLISTICS.Net.Register then
