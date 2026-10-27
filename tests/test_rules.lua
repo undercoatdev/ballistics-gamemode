@@ -74,7 +74,7 @@ local generalPaths = {
 	"RoundTime", "BuyTime", "PostRoundTime", "StartMoney", "MaxMoney",
 	"HealedUpOrgans",
 	"CaptureTimeOne", "CaptureTimeTwo", "CaptureDecay", "CaptureContestedFreeze",
-	"ObjectiveRadius", "CustomizeRadius", "BuyAmmoMags", "MedsMax", "GrenadesMax",
+	"ObjectiveRadius", "CustomizeRadius", "BuyAmmoMags", "MedsMax", "GrenadesMax", "BulletPushForce",
 }
 local generalOk = #general == #generalPaths
 for i = 1, #generalPaths do
