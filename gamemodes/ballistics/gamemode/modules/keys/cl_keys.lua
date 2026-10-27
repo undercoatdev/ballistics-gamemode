@@ -125,11 +125,62 @@ local function bindLabel(command, fallback)
 	return fallback
 end
 
+local function backupCode()
+	local code = type(K.DeadBackup) == "function" and K.DeadBackup(keyDown) or 101
+	code = tonumber(code)
+	if not code or code ~= code or code <= 0 then code = 101 end
+	return math.floor(code)
+end
+
+local function grenadeFallback()
+	if BALLISTICS.Keys.ThrowKey then
+		return keyLabel(BALLISTICS.Keys.ThrowKey(), "!")
+	end
+	return "!"
+end
+
+-- TacRP.GetBind uppercases GetKeyName(GRENADE*_Backup) when the command is
+-- unbound. A nameless backup (KEY_NONE) throws inside the weapon HUD.
+local function guardBind(orig)
+	return function(binding)
+		if binding == "+grenade1" or binding == "+grenade2" then
+			local bound = lookup(binding)
+			if type(bound) ~= "string" or bound == "" then
+				local code = binding == "+grenade1" and TacRP.GRENADE1_Backup or TacRP.GRENADE2_Backup
+				local namer = input and input.GetKeyName
+				if type(K.BackupLabel) == "function" then
+					return K.BackupLabel(code, namer, grenadeFallback())
+				end
+				return grenadeFallback()
+			end
+		end
+		if type(orig) ~= "function" then return "!" end
+		local ok, result = pcall(orig, binding)
+		if ok and type(result) == "string" and result ~= "" then return result end
+		return "!"
+	end
+end
+
+local function tryWrapBind()
+	if type(TacRP) ~= "table" then return end
+	local function wrap(field)
+		local fn = TacRP[field]
+		if type(fn) ~= "function" or wrapped[fn] then return end
+		local guard = guardBind(fn)
+		wrapped[guard] = true
+		TacRP[field] = guard
+	end
+	wrap("GetBind")
+	wrap("GetBindKey")
+end
+
 local function pointBackup()
 	if type(TacRP) ~= "table" or type(K.DeadBackup) ~= "function" then return end
-	TacRP.GRENADE1_Backup = K.DeadBackup(keyDown)
+	local code = backupCode()
+	TacRP.GRENADE1_Backup = code
 	-- H was TacRP's fallback for the grenade wheel; point it at a dead key too.
-	TacRP.GRENADE2_Backup = K.DeadBackup(keyDown)
+	TacRP.GRENADE2_Backup = code
+	tryWrapBind()
 end
 
 local function armHints()
@@ -395,3 +446,4 @@ if hook and hook.Add then
 end
 
 armHints()
+pointBackup()
