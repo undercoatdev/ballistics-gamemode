@@ -61,6 +61,7 @@ function S.Request(ply, key)
 	})
 	if not plan.ok then return false, plan.err end
 	if not takeOne(ply, item) then return false, "take" end
+	if BALLISTICS.Buy and BALLISTICS.Buy.Unrecord then BALLISTICS.Buy.Unrecord(ply, item) end
 	if plan.refund > 0 and BALLISTICS.Money and BALLISTICS.Money.Refund then
 		BALLISTICS.Money.Refund(ply, plan.refund)
 	end

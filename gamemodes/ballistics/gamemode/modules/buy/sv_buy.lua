@@ -320,6 +320,13 @@ local function cleanKey(key)
 	return key
 end
 
+-- Sell-back undoes this phase's buy counters for the item.
+function BALLISTICS.Buy.Unrecord(ply, item)
+	local id = playerId(ply)
+	if not id or not (BALLISTICS.Sell and BALLISTICS.Sell.Unbuy) then return end
+	BALLISTICS.Sell.Unbuy(record(id), item)
+end
+
 function BALLISTICS.Buy.Request(ply, key)
 	if not (BALLISTICS.IsPlayer and BALLISTICS.IsPlayer(ply)) then return false, "player" end
 	local id = playerId(ply)

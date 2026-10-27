@@ -15,4 +15,11 @@ c.have = 2; c.item = { kind = "med", key = "bandage" }; c.price = 300
 check("meds ignore attachment refund", S.Plan(c).refund == 300)
 c.alive = false; check("dead cannot sell", S.Plan(c).err == "player")
 check("label", S.Label(500) == "+$500")
+local row = { weapons = 1, nades = { frag = 2 } }
+S.Unbuy(row, gun); S.Unbuy(row, gun)
+check("weapon buys go down, never below 0", row.weapons == 0)
+S.Unbuy(row, { kind = "nade", key = "frag" })
+check("grenade count goes down by one", row.nades.frag == 1)
+S.Unbuy(row, { kind = "nade", key = "frag" }); S.Unbuy(row, { kind = "nade", key = "frag" })
+check("grenade count stops at 0", (row.nades.frag or 0) == 0)
 if failed then os.exit(1) end

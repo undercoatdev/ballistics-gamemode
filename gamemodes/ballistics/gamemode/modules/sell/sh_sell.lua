@@ -26,3 +26,15 @@ end
 function S.Label(amount)
 	return "+$" .. tostring(math.floor(tonumber(amount) or 0))
 end
+
+-- Undo one buy of this item in this phase's BuyLimits row, never below 0.
+function S.Unbuy(row, item)
+	if type(row) ~= "table" or type(item) ~= "table" then return row end
+	if item.kind == "weapon" then
+		row.weapons = math.max(0, (tonumber(row.weapons) or 0) - 1)
+	elseif item.kind == "nade" and type(row.nades) == "table" and item.key then
+		local n = math.max(0, (tonumber(row.nades[item.key]) or 0) - 1)
+		row.nades[item.key] = n > 0 and n or nil
+	end
+	return row
+end
