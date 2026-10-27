@@ -510,11 +510,16 @@ hook.Add("PostDrawTranslucentRenderables", "Ballistics_FlagRings", function(_, s
 	drawSliceRect()
 end)
 
+-- When a cut is active, draw from just UNDER the plane so Source's PVS
+-- includes basement / tunnel leaves (a high sky camera never sees them).
+-- The clip plane still removes everything above the cut.
 local function cameraView()
-	-- Close zooms stay above the floor (zoom keeps cam.z at least 200 over groundZ),
-	-- so a fixed near plane never swallows it. Far plane reaches the whole map.
+	local z = cam.z
+	if sliceActive() and finiteNum(sliceZ) then
+		z = sliceZ - 16
+	end
 	return {
-		origin = Vector(cam.x, cam.y, cam.z),
+		origin = Vector(cam.x, cam.y, z),
 		angles = Angle(90, cam.yaw or 0, 0),
 		fov = 90,
 		znear = 0.1,
@@ -648,10 +653,16 @@ local function placeAtCursor()
 	local mask = MASK_SOLID_BRUSHONLY or 16395
 	-- Same camera CalcView / RenderScene draw with. gui.ScreenToVector follows the
 	-- engine view, which disagrees once a clip plane is pushed.
-	local dir = D.AimDir(Angle(90, cam.yaw or 0, 0), 90, mx, my, sw, sh)
+	local ang = Angle(90, cam.yaw or 0, 0)
+	local dir = D.AimDir(ang, 90, mx, my, sw, sh)
 	if not dir then return end
-	local origin = Vector(cam.x, cam.y, cam.z)
+	-- Same origin the view uses, so clicks land under the cursor.
+	local viewZ = cam.z
+	if sliceActive() and finiteNum(sliceZ) then viewZ = sliceZ - 16 end
+	local origin = Vector(cam.x, cam.y, viewZ)
 	dir = Vector(dir.x, dir.y, dir.z)
+	-- Force the ray downward so a shallow screen-edge AimDir still hits a floor.
+	if dir.z > -0.05 then dir = Vector(dir.x, dir.y, -1) end
 	local startPos, endPos = clipTrace(origin, origin + dir * 200000)
 	if not startPos or not endPos then return end
 	local tr = util.TraceLine({
@@ -659,7 +670,8 @@ local function placeAtCursor()
 		endpos = endPos,
 		mask = mask,
 	})
-	if not tr or not tr.Hit or tr.HitSky or not tr.HitPos then return end
+	if not tr or not tr.Hit or not tr.HitPos then return end
+	if tr.HitSky and not sliceActive() then return end
 	if side == "box" then
 		local lift = (D.BOX_HEIGHT or 128) * 0.5
 		send(D.OP_BOX, 0, {

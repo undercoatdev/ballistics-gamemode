@@ -634,7 +634,8 @@ end
 -- Screen ray for the overhead camera. fov is horizontal, matching util.AimVector
 -- and CalcView. (0,0) is the top-left. Pitch 90 aims the centre straight down.
 function D.AimDir(angles, fov, mx, my, sw, sh)
-	if type(angles) ~= "table" then return nil end
+	local at = type(angles)
+	if at ~= "table" and at ~= "Angle" and at ~= "userdata" then return nil end
 	sw, sh = tonumber(sw), tonumber(sh)
 	if not sw or not sh or sw <= 0 or sh <= 0 then return nil end
 	mx, my = tonumber(mx) or 0, tonumber(my) or 0

@@ -291,10 +291,16 @@ local function paintColumn(x, y, w, h, teamId, rows)
 	local shown = #rows
 	if shown > maxRows then shown = maxRows end
 	local nameW = killsX - (x + 10) - 8
+	if nameW < 40 then nameW = math.max(40, math.floor(w * 0.4)) end
 	for i = 1, shown do
 		local row = rows[i]
 		local ink = (row.alive == false) and COL_DEAD or COL_TEXT
-		local name = clip(FONT_ROW, row.name, nameW)
+		local rawName = row.name
+		if (rawName == nil or rawName == "") and row.ply then
+			rawName = (type(S.PlayerName) == "function" and S.PlayerName(row.ply)) or ""
+		end
+		local name = clip(FONT_ROW, rawName, nameW)
+		if name == "" and rawName and rawName ~= "" then name = tostring(rawName):sub(1, 12) end
 		paintText(name, FONT_ROW, x + 10, rowY, ink, LEFT)
 		paintText(row.kills, FONT_ROW, killsX, rowY, ink, RIGHT)
 		paintText(row.deaths, FONT_ROW, deathsX, rowY, ink, RIGHT)

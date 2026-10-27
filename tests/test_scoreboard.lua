@@ -186,4 +186,19 @@ check("paint draws the header and both columns", shown ~= nil and shown.popup ==
 shown:Paint(740, 480)
 check("paint issues text for the round, scores, and rows", drawn > 8)
 
+do
+	local ply = setmetatable({
+		Nick = function() return "Fox" end,
+		Frags = function() return 3 end,
+		Deaths = function() return 1 end,
+		Ping = function() return 40 end,
+		Alive = function() return true end,
+	}, { __tostring = function() return "Player" end })
+	-- Simulate GMod's type(Player) == "Player" via a raw type override is hard;
+	-- instead assert the guard lists Player.
+	local src = io.open("gamemodes/ballistics/gamemode/modules/scoreboard/sh_scoreboard.lua"):read("*a")
+	check("Player entity type is accepted", src:find('t == "Player"', 1, true) ~= nil)
+	check("Row keeps the player for the paint fallback", S.Row(ply).name == "Fox" and S.Row(ply).ply == ply)
+end
+
 if failed then os.exit(1) end

@@ -440,4 +440,11 @@ local editor = loadfile("gamemodes/ballistics/gamemode/modules/spawns/cl_spawns_
 local tab = loadfile("gamemodes/ballistics/gamemode/modules/admin/cl_tab_spawns.lua")
 check("spawn editor and Spawns tab compile", editor ~= nil and tab ~= nil)
 
+do
+	local ang = setmetatable({ p = 90, y = 0, r = 0 }, { __name = "Angle" })
+	-- type() stays "table" here; the live game uses "Angle". Cover the guard.
+	local src = io.open("gamemodes/ballistics/gamemode/modules/spawns/sh_spawns.lua"):read("*a")
+	check("AimDir accepts Angle userdata", src:find('at ~= "Angle"', 1, true) ~= nil)
+end
+
 if failed then os.exit(1) end

@@ -84,8 +84,13 @@ function S.MatchFrom(snapshot, nwRound, nwGood, nwBad, roundsToWin)
 	return S.Header(round, roundsToWin, good, bad)
 end
 
+local function isPly(ply)
+	local t = type(ply)
+	return t == "table" or t == "userdata" or t == "Player" or t == "Entity"
+end
+
 function S.PlayerName(ply)
-	if type(ply) ~= "table" and type(ply) ~= "userdata" then return "" end
+	if not isPly(ply) then return "" end
 	local methods = { "Nick", "Name", "GetName" }
 	for i = 1, #methods do
 		local fn = ply[methods[i]]
@@ -100,7 +105,7 @@ function S.PlayerName(ply)
 end
 
 function S.FragCount(ply)
-	if type(ply) ~= "table" and type(ply) ~= "userdata" then return 0 end
+	if not isPly(ply) then return 0 end
 	if type(ply.Frags) == "function" then
 		local ok, n = pcall(ply.Frags, ply)
 		local v = ok and finite(n) or nil
@@ -118,7 +123,7 @@ function S.FragCount(ply)
 end
 
 local function stat(ply, method, field)
-	if type(ply) ~= "table" and type(ply) ~= "userdata" then return 0 end
+	if not isPly(ply) then return 0 end
 	if type(ply[method]) == "function" then
 		local ok, n = pcall(ply[method], ply)
 		local v = ok and finite(n) or nil
@@ -139,7 +144,7 @@ end
 
 function S.Row(ply)
 	local alive = true
-	if type(ply) == "table" or type(ply) == "userdata" then
+	if isPly(ply) then
 		if type(ply.Alive) == "function" then
 			local ok, v = pcall(ply.Alive, ply)
 			if ok then alive = v == true end
@@ -153,6 +158,7 @@ function S.Row(ply)
 		deaths = stat(ply, "Deaths", "deaths"),
 		ping = stat(ply, "Ping", "ping"),
 		alive = alive,
+		ply = ply,
 	}
 end
 
