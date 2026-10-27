@@ -62,7 +62,7 @@ check("slot3 and slot4 are not loadout slots", L.BindSlot("slot3") == nil and L.
 check("Toggle equips the gun in that slot", L.Toggle({ "tacrp_ak", "tacrp_pistol" }, "tacrp_knife", "tacrp_knife", 1) == "tacrp_ak")
 check("Toggle holsters the active gun to the knife", L.Toggle({ "tacrp_ak", "tacrp_pistol" }, "tacrp_ak", "tacrp_knife", 1) == "tacrp_knife")
 check("Toggle on the other gun switches to it", L.Toggle({ "tacrp_ak", "tacrp_pistol" }, "tacrp_ak", "tacrp_knife", 2) == "tacrp_pistol")
-check("Toggle on an empty slot does nothing", L.Toggle({ "tacrp_ak", false }, "tacrp_ak", "tacrp_knife", 2) == nil)
+check("Toggle on an empty slot brings the knife out", L.Toggle({ "tacrp_ak", false }, "tacrp_ak", "tacrp_knife", 2) == "tacrp_knife" and L.Toggle({ false, false }, nil, "tacrp_knife", 1) == "tacrp_knife" and L.Toggle({ false }, nil, nil, 1) == nil)
 check("Toggle without a knife returns nil when holstering", L.Toggle({ "tacrp_ak" }, "tacrp_ak", nil, 1) == nil)
 check("Toggle ignores a bad index", L.Toggle({ "tacrp_ak" }, nil, "tacrp_knife", 3) == nil and L.Toggle(nil, nil, "tacrp_knife", 1) == nil)
 check("scroll is not a slot", L.BindSlot("invnext") == nil and L.BindSlot("invprev") == nil and L.BindSlot("+attack") == nil and L.BindSlot(nil) == nil)

@@ -129,9 +129,13 @@ end
 -- class is already active, or nil if the slot is empty.
 function L.Toggle(slots, activeClass, knife, idx)
 	idx = tonumber(idx)
-	if type(slots) ~= "table" or idx == nil then return nil end
+	if type(slots) ~= "table" or idx == nil or idx < 1 or idx > (L.MAX_GUNS or 2) or idx % 1 ~= 0 then return nil end
 	local class = slots[idx]
-	if type(class) ~= "string" or class == "" then return nil end
+	if type(class) ~= "string" or class == "" then
+		-- Empty gun slot: bring the knife out.
+		if type(knife) == "string" and knife ~= "" then return knife end
+		return nil
+	end
 	if type(activeClass) == "string" and activeClass == class then
 		if type(knife) == "string" and knife ~= "" then return knife end
 		return nil

@@ -36,10 +36,10 @@ if okLoad and cmds.bal_select and cmds.bal_slot then
 	ply.picked = nil
 	BALLISTICS.Loadout.Reset(ply, "tacrp_knife")
 	cmds.bal_slot(ply, "bal_slot", { "1" })
-	check("an empty gun slot does nothing", ply.picked == nil)
+check("an empty gun slot with no knife does nothing", ply.picked == nil)
 	ply.held.tacrp_knife = true
 	cmds.bal_slot(ply, "bal_slot", { "1" })
-	check("the knife has no key", ply.picked == nil)
+check("an empty gun slot brings the knife out", ply.picked == "tacrp_knife")
 	BALLISTICS.Loadout.NoteGun(ply, "tacrp_m1911")
 	ply.picked = nil
 	cmds.bal_slot(ply, "bal_slot", { "1" })

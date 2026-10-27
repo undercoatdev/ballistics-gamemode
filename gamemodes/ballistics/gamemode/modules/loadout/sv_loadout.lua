@@ -178,11 +178,35 @@ local function activeClass(ply)
 	return weaponClass(wep)
 end
 
+-- The knife class this player holds: the tracked one, else any held knife.
+local function heldKnife(ply)
+	local k = L.Knife(ply)
+	if k and type(ply.HasWeapon) == "function" and ply:HasWeapon(k) == true then return k end
+	if type(ply.GetWeapons) ~= "function" then return nil end
+	for _, w in ipairs(ply:GetWeapons() or {}) do
+		local c = weaponClass(w)
+		if type(c) == "string" and c:find("knife", 1, true) then return c end
+	end
+	return nil
+end
+
 local function selectSlot(ply, slot)
-	local class = L.Toggle(L.Slots(ply), activeClass(ply), L.Knife(ply), slot)
+	local knife = heldKnife(ply)
+	local class = L.Toggle(L.Slots(ply), activeClass(ply), knife, slot)
 	if not class then return end
-	if type(ply.HasWeapon) == "function" and ply:HasWeapon(class) ~= true then return end
-	if type(ply.SelectWeapon) == "function" then ply:SelectWeapon(class) end
+	-- A slot that still names a gun the player no longer holds (looted) is empty.
+	if type(ply.HasWeapon) == "function" and ply:HasWeapon(class) ~= true then class = knife end
+	if class and type(ply.SelectWeapon) == "function" then ply:SelectWeapon(class) end
+end
+
+-- Lost the active weapon (looted, dropped, removed): pull the knife out.
+function L.EnsureActive(ply)
+	if ply == nil or type(ply.Alive) ~= "function" or ply:Alive() ~= true then return false end
+	if activeClass(ply) then return false end
+	local knife = heldKnife(ply)
+	if not knife or type(ply.SelectWeapon) ~= "function" then return false end
+	ply:SelectWeapon(knife)
+	return true
 end
 
 local function forget(ply)
@@ -203,4 +227,14 @@ end
 
 if hook and hook.Add then
 	hook.Add("PlayerDisconnected", "Ballistics_Loadout", forget)
+	local nextAt = 0
+	hook.Add("Think", "Ballistics_LoadoutKnife", function()
+		local now = (CurTime and CurTime()) or 0
+		if now < nextAt then return end
+		nextAt = now + 0.2
+		if not (player and player.GetAll) then return end
+		for _, ply in ipairs(player.GetAll()) do
+			if IsValid(ply) then L.EnsureActive(ply) end
+		end
+	end)
 end
