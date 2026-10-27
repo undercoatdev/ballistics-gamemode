@@ -99,10 +99,10 @@ check("a missing medical wheel is left off the list", #noMed == 7)
 check("slot keys share one line", noMed[7].key == "1 2 3" and noMed[7].action == "Weapons")
 
 local box = K.PanelBox(8, 640, 480, true)
-check("the open list sits on the DrawHints anchor", box.x == 4 and box.y == math.floor(240 - box.h / 2) and box.h == 8 * 12 and box.w == 140)
+check("the open list sits on the DrawHints anchor", box.x == 8 and box.y == math.floor(240 - box.h / 2) and box.h == 8 * 12 and box.w == 140)
 local tag = K.PanelBox(8, 640, 480, false)
-check("the collapsed tag is one row", tag.x == 4 and tag.h == 12 and tag.w == 70 and tag.y == math.floor(240 - 6))
-check("spawn reveals the list and F1 closes it", K.ShowList(false, 1, K.NoteSpawn(0)) == true and K.ShowList(false, 4, K.NoteSpawn(0)) == false)
+check("the collapsed tag is one row", tag.x == 8 and tag.h == 12 and tag.w == 70 and tag.y == math.floor(240 - 6))
+check("spawn never reveals the list", K.ShowList(false, 1, K.NoteSpawn(0)) == false and K.ShowList(true, 1, K.NoteSpawn(0)) == true)
 local pin, untilAt = K.ToggleList(false, 10, 0)
 check("F1 pins a closed list", pin == true and K.ShowList(pin, 10, untilAt) == true)
 pin, untilAt = K.ToggleList(true, 12, 99)
@@ -205,7 +205,7 @@ check("a bound grenade key is not pulsed again", move(3.1) == 0)
 binds["+grenade1"] = nil
 
 hook.Run("Think")
-check("the list is open just after spawn", BALLISTICS.Keys.ListOpen() == true)
+check("the list stays closed after spawn", BALLISTICS.Keys.ListOpen() == false)
 local hinted = BALLISTICS.Keys.HintRows()
 local medRow = hinted[#hinted]
 check("hints read the live binds", hinted[1].key == "C" and hinted[2].key == "4" and hinted[3].key == "G" and hinted[4].key == "H" and hinted[5].key == "E" and hinted[6].key == "F2" and hinted[7].key == "1 2 3" and hinted[7].action == "Weapons" and medRow.action == "Medical wheel" and medRow.key == "B")
@@ -225,7 +225,7 @@ convars.bal_throw_key = K.KEY_4
 className = "tacrp_mp5"
 clock = 20
 hook.Run("Think")
-check("switching weapons reveals the list", BALLISTICS.Keys.ListOpen() == true)
+check("switching weapons never opens the list", BALLISTICS.Keys.ListOpen() == false)
 
 convars.playerballistics_med_key = 0
 local without = BALLISTICS.Keys.HintRows()

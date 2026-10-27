@@ -14,7 +14,8 @@ local THROW = "bal_throw_key"
 
 local throwState = (K.Fresh and K.Fresh()) or { down = false, ticks = 0, menu = false }
 local wrapped = setmetatable({}, { __mode = "k" })
-local pinned = false
+-- F1 toggle state, remembered across maps/sessions (cookie).
+local pinned = (cookie and cookie.GetNumber and cookie.GetNumber("bal_keys_pinned", 0) == 1) or false
 local revealUntil = 0
 local f1Latch = false
 local aliveSeen = false
@@ -191,13 +192,12 @@ local function toggleList()
 	local now = (CurTime and CurTime()) or 0
 	local pin, untilAt = K.ToggleList(pinned, now, revealUntil)
 	pinned = pin == true
-	if untilAt ~= nil then revealUntil = untilAt end
+	revealUntil = 0
+	if cookie and cookie.Set then cookie.Set("bal_keys_pinned", pinned and "1" or "0") end
 end
 
-local function reveal()
-	if type(K.NoteSpawn) ~= "function" then return end
-	revealUntil = K.NoteSpawn((CurTime and CurTime()) or 0)
-end
+-- Spawns, deploys and weapon switches never open the list: only F1 does.
+local function reveal() end
 
 local function weaponClass(ply)
 	if ply == nil or type(ply.GetActiveWeapon) ~= "function" then return "" end
@@ -278,18 +278,23 @@ local function paint()
 	local open = listOpen()
 	local rows = open and BALLISTICS.Keys.HintRows() or {}
 	local face = fontName()
-	local lines = {}
-	if open then
-		for i = 1, #rows do lines[i] = tostring(rows[i].key) .. "  " .. tostring(rows[i].action) end
-	else
-		lines[1] = K.TAG or "F1 Keybinds"
-	end
-	local widest = 0
+	local widest, keyW = 0, 0
+	local gap = 0
+	local tag = K.TAG or "F1 Keybinds"
 	if surface.SetFont and surface.GetTextSize then
 		surface.SetFont(face)
-		for i = 1, #lines do
-			local w = surface.GetTextSize(lines[i])
-			if type(w) == "number" and w > widest then widest = w end
+		gap = surface.GetTextSize("  ") or 0
+		if open then
+			local actW = 0
+			for i = 1, #rows do
+				local kw = surface.GetTextSize(tostring(rows[i].key)) or 0
+				local aw = surface.GetTextSize(tostring(rows[i].action)) or 0
+				if kw > keyW then keyW = kw end
+				if aw > actW then actW = aw end
+			end
+			widest = keyW + gap + actW
+		else
+			widest = surface.GetTextSize(tag) or 0
 		end
 	end
 	local box = K.PanelBox(open and #rows or 1, ScrW(), ScrH(), open, widest)
@@ -300,17 +305,21 @@ local function paint()
 	elseif type(surface.DrawRect) == "function" then
 		surface.DrawRect(box.x, box.y, box.w, box.h)
 	end
-	local function text(str, x, y)
+	local function text(str, x, y, align)
 		if type(draw.SimpleText) ~= "function" then return end
-		draw.SimpleText(str, face, x, y, white, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+		draw.SimpleText(str, face, x, y, white, align or TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
 	end
 	if not open then
-		text(lines[1], box.x + K.PAD, box.y + box.h / 2)
+		text(tag, box.x + K.PAD, box.y + box.h / 2)
 		return
 	end
+	-- Key column measured with GetTextSize and right-aligned, so wide keys
+	-- (F2, 1 2 3, MOUSE3) never start left of the panel.
+	local keyRight = box.x + K.PAD + keyW
 	for i = 1, #rows do
 		local y = box.y + (i - 0.5) * box.row
-		text(lines[i], box.x + K.PAD, y)
+		text(tostring(rows[i].key), keyRight, y, TEXT_ALIGN_RIGHT)
+		text(tostring(rows[i].action), keyRight + gap, y)
 	end
 end
 

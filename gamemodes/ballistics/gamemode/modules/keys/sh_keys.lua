@@ -195,7 +195,7 @@ end
 -- the screen height. The open list is wider than TacRP's because the lines
 -- are sentences. The collapsed tag is one row.
 -- textW: widest line in pixels. Width hugs the text plus padding.
-K.PAD = 6
+K.PAD = 8
 
 function K.FitWidth(textW, s, open)
 	local tw = tonumber(textW)
@@ -215,7 +215,7 @@ function K.PanelBox(rowCount, scrW, scrH, open, textW)
 	local scr = tonumber(scrH) or 0
 	if scr ~= scr or scr < 0 then scr = 0 end
 	return {
-		x = math.floor(4 * s),
+		x = math.max(8, math.floor(4 * s)),
 		y = math.floor(scr / 2 - h / 2),
 		w = K.FitWidth(textW, s, open),
 		h = h,
@@ -230,8 +230,9 @@ function K.ShowList(pinned, now, revealUntil)
 	return now < revealUntil
 end
 
+-- Spawns and weapon switches no longer reveal the list (only F1 does).
 function K.NoteSpawn(now)
-	return (tonumber(now) or 0) + K.REVEAL
+	return 0
 end
 
 -- F1 closes a visible list (and cancels the spawn timer) or pins it open.
