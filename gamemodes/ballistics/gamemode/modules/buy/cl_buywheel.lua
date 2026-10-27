@@ -834,6 +834,26 @@ local function ensureRoot()
 		surface.SetDrawColor(14, 14, 18, 255)
 		surface.DrawRect(0, 0, w, h)
 		draw.SimpleText("BUY", "BallisticsBuyTitle", 16, h / 2, Color(240, 240, 240), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+		-- Small mouse hint beside the title: [LMB] Buy  [RMB] Sell.
+		surface.SetFont("BallisticsBuyTitle")
+		local tw = surface.GetTextSize("BUY") or 48
+		local hx = 16 + tw + 18
+		local hints = (BALLISTICS.Buy and BALLISTICS.Buy.MouseHints) and BALLISTICS.Buy.MouseHints() or {}
+		surface.SetFont("BallisticsBuySmall")
+		for i = 1, #hints do
+			local cap, label = hints[i].cap, hints[i].label
+			local cw = (surface.GetTextSize(cap) or 24) + 10
+			local ch = 18
+			local cy = h / 2 - ch / 2
+			surface.SetDrawColor(255, 255, 255, 30)
+			surface.DrawRect(hx, cy, cw, ch)
+			surface.SetDrawColor(140, 150, 166, 160)
+			surface.DrawOutlinedRect(hx, cy, cw, ch)
+			draw.SimpleText(cap, "BallisticsBuySmall", hx + cw / 2, h / 2, Color(220, 224, 232), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+			local lw = surface.GetTextSize(label) or 30
+			draw.SimpleText(label, "BallisticsBuySmall", hx + cw + 6, h / 2, Color(160, 168, 182), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+			hx = hx + cw + 6 + lw + 14
+		end
 		draw.SimpleText("$" .. tostring(moneyOf()), "BallisticsBuyTitle", w / 2, h / 2, Color(120, 200, 140), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
 		local secs = math.ceil(timeLeft() - 1e-4)
 		if secs < 0 then secs = 0 end

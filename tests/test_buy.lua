@@ -872,4 +872,11 @@ check("a miss retries once the content can be mounted", #asked == 1 and asked[1]
 print = oldPrint
 
 check("client med count reads PB's networked state", BALLISTICS.Buy.MedFromState({ counts = { 0, 3, 1, 0 } }, 2) == 3 and BALLISTICS.Buy.MedFromState(nil, 2) == 0 and BALLISTICS.Buy.MedFromState({ counts = {} }, 9) == 0)
+do
+	local h = BALLISTICS.Buy.MouseHints()
+	check("buy menu hint is LMB Buy, RMB Sell", #h == 2 and h[1].cap == "LMB" and h[1].label == "Buy" and h[2].cap == "RMB" and h[2].label == "Sell")
+	local src = io.open("gamemodes/ballistics/gamemode/modules/buy/cl_buywheel.lua"):read("*a")
+	check("every buy menu entry sells one on right-click", src:find("btn.DoRightClick = function()\n\t\t\tif BALLISTICS.Sell and BALLISTICS.Sell.Send then BALLISTICS.Sell.Send(item) end", 1, true) ~= nil)
+end
+
 if failed then os.exit(1) end

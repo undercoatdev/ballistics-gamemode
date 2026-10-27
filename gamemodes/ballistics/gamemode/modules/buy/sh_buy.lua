@@ -230,3 +230,8 @@ function BALLISTICS.Buy.MedFromState(state, id)
 	if n ~= n or n < 0 then return 0 end
 	return math.floor(n)
 end
+
+-- Buy menu header hint: mouse buttons and what they do.
+function BALLISTICS.Buy.MouseHints()
+	return { { cap = "LMB", label = "Buy" }, { cap = "RMB", label = "Sell" } }
+end
