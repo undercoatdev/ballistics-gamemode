@@ -13,6 +13,7 @@ K.KEY_3 = 4
 K.KEY_4 = 5
 K.KEY_5 = 6
 K.KEY_G = 17
+K.KEY_Z = 36
 K.KEY_H = 18
 K.KEY_F1 = 92
 K.IN_GRENADE1 = 8388608
@@ -169,7 +170,17 @@ function K.BlockBind(bind, throwKey, inventoryKey)
 	local name = string.lower(bind)
 	if name == "gm_showhelp" then return true end
 	if name == "slot3" or name == "slot4" or name == "slot5" then return true end
+	-- Z holds the med wheel here; undo does nothing in this gamemode.
+	if name == "undo" or name == "gmod_undo" then return true end
 	return false
+end
+
+-- PB's med release decision, wrapped: with the wheel closed a release does
+-- nothing (no tap quick-use); with it open PB's own choice stands.
+function K.MedRelease(orig, heldFor, hold, wheelOpen, hoverId, holding)
+	if not wheelOpen then return nil, nil, "keep" end
+	if type(orig) ~= "function" then return nil, nil, "keep" end
+	return orig(heldFor, hold, wheelOpen, hoverId, holding)
 end
 
 function K.Rows(binds)

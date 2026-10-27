@@ -158,6 +158,19 @@ local function forceHints()
 	end
 end
 
+-- Player Ballistics' med wheel: hold Z to open, release to close. PB reads the
+-- key through PLAYER_BALLISTICS.MedKeyCode, so that is wrapped (PB untouched).
+local function wrapMed()
+	local PB = PLAYER_BALLISTICS
+	if type(PB) ~= "table" or PB.BallisticsMedZ then return end
+	if type(PB.MedKeyCode) ~= "function" or type(PB.MedKeyRelease) ~= "function" then return end
+	PB.BallisticsMedZ = true
+	local release = PB.MedKeyRelease
+	PB.MedKeyCode = function() return KEY_Z or K.KEY_Z or 36 end
+	PB.MedHold = function() return 0.05 end
+	PB.MedKeyRelease = function(...) return K.MedRelease(release, ...) end
+end
+
 local function applyCmd(cmd)
 	if cmd == nil or type(cmd.GetButtons) ~= "function" or type(cmd.SetButtons) ~= "function" then return end
 	if type(K.Step) ~= "function" or type(K.Intent) ~= "function" or type(K.ApplyButtons) ~= "function" then return end
@@ -267,9 +280,7 @@ end
 function BALLISTICS.Keys.HintRows()
 	local throw = BALLISTICS.Keys.ThrowKey()
 	local inspect = convarInt("playerballistics_key_inspect", K.KEY_G or 17)
-	local medCode = convar("playerballistics_med_key") and convarInt("playerballistics_med_key", 0) or 0
-	local med = nil
-	if medCode > 0 then med = keyLabel(medCode, "B") end
+	local med = "Z (hold)"
 	if type(K.Rows) ~= "function" then return {} end
 	return K.Rows({
 		customize = bindLabel("+menu_context", "C"),
@@ -354,6 +365,7 @@ if hook and hook.Add then
 		applyCmd(cmd)
 	end)
 	hook.Add("Think", "Ballistics_Keys", function()
+		wrapMed()
 		pointBackup()
 		tryWrap()
 		forceHints()

@@ -216,7 +216,7 @@ hook.Run("Think")
 check("the list stays closed after spawn", BALLISTICS.Keys.ListOpen() == false)
 local hinted = BALLISTICS.Keys.HintRows()
 local medRow = hinted[#hinted]
-check("hints read the live binds", hinted[1].key == "C" and hinted[2].key == "3" and hinted[3].key == "G" and hinted[4].key == "H" and hinted[5].key == "E" and hinted[6].key == "E (double-tap)" and hinted[6].action == "Drag / drop body" and hinted[7].key == "E (hold 1s)" and hinted[7].action == "Loot inventory / E close" and hinted[8].key == "F2" and hinted[9].key == "4" and hinted[9].action == "Inventory" and hinted[10].key == "1 2" and hinted[10].action == "Weapons" and medRow.action == "Medical wheel" and medRow.key == "B")
+check("hints read the live binds", hinted[1].key == "C" and hinted[2].key == "3" and hinted[3].key == "G" and hinted[4].key == "H" and hinted[5].key == "E" and hinted[6].key == "E (double-tap)" and hinted[6].action == "Drag / drop body" and hinted[7].key == "E (hold 1s)" and hinted[7].action == "Loot inventory / E close" and hinted[8].key == "F2" and hinted[9].key == "4" and hinted[9].action == "Inventory" and hinted[10].key == "1 2" and hinted[10].action == "Weapons" and medRow.action == "Medical wheel" and medRow.key == "Z (hold)")
 clock = 10
 hook.Run("Think")
 check("the list collapses when the reveal ends", BALLISTICS.Keys.ListOpen() == false)
@@ -243,7 +243,12 @@ check("switching weapons never opens the list", BALLISTICS.Keys.ListOpen() == fa
 
 convars.playerballistics_med_key = 0
 local without = BALLISTICS.Keys.HintRows()
-check("a med key of none drops the wheel line", #without == #hinted - 1)
+check("the med wheel is always Z in this gamemode", #without == #hinted)
+check("undo is swallowed", K.BlockBind("undo") and K.BlockBind("gmod_undo") and not K.BlockBind("+use"))
+check("releasing Z with the wheel closed does nothing", K.MedRelease(function() return 3 end, 0.01, 0.05, false, nil, false) == nil)
+check("releasing Z with the wheel open keeps PB's choice", K.MedRelease(function(_, _, _, h) return 2, h end, 1, 0.05, true, 4, false) == 2)
+local PBt = PLAYER_BALLISTICS
+check("PB's med key is wrapped to Z", type(PBt) ~= "table" or type(PBt.MedKeyCode) ~= "function" or PBt.MedKeyCode() == 36 or PBt.BallisticsMedZ == nil)
 
 local drawn = false
 local texts = 0
