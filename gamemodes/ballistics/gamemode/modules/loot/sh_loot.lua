@@ -113,6 +113,33 @@ function L.PickupBlocked(ply, wep, now)
 	return now < untilT
 end
 
+-- Grenade/med row height: fill the card's free space, 48..112 px.
+-- used = y where the Throwables label starts (after the gun rows).
+function L.StackTall(cardH, used, hasAmmo)
+	cardH = tonumber(cardH) or 0
+	used = tonumber(used) or 0
+	-- two labels (16) + two row gaps (8) + bottom pad, plus the ammo row.
+	local fixed = 16 * 2 + 8 * 2 + 10
+	if hasAmmo then fixed = fixed + 16 + 48 + 8 end
+	local tall = math.floor((cardH - used - fixed) / 2)
+	if tall > 112 then tall = 112 end
+	if tall < 48 then tall = 48 end
+	return tall
+end
+
+-- Icon box under the name and count in a tall grenade/med slot, or nil
+-- when the slot is too short (then the icon sits on the right as before).
+function L.StackIconRect(kind, w, h)
+	if kind ~= "nade" and kind ~= "med" then return nil end
+	w = tonumber(w) or 0
+	h = tonumber(h) or 0
+	local top = 44
+	if h < top + 28 then return nil end
+	local size = math.min(56, h - top - 6, w - 16)
+	if size < 20 then return nil end
+	return { math.floor((w - size) / 2), top + math.floor((h - top - size) / 2), size }
+end
+
 function L.Note(err)
 	if type(err) ~= "string" then return nil end
 	return NOTES[err]

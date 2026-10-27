@@ -471,13 +471,25 @@ local function paintSlot(pnl, w, h)
 			sub = sub .. " rounds"
 		end
 	end
+	local iconItem = L.IconItem(slot, BALLISTICS.Catalog)
+	local rect = L.StackIconRect(slot.kind, w, h)
+	if rect then
+		-- Tall stack slot: name, count, then the icon centred below.
+		draw.SimpleText(text, "BallisticsLoot", 8, 14, col, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+		if sub ~= "" then
+			draw.SimpleText(sub, "BallisticsLootSmall", 8, 33, Color(170, 186, 204, a), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+		end
+		if iconItem and BALLISTICS.BuyWheel and BALLISTICS.BuyWheel.DrawIcon then
+			BALLISTICS.BuyWheel.DrawIcon(iconItem, w, h, pnl, rect)
+		end
+		return
+	end
 	draw.SimpleText(text, "BallisticsLoot", 8, h / 2 - 8, col, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
 	if sub ~= "" then
 		draw.SimpleText(sub, "BallisticsLootSmall", 8, h / 2 + 10, Color(170, 186, 204, a), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
 	end
 	-- Spawn-menu icon on the right, same as the buy panel. The panel is the
 	-- parent for a model fallback, and for the ghost copy of this slot.
-	local iconItem = L.IconItem(slot, BALLISTICS.Catalog)
 	if iconItem and BALLISTICS.BuyWheel and BALLISTICS.BuyWheel.DrawIcon then
 		BALLISTICS.BuyWheel.DrawIcon(iconItem, w, h, pnl)
 	end
@@ -727,10 +739,12 @@ local function fillCard(card, side, view, box)
 	for i = 1, #guns do
 		rowSlots({ guns[i] }, "gun", 58)
 	end
+	local hasAmmo = type(view.ammo) == "table" and #view.ammo > 0
+	local stackTall = L.StackTall(box.h, y, hasAmmo)
 	label("Throwables", 16)
-	rowSlots(view.nades, "nade", 48)
+	rowSlots(view.nades, "nade", stackTall)
 	label("Meds", 16)
-	rowSlots(view.meds, "med", 48)
+	rowSlots(view.meds, "med", stackTall)
 	if type(view.ammo) == "table" and #view.ammo > 0 then
 		label("Ammo", 16)
 		rowSlots(view.ammo, "ammo", 48)

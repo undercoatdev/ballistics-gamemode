@@ -1126,4 +1126,13 @@ resetGate()
 consoleUp = true
 tap(18)
 check("5 does nothing in the console", #sent == 0)
+
+do
+	local tall = L.StackTall(640, 200, false)
+	check("stack rows grow into free space but stop at 112", tall == 112)
+	check("stack rows never shrink below 48", L.StackTall(280, 250, true) == 48)
+	local r = L.StackIconRect("med", 110, 112)
+	check("tall med slot puts a 56 px icon centred below the text", r ~= nil and r[3] == 56 and r[1] == 27 and r[2] >= 44 and r[2] + r[3] <= 112)
+	check("short slots and guns keep the side icon", L.StackIconRect("nade", 110, 48) == nil and L.StackIconRect("gun", 110, 112) == nil)
+end
 if failed then os.exit(1) end

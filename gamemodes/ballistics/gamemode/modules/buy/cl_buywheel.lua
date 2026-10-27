@@ -446,6 +446,9 @@ local function hideModel(panel)
 	if child.SetVisible then child:SetVisible(false) end
 end
 
+-- Set by drawIcon when the caller gives its own icon box.
+local rectOverride = nil
+
 local function showModel(panel, model, w, h)
 	if not valid(panel) or type(model) ~= "string" or model == "" then return false end
 	if not vgui or type(vgui.Create) ~= "function" then return false end
@@ -459,6 +462,7 @@ local function showModel(panel, model, w, h)
 		if left < 0 then left = 0 end
 		x, y, size = left, 4, sizeN
 	end
+	if rectOverride then x, y, size = rectOverride[1], rectOverride[2], rectOverride[3] end
 	local child = panel.balModel
 	if not valid(child) then
 		child = vgui.Create("SpawnIcon", panel)
@@ -485,6 +489,7 @@ local function showModel(panel, model, w, h)
 end
 
 local function iconRect(w, h)
+	if rectOverride then return rectOverride[1], rectOverride[2], rectOverride[3] end
 	local size = (tonumber(h) or 0) - 8
 	if size < 8 then size = 8 end
 	local wide = tonumber(w) or 0
@@ -494,7 +499,19 @@ local function iconRect(w, h)
 	return x, 4, size
 end
 
-local function drawIcon(item, w, h, panel)
+local drawIconAt
+local function drawIcon(item, w, h, panel, rect)
+	if type(rect) == "table" then
+		rectOverride = rect
+		local ok, err = pcall(drawIconAt, item, w, h, panel)
+		rectOverride = nil
+		if not ok then print("[Ballistics icon] draw error " .. tostring(err)) end
+		return
+	end
+	return drawIconAt(item, w, h, panel)
+end
+
+function drawIconAt(item, w, h, panel)
 	local icon = iconFor(item)
 	if type(icon) ~= "table" then
 		hideModel(panel)
