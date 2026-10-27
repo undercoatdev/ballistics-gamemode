@@ -50,6 +50,7 @@ check("wheel exposes Open Hide IsOpen", buySrc:find("BuyWheel.Open", 1, true)
 check("weapon tab splits light and heavy columns by category", buySrc:find("WeaponColumns", 1, true) ~= nil)
 check("buy wheel does not switch weapons on the scroll wheel", buySrc:find("bal_slot", 1, true) ~= nil and not buySrc:find("OnMouseWheeled", 1, true))
 check("the wheel asks LeftAction", buySrc:find("LeftAction", 1, true) ~= nil)
+check("the wheel can show two copies owned", buySrc:find("Owned x2", 1, true) ~= nil)
 check("grenade and med rows show the stack", buySrc:find("StackCount", 1, true) ~= nil)
 
 local compiled = loadfile("gamemodes/ballistics/gamemode/modules/buy/cl_buywheel.lua")
@@ -142,12 +143,12 @@ result = purchase({ price = 9.9, balance = 8 }, {
 check("floored price still needs the money", result.ok == false and result.err == "money")
 
 ok, err = BALLISTICS.Buy.Validate(ctx({ owned = true }))
-check("duplicate gun is refused", ok == false and err == "duplicate")
+check("an owned gun buys when a slot is free", ok == true)
 result = purchase({ owned = true }, {
-	spend = function() error("spent") end,
-	grant = function() error("granted") end,
+	spend = function() return true end,
+	grant = function() return true end,
 })
-check("duplicate gun does not spend", result.ok == false and result.err == "duplicate" and result.spent == false)
+check("an owned gun with a free slot spends", result.ok == true and result.spent == true)
 ok, err = BALLISTICS.Buy.Validate(ctx({ gunSlotsFull = true }))
 check("full gun slots are refused", ok == false and err == "full")
 result = purchase({ gunSlotsFull = true }, {
@@ -236,8 +237,9 @@ check("a med under the cap buys", act("med", 0, 3, 0, false) == "buy")
 check("a med at the cap sells only when fresh", act("med", 3, 3, 2, false) == "sell" and act("med", 3, 3, 0, false) == "buy")
 check("a zero cap is already full", act("nade", 0, 0, 1, false) == "sell" and act("med", 0, 0, 0, false) == "buy")
 check("a missing cap stays a buy", act("nade", 3, nil, 3, false) == "buy")
-check("an owned fresh gun sells", act("weapon", 1, 0, 1, true) == "sell")
-check("an owned carried gun stays a buy", act("weapon", 1, 0, 0, true) == "buy")
+check("an owned fresh gun sells when slots are full", act("weapon", 1, 0, 1, true, true) == "sell")
+check("an owned fresh gun buys when a slot is free", act("weapon", 1, 0, 1, true, false) == "buy")
+check("an owned carried gun stays a buy", act("weapon", 1, 0, 0, true, true) == "buy")
 check("an unowned gun buys", act("weapon", 0, 0, 1, false) == "buy")
 check("an unknown kind buys", act("ammo", 9, 1, 9, true) == "buy")
 check("the stack label is owned over the cap", BALLISTICS.Buy.StackCount(2, 3) == "2 / 3" and BALLISTICS.Buy.StackCount(0, 3) == "0 / 3")
@@ -493,6 +495,9 @@ local function fresh()
 	BALLISTICS.Config.BuyLimits.nade_each = 0
 	BALLISTICS.Config.Costs.med_pills = 50
 	BALLISTICS.Money.Reset(ply)
+	if BALLISTICS.Loadout and BALLISTICS.Loadout.Reset then
+		BALLISTICS.Loadout.Reset(ply, "tacrp_knife")
+	end
 	hook.Run("Ballistics_PhaseChanged", "post", "buy")
 	ply.chats = {}
 end
@@ -505,9 +510,14 @@ check("m1911 reserve is 3 clips of Primary.Ammo", #ply.ammo == 1 and ply.ammo[1]
 check("m1911 costs 100", BALLISTICS.Money.Get(ply) == 900)
 
 buyOk, buyErr = BALLISTICS.Buy.Request(ply, "tacrp_ex_m1911")
-check("server refuses the duplicate gun", buyOk == false and buyErr == "duplicate" and BALLISTICS.Money.Get(ply) == 900)
-check("duplicate does not give again", #ply.giveCalls == 1)
-check("duplicate tells the player", ply.chats[#ply.chats] == "Ballistics: You already have that weapon.")
+check("a second copy of the same gun fills the free slot", buyOk == true and buyErr == nil and BALLISTICS.Money.Get(ply) == 800)
+check("the second copy is not given again", #ply.giveCalls == 1)
+check("both slots hold the class", BALLISTICS.Loadout.ClassFor(ply, 1) == "tacrp_ex_m1911" and BALLISTICS.Loadout.ClassFor(ply, 2) == "tacrp_ex_m1911")
+local twin = BALLISTICS.Loadout.Twin(ply)
+check("the second copy is the stored twin", twin ~= nil and twin.class == "tacrp_ex_m1911" and twin.clip1 == 7 and #(twin.attachments or {}) == 0)
+buyOk, buyErr = BALLISTICS.Buy.Request(ply, "tacrp_ex_m1911")
+check("a third copy is refused", buyOk == false and buyErr == "duplicate" and BALLISTICS.Money.Get(ply) == 800)
+check("a third copy tells the player", ply.chats[#ply.chats] == "Ballistics: You already have that weapon.")
 
 fresh()
 buyOk = BALLISTICS.Buy.Request(ply, "tacrp_ex_ak47")
@@ -672,8 +682,10 @@ do
 	fresh()
 	BALLISTICS.Buy.Request(ply, "tacrp_ex_m1911")
 	check("successful buy plays the sound for the buyer", #sent == 1 and sent[1] == ply)
+	phase = "live"
 	BALLISTICS.Buy.Request(ply, "tacrp_ex_m1911")
 	check("refused buy plays no sound", #sent == 1)
+	phase = "buy"
 	BALLISTICS.Net.Send = realSend
 end
 

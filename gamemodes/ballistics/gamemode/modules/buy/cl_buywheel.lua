@@ -104,7 +104,24 @@ local function owns(class)
 	return ply:HasWeapon(class) == true
 end
 
+local function clientSlots()
+	local ply = localPly()
+	local L = BALLISTICS.Loadout
+	if ply and type(ply.GetNW2String) == "function" and L and type(L.DecodeSlots) == "function" then
+		local ok, raw = pcall(ply.GetNW2String, ply, "bal_slots", "")
+		if ok and type(raw) == "string" and raw ~= "" then
+			return L.DecodeSlots(raw)
+		end
+	end
+	return nil
+end
+
 local function gunCount()
+	local slots = clientSlots()
+	local L = BALLISTICS.Loadout
+	if type(slots) == "table" and L and type(L.Compact) == "function" then
+		return #L.Compact(slots)
+	end
 	local list = BALLISTICS.Catalog and BALLISTICS.Catalog.Weapons and BALLISTICS.Catalog.Weapons() or {}
 	local n = 0
 	for i = 1, #list do
@@ -112,6 +129,18 @@ local function gunCount()
 		if owns(class) then n = n + 1 end
 	end
 	return n
+end
+
+local function ownedCopies(class)
+	if type(class) ~= "string" or class == "" then return 0 end
+	local slots = clientSlots()
+	local L = BALLISTICS.Loadout
+	if type(slots) == "table" and L and type(L.CountClass) == "function" then
+		local n = L.CountClass(slots, class)
+		if n > 0 then return n end
+	end
+	if owns(class) then return 1 end
+	return 0
 end
 
 local function slotsFull(item)
@@ -598,7 +627,7 @@ local function leftAction(item)
 	end
 	local action = "buy"
 	if BALLISTICS.Buy and type(BALLISTICS.Buy.LeftAction) == "function" then
-		action = BALLISTICS.Buy.LeftAction(item.kind, have, cap, freshCount(item), ownedGun)
+		action = BALLISTICS.Buy.LeftAction(item.kind, have, cap, freshCount(item), ownedGun, slotsFull(item))
 	end
 	if action ~= "sell" then action = "buy" end
 	return action, have, cap
@@ -607,15 +636,16 @@ end
 local function paintItem(self, w, h)
 	local item = self.balItem or {}
 	local price = BALLISTICS.Catalog and BALLISTICS.Catalog.Price and BALLISTICS.Catalog.Price(item.key) or nil
-	local owned = item.kind == "weapon" and owns(item.class)
-	local full = item.kind == "weapon" and not owned and slotsFull(item)
+	local copies = item.kind == "weapon" and ownedCopies(item.class) or 0
+	local owned = copies > 0
+	local full = item.kind == "weapon" and slotsFull(item)
 	local action, have, cap = leftAction(item)
 	local selling = action == "sell"
-	local afford = type(price) == "number" and moneyOf() >= price and not owned and not full and not selling
+	local afford = type(price) == "number" and moneyOf() >= price and not selling and not full
 	local hover = self.Hovered == true
 	if hover then
 		surface.SetDrawColor(52, 64, 82, 255)
-	elseif owned or not afford then
+	elseif (owned and full) or not afford then
 		surface.SetDrawColor(28, 28, 32, 255)
 	else
 		surface.SetDrawColor(36, 38, 46, 255)
@@ -648,8 +678,8 @@ local function paintItem(self, w, h)
 		if n < 0 then n = 0 end
 		priceText = "Sell  +$" .. tostring(n)
 		priceCol = Color(120, 210, 140)
-	elseif owned then
-		priceText = "Owned"
+	elseif owned and (selling or full) then
+		priceText = copies >= 2 and "Owned x2" or "Owned"
 	elseif full then
 		priceText = "Full"
 	elseif type(price) == "number" then

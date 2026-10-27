@@ -112,57 +112,99 @@ local function meleeClass(ply)
 	return nil
 end
 
--- Ranked guns stay in acquisition order. Anything the loadout does not know
--- keeps its place after them. A removed gun already shifted down in Guns().
-local function inSlotOrder(ply, list)
-	local rank = {}
-	if BALLISTICS.Loadout and type(BALLISTICS.Loadout.Guns) == "function" then
-		local guns = BALLISTICS.Loadout.Guns(ply) or {}
-		for i = 1, #guns do rank[guns[i]] = i end
+local function captureFromWep(wep)
+	if BALLISTICS.Loadout and type(BALLISTICS.Loadout.CaptureGun) == "function" then
+		local gun = BALLISTICS.Loadout.CaptureGun(wep)
+		if type(gun) ~= "table" then return nil end
+		return {
+			class = gun.class,
+			clip1 = gun.clip1,
+			clip2 = gun.clip2,
+			ammo = gun.ammo,
+			attachments = gun.attachments or {},
+		}
 	end
-	local indexed = {}
-	for i = 1, #list do indexed[i] = { row = list[i], i = i } end
-	table.sort(indexed, function(a, b)
-		local ra = rank[a.row.class] or (1000 + a.i)
-		local rb = rank[b.row.class] or (1000 + b.i)
-		if ra ~= rb then return ra < rb end
-		return a.i < b.i
-	end)
-	local out = {}
-	for i = 1, #indexed do out[i] = indexed[i].row end
-	return out
+	local class = wep ~= nil and weaponClass(wep) or nil
+	if not class then return nil end
+	local atts = {}
+	if type(wep.Attachments) == "table" then
+		for slot, slottbl in pairs(wep.Attachments) do
+			if type(slottbl) == "table" then
+				local att = slottbl.Installed
+				if type(att) == "string" and att ~= "" then
+					atts[#atts + 1] = { slot = slot, att = att }
+				end
+			end
+		end
+	end
+	return {
+		class = class,
+		clip1 = numberCall(wep.Clip1, wep),
+		clip2 = numberCall(wep.Clip2, wep),
+		attachments = atts,
+	}
 end
 
 local function captureWeapons(ply)
-	local list = {}
-	if type(ply.GetWeapons) ~= "function" then return list end
-	local ok, weps = pcall(ply.GetWeapons, ply)
-	if not ok or type(weps) ~= "table" then return list end
-	local melee = meleeClass(ply)
-	for i = 1, #weps do
-		local wep = weps[i]
-		local class = wep ~= nil and weaponClass(wep) or nil
-		if class and class ~= KNIFE and class ~= melee then
-			local atts = {}
-			if type(wep.Attachments) == "table" then
-				for slot, slottbl in pairs(wep.Attachments) do
-					if type(slottbl) == "table" then
-						local att = slottbl.Installed
-						if type(att) == "string" and att ~= "" then
-							atts[#atts + 1] = { slot = slot, att = att }
-						end
-					end
+	local liveByClass = {}
+	if type(ply.GetWeapons) == "function" then
+		local ok, weps = pcall(ply.GetWeapons, ply)
+		if ok and type(weps) == "table" then
+			local melee = meleeClass(ply)
+			for i = 1, #weps do
+				local wep = weps[i]
+				local class = wep ~= nil and weaponClass(wep) or nil
+				if class and class ~= KNIFE and class ~= melee then
+					liveByClass[class] = captureFromWep(wep)
 				end
 			end
-			list[#list + 1] = {
-				class = class,
-				clip1 = numberCall(wep.Clip1, wep),
-				clip2 = numberCall(wep.Clip2, wep),
-				attachments = atts,
-			}
 		end
 	end
-	return inSlotOrder(ply, list)
+	local Load = BALLISTICS.Loadout
+	local slots, twin, liveSlot
+	if Load and type(Load.Slots) == "function" then slots = Load.Slots(ply) end
+	if Load and type(Load.Twin) == "function" then twin = Load.Twin(ply) end
+	if Load and type(Load.LiveSlot) == "function" then liveSlot = Load.LiveSlot(ply) end
+	local list = {}
+	if type(slots) == "table" then
+		local seen = {}
+		for i = 1, 2 do
+			local class = slots[i]
+			if type(class) == "string" and class ~= "" then
+				local useTwin = type(twin) == "table" and twin.class == class
+				if useTwin then
+					if liveSlot == 1 or liveSlot == 2 then
+						useTwin = liveSlot ~= i
+					else
+						useTwin = seen[class] == true
+					end
+				end
+				seen[class] = true
+				local row
+				if useTwin then
+					row = {
+						class = twin.class,
+						clip1 = twin.clip1,
+						clip2 = twin.clip2,
+						ammo = twin.ammo,
+						attachments = twin.attachments or {},
+					}
+				else
+					row = liveByClass[class]
+				end
+				if type(row) == "table" then
+					row.slot = i
+					list[#list + 1] = row
+				end
+			end
+		end
+		return list
+	end
+	for class, row in pairs(liveByClass) do
+		list[#list + 1] = row
+	end
+	table.sort(list, function(a, b) return (a.class or "") < (b.class or "") end)
+	return list
 end
 
 local function ammoName(id, stored)
@@ -201,8 +243,13 @@ local function captureMeds(ply)
 end
 
 local function takeSnapshot(ply)
+	local liveSlot
+	if BALLISTICS.Loadout and type(BALLISTICS.Loadout.LiveSlot) == "function" then
+		liveSlot = BALLISTICS.Loadout.LiveSlot(ply)
+	end
 	return {
 		weapons = captureWeapons(ply),
+		liveSlot = liveSlot,
 		ammo = captureAmmo(ply),
 		meds = captureMeds(ply),
 	}
@@ -287,39 +334,82 @@ local function giveWeapon(ply, class)
 	return wep
 end
 
-local function restoreWeapons(ply, list)
+local function applyRow(wep, row)
+	if wep == nil or type(row) ~= "table" then return end
+	if BALLISTICS.Loadout and type(BALLISTICS.Loadout.ApplyGun) == "function" then
+		BALLISTICS.Loadout.ApplyGun(wep, row)
+		return
+	end
+	local atts = row.attachments or {}
+	for a = 1, #atts do
+		installAtt(wep, atts[a].slot, atts[a].att)
+	end
+	if type(wep.SetClip1) == "function" then pcall(wep.SetClip1, wep, tonumber(row.clip1) or 0) end
+	if type(wep.SetClip2) == "function" then pcall(wep.SetClip2, wep, tonumber(row.clip2) or 0) end
+	if type(wep.NetworkWeapon) == "function" then pcall(wep.NetworkWeapon, wep) end
+end
+
+local function restoreWeapons(ply, list, liveSlot)
 	if type(list) ~= "table" then return end
 	local melee = meleeClass(ply)
-	local ordered = {}
+	local counts = {}
+	local rows = {}
 	for i = 1, #list do
 		local row = list[i]
 		if type(row) == "table" and type(row.class) == "string" and row.class ~= KNIFE and row.class ~= melee then
-			local wep = giveWeapon(ply, row.class)
-			if wep ~= nil then
-				local atts = row.attachments or {}
-				for a = 1, #atts do
-					installAtt(wep, atts[a].slot, atts[a].att)
-				end
-				if type(wep.SetClip1) == "function" then pcall(wep.SetClip1, wep, tonumber(row.clip1) or 0) end
-				if type(wep.SetClip2) == "function" then pcall(wep.SetClip2, wep, tonumber(row.clip2) or 0) end
-				if type(wep.NetworkWeapon) == "function" then pcall(wep.NetworkWeapon, wep) end
-				ordered[#ordered + 1] = row.class
-			end
+			rows[#rows + 1] = row
+			counts[row.class] = (counts[row.class] or 0) + 1
 		end
 	end
-	if BALLISTICS.Loadout and type(BALLISTICS.Loadout.Restore) == "function" then
-		BALLISTICS.Loadout.Restore(ply, ordered)
+	local given = {}
+	local ordered = {}
+	for i = 1, #rows do
+		local row = rows[i]
+		local slot = math.floor(tonumber(row.slot) or 0)
+		if slot < 1 or slot > 2 then slot = #ordered + 1 end
+		ordered[slot] = row.class
+		if given[row.class] == nil then
+			given[row.class] = giveWeapon(ply, row.class)
+		end
+	end
+	local Load = BALLISTICS.Loadout
+	if Load and Load.ClearTwin then Load.ClearTwin(ply) end
+	for i = 1, #rows do
+		local row = rows[i]
+		local wep = given[row.class]
+		local copies = counts[row.class] or 0
+		local slot = math.floor(tonumber(row.slot) or 0)
+		if copies < 2 then
+			applyRow(wep, row)
+		elseif (liveSlot == 1 or liveSlot == 2) and slot == liveSlot then
+			applyRow(wep, row)
+		elseif (liveSlot == 1 or liveSlot == 2) and slot ~= liveSlot then
+			if Load and Load.SetTwin then Load.SetTwin(ply, row) end
+		elseif given[row.class] ~= true and wep ~= nil then
+			-- First row of a twin pair without liveSlot is the live copy.
+			applyRow(wep, row)
+			given[row.class] = true
+		else
+			if Load and Load.SetTwin then Load.SetTwin(ply, row) end
+		end
+	end
+	-- given[class] was the wep, then may have been set to true. Restore slots.
+	if Load and type(Load.Restore) == "function" then
+		Load.Restore(ply, ordered)
+	end
+	if Load and type(Load.SetLiveSlot) == "function" and (liveSlot == 1 or liveSlot == 2) then
+		Load.SetLiveSlot(ply, liveSlot)
 	end
 	-- A carried-over gun is drawn instead of the knife (first slot, else the
 	-- second). Equip selects now and next tick; one more pass after the spawn
 	-- loadout so its knife select cannot win.
-	local first = ordered[1]
-	if first and BALLISTICS.Loadout and type(BALLISTICS.Loadout.Equip) == "function" then
-		BALLISTICS.Loadout.Equip(ply, first)
+	local first = ordered[1] or ordered[2]
+	if first and Load and type(Load.Equip) == "function" then
+		Load.Equip(ply, first)
 		if timer and timer.Simple then
 			timer.Simple(0.2, function()
 				if IsValid and not IsValid(ply) then return end
-				BALLISTICS.Loadout.Equip(ply, first)
+				Load.Equip(ply, first)
 			end)
 		end
 	end
@@ -368,7 +458,7 @@ function BALLISTICS.Gear.ApplySpawn(ply)
 	local snap = pending[id]
 	pending[id] = nil
 	if type(snap) ~= "table" then return end
-	restoreWeapons(ply, snap.weapons)
+	restoreWeapons(ply, snap.weapons, snap.liveSlot)
 	restoreAmmo(ply, snap.ammo)
 	restoreMeds(ply, snap.meds)
 end

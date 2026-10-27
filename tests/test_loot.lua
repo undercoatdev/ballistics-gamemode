@@ -117,7 +117,34 @@ local dup = L.Transfer({
 	you = { guns = { { class = "tacrp_mp5", clip1 = 1 } }, nades = {}, meds = {}, ammo = {} },
 	them = moved.them, from = "you", kind = "gun", key = "tacrp_mp5", amount = 1, to = "them", slot = 0,
 })
-check("a duplicate gun does not fit", dup.ok == false and dup.err == "fit" and dup.note == L.FIT)
+check("a second copy of the same gun fills the free slot", dup.ok == true and #dup.them.guns == 2 and dup.them.guns[1].class == "tacrp_mp5" and dup.them.guns[2].class == "tacrp_mp5")
+local twoFull = L.Transfer({
+	you = { guns = { { class = "tacrp_mp5", clip1 = 2 } }, nades = {}, meds = {}, ammo = {} },
+	them = dup.them, from = "you", kind = "gun", key = "tacrp_mp5", amount = 1, to = "them", slot = 0,
+})
+check("a third gun does not fit even as a twin", twoFull.ok == false and twoFull.err == "fit" and twoFull.note == L.FIT)
+local dropTwin = L.Transfer({
+	you = {
+		guns = { { class = "tacrp_mp5", slot = 1, clip1 = 4 }, { class = "tacrp_mp5", slot = 2, clip1 = 9 } },
+		nades = {}, meds = {}, ammo = {},
+	},
+	them = L.Blank(), from = "you", kind = "gun", key = "tacrp_mp5", amount = 1, to = "drop", fromSlot = 2,
+})
+check("dropping a slot drops that copy", dropTwin.ok == true and dropTwin.drop.clip1 == 9 and #dropTwin.you.guns == 1 and dropTwin.you.guns[1].clip1 == 4)
+local swapTwin = L.Transfer({
+	you = {
+		guns = { { class = "tacrp_mp5", slot = 1, clip1 = 4 }, { class = "tacrp_mp5", slot = 2, clip1 = 9 } },
+		nades = {}, meds = {}, ammo = {},
+	},
+	them = L.Blank(), from = "you", kind = "gun", key = "tacrp_mp5", amount = 1, to = "you", slot = 2, fromSlot = 1,
+})
+local function clipAt(guns, slot)
+	for i = 1, #(guns or {}) do
+		if guns[i].slot == slot then return guns[i].clip1 end
+	end
+	return nil
+end
+check("dragging twins swaps those copies", swapTwin.ok == true and clipAt(swapTwin.you.guns, 1) == 9 and clipAt(swapTwin.you.guns, 2) == 4)
 local knife = L.Transfer({
 	you = { guns = { { class = "tacrp_knife", clip1 = 0 } }, nades = {}, meds = {}, ammo = {} },
 	them = L.Blank(), from = "you", kind = "gun", key = "tacrp_knife", amount = 1, to = "them", slot = 0,
@@ -334,7 +361,11 @@ check("a closed state is just the note", back.open == false and back.note == "To
 w, r = pipe()
 L.WriteAct(w, { from = "them", kind = "ammo", key = "smg1", amount = 6, to = "you", slot = 0, whole = true })
 local act = L.ReadAct(r)
-check("an action round-trips", act.from == "them" and act.kind == "ammo" and act.key == "smg1" and act.amount == 6 and act.to == "you" and act.slot == 0 and act.whole == true)
+check("an action round-trips", act.from == "them" and act.kind == "ammo" and act.key == "smg1" and act.amount == 6 and act.to == "you" and act.slot == 0 and act.whole == true and (act.fromSlot == 0 or act.fromSlot == nil))
+w, r = pipe()
+L.WriteAct(w, { from = "you", kind = "gun", key = "tacrp_mp5", amount = 1, to = "drop", slot = 0, fromSlot = 2, whole = false })
+act = L.ReadAct(r)
+check("a gun action round-trips the source slot", act.fromSlot == 2 and act.key == "tacrp_mp5" and act.to == "drop")
 
 local locks = {}
 check("the first looter locks the body", L.Lock(locks, "ply:a", "a") == true)
@@ -422,6 +453,9 @@ local function makeWep(class, ammo, clip, att)
 	function wep:Attach(slot, name)
 		self.Attachments[slot] = self.Attachments[slot] or {}
 		self.Attachments[slot].Installed = name
+	end
+	function wep:Detach(slot)
+		if self.Attachments[slot] then self.Attachments[slot].Installed = nil end
 	end
 	return wep
 end
@@ -683,7 +717,8 @@ arm(victim, "tacrp_mp5")
 victim.pbDown = true
 L.Open(looter, victim)
 ok = L.Act(looter, { from = "them", kind = "gun", key = "tacrp_mp5", amount = 1, to = "you", slot = 0 })
-check("a duplicate class does not fit", ok == false and looter.weapons.tacrp_mp5 ~= nil and victim.weapons.tacrp_mp5 ~= nil)
+check("a duplicate class becomes a twin when a slot is free", ok == true and looter.weapons.tacrp_mp5 ~= nil and victim.weapons.tacrp_mp5 == nil)
+check("the looted copy is stored as a twin", BALLISTICS.Loadout.Twin(looter) ~= nil and BALLISTICS.Loadout.Twin(looter).class == "tacrp_mp5")
 
 settle()
 looter.pbMed.counts[1] = 2
@@ -775,6 +810,54 @@ victim.alive = false
 hook.Run("PlayerDeath", victim)
 last = L.Last(looter)
 check("death keeps the window on the snapshot", last.open == true and last.giveOnly == false and classes(last.them)[1] == "tacrp_mp5" and last.them.guns[1].clip1 == 8 and last.them.guns[1].attachments[1].att == "optic_test")
+
+settle()
+arm(looter, "tacrp_mp5", { ammo = "smg1", clip = 4, att = "optic_live" })
+BALLISTICS.Loadout.Reset(looter, "tacrp_knife")
+BALLISTICS.Loadout.NoteGun(looter, "tacrp_mp5")
+BALLISTICS.Loadout.SetTwin(looter, {
+	class = "tacrp_mp5",
+	clip1 = 9,
+	ammo = "smg1",
+	attachments = { { slot = 1, att = "optic_twin" } },
+})
+BALLISTICS.Loadout.NoteGun(looter, "tacrp_mp5")
+BALLISTICS.Loadout.SetLiveSlot(looter, 1)
+local liveInv = L.ReadLive(looter)
+check("own inventory lists the twin as its own slot", #liveInv.guns == 2 and liveInv.guns[1].class == "tacrp_mp5" and liveInv.guns[2].class == "tacrp_mp5")
+check("the live copy keeps its mag and att", liveInv.guns[1].clip1 == 4 and liveInv.guns[1].attachments[1].att == "optic_live")
+check("the twin keeps its mag and att", liveInv.guns[2].clip1 == 9 and liveInv.guns[2].attachments[1].att == "optic_twin")
+looter.alive = false
+L.RememberDeath(looter)
+local snapView = L.View(L.Blank(), liveInv, { open = true, caps = L.Caps(nil) })
+check("a body can hold two of the same class", snapView.them.guns[1].class == "tacrp_mp5" and snapView.them.guns[2].class == "tacrp_mp5")
+
+settle()
+arm(looter, "tacrp_mp5", { ammo = "smg1", clip = 3, att = "optic_mine" })
+arm(victim, "tacrp_mp5", { ammo = "smg1", clip = 8, att = "optic_body" })
+BALLISTICS.Loadout.Reset(looter, "tacrp_knife")
+BALLISTICS.Loadout.NoteGun(looter, "tacrp_mp5")
+victim.pbDown = true
+L.Open(looter, victim)
+ok = L.Act(looter, { from = "them", kind = "gun", key = "tacrp_mp5", amount = 1, to = "you", slot = 0 })
+local lootedTwin = BALLISTICS.Loadout.Twin(looter)
+check("looting a gun you hold stores it as a twin", ok == true and looter.weapons.tacrp_mp5 ~= nil and lootedTwin ~= nil and lootedTwin.clip1 == 8)
+check("the looted twin keeps the body's attachments", lootedTwin.attachments[1].att == "optic_body")
+check("both of your slots name that class", BALLISTICS.Loadout.ClassFor(looter, 1) == "tacrp_mp5" and BALLISTICS.Loadout.ClassFor(looter, 2) == "tacrp_mp5")
+
+settle()
+arm(victim, "tacrp_mp5", { ammo = "smg1", clip = 8, att = "optic_test" })
+victim.ammo.smg1 = 15
+victim.pbMed.counts[1] = 2
+victim.ammo.grenade = 1
+victim.pbDown = true
+L.Open(looter, victim)
+hook.Run("DoPlayerDeath", victim)
+victim.alive = false
+wipe(victim)
+victim.alive = false
+hook.Run("PlayerDeath", victim)
+last = L.Last(looter)
 check("the snapshot keeps meds, grenades, and reserve", stack(last.them, "meds", "med_pills") == 2 and stack(last.them, "nades", "nade_frag") == 1 and stack(last.them, "ammo", "smg1") == 15)
 ok = L.Act(looter, { from = "them", kind = "gun", key = "tacrp_mp5", amount = 1, to = "you", slot = 0 })
 check("taking from a corpse edits the snapshot", ok == true and looter.weapons.tacrp_mp5 ~= nil and classes(L.Last(looter).them)[1] == nil)

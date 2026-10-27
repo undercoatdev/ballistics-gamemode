@@ -110,6 +110,9 @@ end
 
 function BALLISTICS.Player.Wipe(ply)
 	if not isPlayer(ply) then return end
+	if BALLISTICS.Loadout and type(BALLISTICS.Loadout.ClearTwin) == "function" then
+		BALLISTICS.Loadout.ClearTwin(ply)
+	end
 	if ply.StripWeapons then ply:StripWeapons() end
 	if ply.RemoveAllAmmo then ply:RemoveAllAmmo() end
 	if ply.StripAmmo then ply:StripAmmo() end

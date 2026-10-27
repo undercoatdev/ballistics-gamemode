@@ -55,6 +55,18 @@ check("a third gun does not take a slot", #capped == 2 and capped[1] == "tacrp_a
 
 local _, once = L.Resolve(nil, { "tacrp_pistol", "tacrp_pistol", "tacrp_ak" }, "tacrp_knife")
 check("a repeated gun is one slot", #once == 2 and once[1] == "tacrp_pistol" and once[2] == "tacrp_ak")
+local _, twins = L.ResolveSlots({ "tacrp_pistol", "tacrp_pistol" }, { "tacrp_pistol" }, "tacrp_knife", "tacrp_pistol")
+check("a stored twin keeps both slots", twins[1] == "tacrp_pistol" and twins[2] == "tacrp_pistol")
+local _, twinFill = L.ResolveSlots({ "tacrp_pistol", false }, { "tacrp_pistol" }, "tacrp_knife", "tacrp_pistol")
+check("a stored twin fills the free slot", twinFill[1] == "tacrp_pistol" and twinFill[2] == "tacrp_pistol")
+check("TwinClassOf sees a duplicate", L.TwinClassOf(twins) == "tacrp_pistol" and L.TwinClassOf({ "tacrp_ak", "tacrp_pistol" }) == nil)
+check("CountClass counts copies", L.CountClass(twins, "tacrp_pistol") == 2 and L.CountClass({ "tacrp_ak", false }, "tacrp_ak") == 1)
+local encoded = L.EncodeSlots({ "tacrp_pistol", "tacrp_pistol" })
+local decoded = L.DecodeSlots(encoded)
+check("slots encode both copies", decoded[1] == "tacrp_pistol" and decoded[2] == "tacrp_pistol")
+local twinRow = L.CopyTwin({ class = "tacrp_pistol", clip1 = 5, ammo = "pistol", attachments = { { slot = 1, att = "optic_a" } } })
+check("CopyTwin keeps clip atts ammo", twinRow.class == "tacrp_pistol" and twinRow.clip1 == 5 and twinRow.ammo == "pistol" and twinRow.attachments[1].att == "optic_a")
+check("CopyTwin refuses a bad row", L.CopyTwin({}) == nil and L.CopyTwin(nil) == nil)
 
 check("empty hands have no slots", L.At(nil, {}, 1) == nil and L.At("tacrp_knife", {}, 2) == nil)
 check("slot binds are key 1 and key 2", L.BindSlot("slot1") == 1 and L.BindSlot("SLOT2") == 2 and L.BindSlot("slot3") == nil)
@@ -62,6 +74,8 @@ check("slot3 and slot4 are not loadout slots", L.BindSlot("slot3") == nil and L.
 check("Toggle equips the gun in that slot", L.Toggle({ "tacrp_ak", "tacrp_pistol" }, "tacrp_knife", "tacrp_knife", 1) == "tacrp_ak")
 check("Toggle holsters the active gun to the knife", L.Toggle({ "tacrp_ak", "tacrp_pistol" }, "tacrp_ak", "tacrp_knife", 1) == "tacrp_knife")
 check("Toggle on the other gun switches to it", L.Toggle({ "tacrp_ak", "tacrp_pistol" }, "tacrp_ak", "tacrp_knife", 2) == "tacrp_pistol")
+check("Toggle on the live twin slot holsters", L.Toggle({ "tacrp_pistol", "tacrp_pistol" }, "tacrp_pistol", "tacrp_knife", 1, 1) == "tacrp_knife")
+check("Toggle on the other twin slot selects it", L.Toggle({ "tacrp_pistol", "tacrp_pistol" }, "tacrp_pistol", "tacrp_knife", 2, 1) == "tacrp_pistol")
 check("Toggle on an empty slot brings the knife out", L.Toggle({ "tacrp_ak", false }, "tacrp_ak", "tacrp_knife", 2) == "tacrp_knife" and L.Toggle({ false, false }, nil, "tacrp_knife", 1) == "tacrp_knife" and L.Toggle({ false }, nil, nil, 1) == nil)
 check("Toggle without a knife returns nil when holstering", L.Toggle({ "tacrp_ak" }, "tacrp_ak", nil, 1) == nil)
 check("Toggle ignores a bad index", L.Toggle({ "tacrp_ak" }, nil, "tacrp_knife", 3) == nil and L.Toggle(nil, nil, "tacrp_knife", 1) == nil)
@@ -100,6 +114,60 @@ BALLISTICS.Loadout.NoteGun(ply, "tacrp_pistol")
 ply.list = { "tacrp_knife", "tacrp_ak", "tacrp_pistol" }
 check("server slots follow buy order", BALLISTICS.Loadout.ClassFor(ply, 1) == "tacrp_ak" and BALLISTICS.Loadout.ClassFor(ply, 2) == "tacrp_pistol" and BALLISTICS.Loadout.GunCount(ply) == 2)
 check("a third noted gun is refused", BALLISTICS.Loadout.NoteGun(ply, "tacrp_spr") == false and BALLISTICS.Loadout.GunCount(ply) == 2)
+
+do
+	local twinPly = { sid = "twin", list = { "tacrp_knife", "tacrp_pistol" }, valid = true, selected = nil }
+	function twinPly:IsValid() return self.valid == true end
+	function twinPly:HasWeapon(class)
+		for i = 1, #self.list do if self.list[i] == class then return true end end
+		return false
+	end
+	function twinPly:GetWeapons()
+		local out = {}
+		for i = 1, #self.list do
+			local class = self.list[i]
+			out[i] = { GetClass = function() return class end, IsValid = function() return true end }
+		end
+		return out
+	end
+	function twinPly:SelectWeapon(class) self.selected = class end
+	local liveWep = {
+		class = "tacrp_pistol",
+		clip1 = 4,
+		Attachments = { [1] = { Installed = "optic_live" } },
+	}
+	function liveWep:IsValid() return true end
+	function liveWep:GetClass() return self.class end
+	function liveWep:Clip1() return self.clip1 end
+	function liveWep:Clip2() return 0 end
+	function liveWep:SetClip1(n) self.clip1 = n end
+	function liveWep:SetClip2() end
+	function liveWep:Attach(slot, att)
+		self.Attachments[slot] = self.Attachments[slot] or {}
+		self.Attachments[slot].Installed = att
+	end
+	function liveWep:Detach(slot)
+		if self.Attachments[slot] then self.Attachments[slot].Installed = nil end
+	end
+	function twinPly:GetWeapon(class)
+		if class == "tacrp_pistol" then return liveWep end
+		return nil
+	end
+	function twinPly:GetActiveWeapon()
+		return liveWep
+	end
+	BALLISTICS.Loadout.Reset(twinPly, "tacrp_knife")
+	BALLISTICS.Loadout.NoteGun(twinPly, "tacrp_pistol")
+	BALLISTICS.Loadout.SetTwin(twinPly, { class = "tacrp_pistol", clip1 = 9, attachments = { { slot = 1, att = "optic_twin" } } })
+	BALLISTICS.Loadout.NoteGun(twinPly, "tacrp_pistol")
+	check("twin slots both name the class", BALLISTICS.Loadout.ClassFor(twinPly, 1) == "tacrp_pistol" and BALLISTICS.Loadout.ClassFor(twinPly, 2) == "tacrp_pistol")
+	BALLISTICS.Loadout.SetLiveSlot(twinPly, 1)
+	local swapped = BALLISTICS.Loadout.SwapTwin(twinPly, 2)
+	check("SwapTwin applies the stored copy", swapped == true and liveWep.clip1 == 9 and liveWep.Attachments[1].Installed == "optic_twin")
+	local stored = BALLISTICS.Loadout.Twin(twinPly)
+	check("SwapTwin stores the previous live copy", stored ~= nil and stored.clip1 == 4 and stored.attachments[1].att == "optic_live")
+	check("SwapTwin moves liveSlot", BALLISTICS.Loadout.LiveSlot(twinPly) == 2)
+end
 ply.list = { "tacrp_knife", "tacrp_pistol" }
 check("removing the first gun leaves key 1 empty", BALLISTICS.Loadout.ClassFor(ply, 1) == nil and BALLISTICS.Loadout.ClassFor(ply, 2) == "tacrp_pistol")
 ply.list = {}

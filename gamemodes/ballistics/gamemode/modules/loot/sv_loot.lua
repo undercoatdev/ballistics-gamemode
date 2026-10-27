@@ -310,6 +310,9 @@ local function setAmmo(ply, ammoType, count)
 end
 
 local function captureGun(wep)
+	if BALLISTICS.Loadout and type(BALLISTICS.Loadout.CaptureGun) == "function" then
+		return BALLISTICS.Loadout.CaptureGun(wep)
+	end
 	if wep == nil or type(wep.GetClass) ~= "function" then return nil end
 	local ok, class = pcall(wep.GetClass, wep)
 	if not ok or type(class) ~= "string" or class == "" then return nil end
@@ -340,6 +343,23 @@ local function captureGun(wep)
 	}
 end
 
+local function copyGunRow(gun, slot)
+	if type(gun) ~= "table" then return nil end
+	local class = gun.class
+	if type(class) ~= "string" or class == "" then return nil end
+	local row = {
+		class = class,
+		name = gun.name or L.WeaponName(class),
+		clip1 = math.max(0, math.floor(tonumber(gun.clip1) or 0)),
+		clip2 = math.max(0, math.floor(tonumber(gun.clip2) or 0)),
+		ammo = gun.ammo,
+		clip = gun.clip,
+		attachments = gun.attachments or {},
+	}
+	if slot then row.slot = slot end
+	return row
+end
+
 local function readGuns(ply)
 	local captured = {}
 	if type(ply.GetWeapons) == "function" then
@@ -354,16 +374,32 @@ local function readGuns(ply)
 		end
 	end
 	local maxGuns = (L.Caps(BALLISTICS.Config).guns) or L.GUNS
+	local twin, liveSlot
+	if BALLISTICS.Loadout then
+		if type(BALLISTICS.Loadout.Twin) == "function" then twin = BALLISTICS.Loadout.Twin(ply) end
+		if type(BALLISTICS.Loadout.LiveSlot) == "function" then liveSlot = BALLISTICS.Loadout.LiveSlot(ply) end
+	end
 	if BALLISTICS.Loadout and type(BALLISTICS.Loadout.Slots) == "function" then
 		local slots = BALLISTICS.Loadout.Slots(ply)
 		if type(slots) == "table" then
 			local list = {}
+			local seenClass = {}
 			for i = 1, maxGuns do
 				local class = slots[i]
-				local gun = type(class) == "string" and captured[class] or nil
-				if type(gun) == "table" then
-					gun.slot = i
-					list[#list + 1] = gun
+				if type(class) == "string" and class ~= "" then
+					local useTwin = type(twin) == "table" and twin.class == class
+					if useTwin then
+						if liveSlot == 1 or liveSlot == 2 then
+							useTwin = liveSlot ~= i
+						else
+							useTwin = seenClass[class] == true
+						end
+					end
+					seenClass[class] = true
+					local gun = useTwin and copyGunRow(twin, i) or copyGunRow(captured[class], i)
+					if type(gun) == "table" then
+						list[#list + 1] = gun
+					end
 				end
 			end
 			return list
@@ -384,7 +420,8 @@ local function readGuns(ply)
 	for i = 1, #order do
 		local gun = captured[order[i]]
 		if gun and #list < maxGuns then
-			list[#list + 1] = gun
+			local row = copyGunRow(gun, #list + 1)
+			if row then list[#list + 1] = row end
 		end
 	end
 	return list
@@ -695,13 +732,10 @@ local function installAtt(wep, slot, att)
 	if type(wep.SetBaseSettings) == "function" then pcall(wep.SetBaseSettings, wep) end
 end
 
-local function giveGun(ply, gun)
-	if type(ply.Give) ~= "function" then return false end
-	local wep = ply:Give(gun.class, true)
-	if not valid(wep) and type(ply.GetWeapon) == "function" then
-		wep = ply:GetWeapon(gun.class)
+local function applyGunState(wep, gun)
+	if BALLISTICS.Loadout and type(BALLISTICS.Loadout.ApplyGun) == "function" then
+		return BALLISTICS.Loadout.ApplyGun(wep, gun)
 	end
-	if not valid(wep) then return false end
 	local atts = gun.attachments or {}
 	for i = 1, #atts do
 		installAtt(wep, atts[i].slot, atts[i].att)
@@ -709,6 +743,20 @@ local function giveGun(ply, gun)
 	if type(wep.SetClip1) == "function" then pcall(wep.SetClip1, wep, tonumber(gun.clip1) or 0) end
 	if type(wep.SetClip2) == "function" then pcall(wep.SetClip2, wep, tonumber(gun.clip2) or 0) end
 	if type(wep.NetworkWeapon) == "function" then pcall(wep.NetworkWeapon, wep) end
+	return true
+end
+
+local function giveGun(ply, gun)
+	if type(ply.Give) ~= "function" then return false end
+	if type(ply.HasWeapon) == "function" and ply:HasWeapon(gun.class) == true then
+		return false
+	end
+	local wep = ply:Give(gun.class, true)
+	if not valid(wep) and type(ply.GetWeapon) == "function" then
+		wep = ply:GetWeapon(gun.class)
+	end
+	if not valid(wep) then return false end
+	applyGunState(wep, gun)
 	return true
 end
 
@@ -723,14 +771,45 @@ local function stripGun(ply, class)
 	if valid(wep) and type(wep.Remove) == "function" then pcall(wep.Remove, wep) end
 end
 
-local function gunMap(inv)
+local function classCount(inv)
 	local map = {}
 	local guns = type(inv) == "table" and inv.guns or {}
 	for i = 1, #guns do
-		local gun = guns[i]
-		if gun and gun.class then map[gun.class] = gun end
+		local class = guns[i] and guns[i].class
+		if type(class) == "string" and class ~= "" then
+			map[class] = (map[class] or 0) + 1
+		end
 	end
 	return map
+end
+
+local function gunsOfClass(inv, class)
+	local list = {}
+	local guns = type(inv) == "table" and inv.guns or {}
+	for i = 1, #guns do
+		if guns[i] and guns[i].class == class then list[#list + 1] = guns[i] end
+	end
+	return list
+end
+
+local function heldWeapon(ply, class)
+	if ply == nil or type(class) ~= "string" or type(ply.GetWeapon) ~= "function" then return nil end
+	local ok, wep = pcall(ply.GetWeapon, ply, class)
+	if ok and valid(wep) then return wep end
+	return nil
+end
+
+local function liveMatches(cap, gun)
+	if type(cap) ~= "table" or type(gun) ~= "table" then return false end
+	if cap.class ~= gun.class then return false end
+	if math.floor(tonumber(cap.clip1) or 0) ~= math.floor(tonumber(gun.clip1) or 0) then return false end
+	local a, b = cap.attachments or {}, gun.attachments or {}
+	if #a ~= #b then return false end
+	for i = 1, #a do
+		if (a[i].att or "") ~= (b[i].att or "") then return false end
+		if math.floor(tonumber(a[i].slot) or 0) ~= math.floor(tonumber(b[i].slot) or 0) then return false end
+	end
+	return true
 end
 
 local function applyMeds(ply, before, after)
@@ -769,18 +848,7 @@ local function applyNamed(ply, before, after, ammoOf)
 	end
 end
 
-local function applyLive(ply, before, after, infinite)
-	if not valid(ply) then return false end
-	local oldGuns = gunMap(before)
-	local newGuns = gunMap(after)
-	for class, gun in pairs(newGuns) do
-		if not oldGuns[class] then
-			if not giveGun(ply, gun) then return false end
-		end
-	end
-	for class in pairs(oldGuns) do
-		if not newGuns[class] then stripGun(ply, class) end
-	end
+local function restoreSlots(ply, after)
 	local maxGuns = L.GUNS
 	if BALLISTICS.Loadout and tonumber(BALLISTICS.Loadout.MAX_GUNS) then
 		maxGuns = math.floor(tonumber(BALLISTICS.Loadout.MAX_GUNS) or L.GUNS)
@@ -814,6 +882,98 @@ local function applyLive(ply, before, after, infinite)
 	if BALLISTICS.Loadout and type(BALLISTICS.Loadout.Restore) == "function" then
 		BALLISTICS.Loadout.Restore(ply, order)
 	end
+	return order
+end
+
+local function applyGunCopies(ply, before, after)
+	local oldN = classCount(before)
+	local newN = classCount(after)
+	local classes = {}
+	for class in pairs(oldN) do classes[class] = true end
+	for class in pairs(newN) do classes[class] = true end
+	local Load = BALLISTICS.Loadout
+	local liveSlot = Load and Load.LiveSlot and Load.LiveSlot(ply) or nil
+	for class in pairs(classes) do
+		local beforeN = oldN[class] or 0
+		local afterN = newN[class] or 0
+		local afterGuns = gunsOfClass(after, class)
+		local wep = heldWeapon(ply, class)
+		local cap = wep and captureGun(wep) or nil
+		if afterN < 1 then
+			stripGun(ply, class)
+			if Load and Load.Twin then
+				local twin = Load.Twin(ply)
+				if type(twin) == "table" and twin.class == class and Load.ClearTwin then
+					Load.ClearTwin(ply)
+				end
+			end
+		elseif beforeN < 1 then
+			local liveGun = afterGuns[1]
+			if liveSlot and afterGuns[2] then
+				for i = 1, #afterGuns do
+					if afterGuns[i].slot == liveSlot then liveGun = afterGuns[i] break end
+				end
+			end
+			if not giveGun(ply, liveGun) then return false end
+			if afterN >= 2 then
+				local other = afterGuns[1] == liveGun and afterGuns[2] or afterGuns[1]
+				if Load and Load.SetTwin then Load.SetTwin(ply, other) end
+				if Load and Load.SetLiveSlot and liveGun.slot then Load.SetLiveSlot(ply, liveGun.slot) end
+			end
+		elseif afterN > beforeN then
+			-- Extra copy of a class already held: stored twin, no second entity.
+			local extra = afterGuns[1]
+			if cap then
+				for i = 1, #afterGuns do
+					if not liveMatches(cap, afterGuns[i]) then extra = afterGuns[i] break end
+				end
+			elseif liveSlot then
+				for i = 1, #afterGuns do
+					if afterGuns[i].slot ~= liveSlot then extra = afterGuns[i] break end
+				end
+			end
+			if Load and Load.SetTwin then Load.SetTwin(ply, extra) end
+		elseif afterN < beforeN then
+			-- One copy left. Dropping the twin clears it; dropping live applies the twin.
+			local remain = afterGuns[1]
+			if cap and liveMatches(cap, remain) then
+				if Load and Load.ClearTwin then Load.ClearTwin(ply) end
+			else
+				if wep then applyGunState(wep, remain) end
+				if Load and Load.ClearTwin then Load.ClearTwin(ply) end
+			end
+			if Load and Load.SetLiveSlot and remain and remain.slot then
+				Load.SetLiveSlot(ply, remain.slot)
+			end
+		else
+			-- Same number of copies: slots may have swapped.
+			if afterN >= 2 then
+				local liveGun, twinGun = afterGuns[1], afterGuns[2]
+				if cap then
+					if liveMatches(cap, afterGuns[2]) then liveGun, twinGun = afterGuns[2], afterGuns[1] end
+					if liveMatches(cap, afterGuns[1]) then liveGun, twinGun = afterGuns[1], afterGuns[2] end
+				elseif liveSlot then
+					for i = 1, #afterGuns do
+						if afterGuns[i].slot == liveSlot then liveGun = afterGuns[i] end
+						if afterGuns[i].slot ~= liveSlot then twinGun = afterGuns[i] end
+					end
+				end
+				if Load and Load.SetTwin then Load.SetTwin(ply, twinGun) end
+				if Load and Load.SetLiveSlot and liveGun and liveGun.slot then
+					Load.SetLiveSlot(ply, liveGun.slot)
+				end
+			elseif afterN == 1 and Load and Load.SetLiveSlot and afterGuns[1].slot then
+				Load.SetLiveSlot(ply, afterGuns[1].slot)
+			end
+		end
+	end
+	return true
+end
+
+local function applyLive(ply, before, after, infinite)
+	if not valid(ply) then return false end
+	if not applyGunCopies(ply, before, after) then return false end
+	restoreSlots(ply, after)
 	applyMeds(ply, before.meds, after.meds)
 	applyNamed(ply, before.nades, after.nades, function(key)
 		local item = BALLISTICS.Catalog and BALLISTICS.Catalog.Get and BALLISTICS.Catalog.Get(key)
@@ -929,13 +1089,7 @@ local function spawnDrop(ply, gun)
 		if valid(ent) and ent ~= held and type(ent.Remove) == "function" then pcall(ent.Remove, ent) end
 		return nil
 	end
-	local atts = gun.attachments or {}
-	for i = 1, #atts do
-		installAtt(ent, atts[i].slot, atts[i].att)
-	end
-	if type(ent.SetClip1) == "function" then pcall(ent.SetClip1, ent, tonumber(gun.clip1) or 0) end
-	if type(ent.SetClip2) == "function" then pcall(ent.SetClip2, ent, tonumber(gun.clip2) or 0) end
-	if type(ent.NetworkWeapon) == "function" then pcall(ent.NetworkWeapon, ent) end
+	applyGunState(ent, gun)
 	if not valid(ent) then
 		if ent ~= held and type(ent) == "table" and type(ent.Remove) == "function" then pcall(ent.Remove, ent) end
 		return nil
@@ -1092,6 +1246,7 @@ local function actSelf(ply, session, req)
 			amount = req.amount,
 			to = "you",
 			slot = req.slot,
+			fromSlot = req.fromSlot or req.index,
 			whole = false,
 			giveOnly = false,
 			caps = capsNow(),
@@ -1133,6 +1288,7 @@ local function actSelf(ply, session, req)
 		amount = req.amount,
 		to = "drop",
 		slot = 0,
+		fromSlot = req.fromSlot or req.index,
 		whole = false,
 		selfDrop = true,
 		giveOnly = false,
@@ -1222,6 +1378,7 @@ function L.Act(ply, req)
 		amount = req.amount,
 		to = req.to,
 		slot = req.slot,
+		fromSlot = req.fromSlot or req.index,
 		whole = req.whole == true,
 		giveOnly = L.GiveOnly(mode),
 		caps = capsNow(),

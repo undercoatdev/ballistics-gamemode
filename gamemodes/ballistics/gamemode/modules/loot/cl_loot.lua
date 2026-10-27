@@ -566,6 +566,7 @@ local function onSlotPress(slot, pnl)
 			amount = slot.count or 1,
 			to = other,
 			slot = 0,
+			fromSlot = slot.index or 0,
 			whole = true,
 		})
 		return
@@ -629,6 +630,7 @@ local function finishDrag()
 			amount = current.amount or 1,
 			to = "drop",
 			slot = 0,
+			fromSlot = current.index or 0,
 			whole = false,
 		})
 		return
@@ -642,6 +644,7 @@ local function finishDrag()
 		amount = current.amount or 1,
 		to = target.side,
 		slot = target.index or 0,
+		fromSlot = current.index or 0,
 		whole = false,
 	})
 end

@@ -246,24 +246,51 @@ local function tookGun(ply, class)
 	return true
 end
 
-local function grantWeapon(ply, item)
-	if type(ply.HasWeapon) == "function" and ply:HasWeapon(item.class) == true then
+local function storeTwin(ply, item, ammoType, clip)
+	if not (BALLISTICS.Loadout and type(BALLISTICS.Loadout.SetTwin) == "function") then
 		return false, "duplicate"
 	end
-	if type(ply.Give) ~= "function" then return false, "give" end
-	local beforeAmmo = copyAmmo(ply)
-	-- true skips engine/TacRP default ammo. EquipAmmo would add extra magazines.
-	local wep = ply:Give(item.class, true)
-	if not isValid(wep) and type(ply.GetWeapon) == "function" then
+	local clip1 = math.floor(tonumber(clip) or 0)
+	if clip1 < 0 then clip1 = 0 end
+	local ammo = ammoType
+	if type(ammo) ~= "string" or ammo == "" or ammo == "none" then ammo = nil end
+	BALLISTICS.Loadout.SetTwin(ply, {
+		class = item.class,
+		clip1 = clip1,
+		ammo = ammo,
+		attachments = {},
+	})
+	return tookGun(ply, item.class)
+end
+
+local function grantWeapon(ply, item)
+	local already = type(ply.HasWeapon) == "function" and ply:HasWeapon(item.class) == true
+	if already and slotsFull(ply) then
+		return false, "duplicate"
+	end
+	local wep = nil
+	if already and type(ply.GetWeapon) == "function" then
 		wep = ply:GetWeapon(item.class)
 	end
-	if not isValid(wep) then return false, "give" end
+	local beforeAmmo = copyAmmo(ply)
+	if not already then
+		if type(ply.Give) ~= "function" then return false, "give" end
+		-- true skips engine/TacRP default ammo. EquipAmmo would add extra magazines.
+		wep = ply:Give(item.class, true)
+		if not isValid(wep) and type(ply.GetWeapon) == "function" then
+			wep = ply:GetWeapon(item.class)
+		end
+		if not isValid(wep) then return false, "give" end
+	elseif not isValid(wep) then
+		return false, "give"
+	end
 	local ammoType, clip = nil, nil
 	if BALLISTICS.Buy.WeaponAmmo then
 		ammoType, clip = BALLISTICS.Buy.WeaponAmmo(wep)
 	end
 	local mags = buyMags()
 	if BALLISTICS.Ammo and BALLISTICS.Ammo.WritesReserve and not BALLISTICS.Ammo.WritesReserve(mags) then
+		if already then return storeTwin(ply, item, ammoType, clip) end
 		fillClip(wep, clip)
 		return tookGun(ply, item.class)
 	end
@@ -278,13 +305,15 @@ local function grantWeapon(ply, item)
 			target = BALLISTICS.Ammo.ReserveTarget(before, clip, mags)
 		end
 		ply:SetAmmo(target, ammoType)
+		if already then return storeTwin(ply, item, ammoType, clip) end
 		fillClip(wep, clip)
 		return tookGun(ply, item.class)
 	end
 	if rounds > 0 and not giveAmmo(ply, rounds, ammoType) then
-		stripWeapon(ply, item.class)
+		if not already then stripWeapon(ply, item.class) end
 		return false, "give"
 	end
+	if already then return storeTwin(ply, item, ammoType, clip) end
 	fillClip(wep, clip)
 	return tookGun(ply, item.class)
 end

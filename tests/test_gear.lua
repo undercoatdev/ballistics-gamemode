@@ -191,6 +191,37 @@ do
 	check("restored guns keep that slot order", guns[1] == "tacrp_ex_ak47" and guns[2] == "tacrp_ex_m1911")
 end
 
+do
+	local pistolA = makeGun("tacrp_ex_m1911", "optic_live", 4)
+	winner.alive = true
+	winner.weapons = { knife, pistolA }
+	BALLISTICS.Loadout.Reset(winner, "tacrp_knife")
+	BALLISTICS.Loadout.NoteGun(winner, "tacrp_ex_m1911")
+	BALLISTICS.Loadout.SetTwin(winner, {
+		class = "tacrp_ex_m1911",
+		clip1 = 9,
+		attachments = { { slot = 1, att = "optic_twin" } },
+	})
+	BALLISTICS.Loadout.NoteGun(winner, "tacrp_ex_m1911")
+	BALLISTICS.Loadout.SetLiveSlot(winner, 1)
+	hook.Run("Ballistics_RoundEnd", "good", "elimination")
+	winner.weapons = {}
+	local given = {}
+	function winner:Give(class, noAmmo)
+		given[#given + 1] = class
+		local wep = makeGun(class, "irons", 0)
+		self.weapons[#self.weapons + 1] = wep
+		self.given = wep
+		return wep
+	end
+	BALLISTICS.Gear.ApplySpawn(winner)
+	check("a twin is given once", #given == 1 and given[1] == "tacrp_ex_m1911")
+	check("the live copy is restored onto the entity", winner.given.clip1 == 4 and winner.given.Attachments[1].Installed == "optic_live")
+	local twin = BALLISTICS.Loadout.Twin(winner)
+	check("the stored twin is restored", twin ~= nil and twin.clip1 == 9 and twin.attachments[1].att == "optic_twin")
+	check("twin slots survive carry-over", BALLISTICS.Loadout.ClassFor(winner, 1) == "tacrp_ex_m1911" and BALLISTICS.Loadout.ClassFor(winner, 2) == "tacrp_ex_m1911")
+end
+
 -- TacRP autosave forced off on the client so bought guns start bare.
 do
 	local val = 1

@@ -40,4 +40,5 @@ S.Unbuy(row, { kind = "nade", key = "frag" }); S.Unbuy(row, { kind = "nade", key
 check("grenade count stops at 0", (row.nades.frag or 0) == 0)
 local svSrc = io.open("gamemodes/ballistics/gamemode/modules/sell/sv_sell.lua"):read("*a")
 check("sell server defines its own GOOD/BAD team ids", svSrc:find("local GOOD = TEAM_GOOD", 1, true) ~= nil and svSrc:find("local BAD = TEAM_BAD", 1, true) ~= nil)
+check("sell prefers the stored twin", svSrc:find("ClearTwin", 1, true) ~= nil and svSrc:find("Load.Twin", 1, true) ~= nil)
 if failed then os.exit(1) end

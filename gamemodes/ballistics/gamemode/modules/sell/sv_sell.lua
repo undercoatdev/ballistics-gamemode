@@ -32,9 +32,29 @@ local function attRefund(wep)
 	return total
 end
 
+local function attRefundTwin(twin)
+	local total = 0
+	if type(twin) ~= "table" or type(twin.attachments) ~= "table" then return 0 end
+	local P = BALLISTICS.AttPrice
+	if not (P and P.Cost) then return 0 end
+	for i = 1, #twin.attachments do
+		local row = twin.attachments[i]
+		if type(row) == "table" and type(row.att) == "string" and row.att ~= "" then
+			local price = P.Cost({ Category = row.att, Installed = row.att, PrintName = row.att })
+			if tonumber(price) then total = total + price end
+		end
+	end
+	return total
+end
+
 local function haveOf(ply, item)
 	if item.kind == "weapon" then
-		return (type(ply.HasWeapon) == "function" and ply:HasWeapon(item.class)) and 1 or 0
+		local n = (type(ply.HasWeapon) == "function" and ply:HasWeapon(item.class)) and 1 or 0
+		if BALLISTICS.Loadout and type(BALLISTICS.Loadout.Twin) == "function" then
+			local twin = BALLISTICS.Loadout.Twin(ply)
+			if type(twin) == "table" and twin.class == item.class then n = n + 1 end
+		end
+		return n
 	elseif item.kind == "nade" then
 		return type(ply.GetAmmoCount) == "function" and (tonumber(ply:GetAmmoCount(item.ammo)) or 0) or 0
 	elseif item.kind == "med" then
@@ -49,7 +69,30 @@ end
 
 local function takeOne(ply, item)
 	if item.kind == "weapon" then
+		local Load = BALLISTICS.Loadout
+		local twin = Load and Load.Twin and Load.Twin(ply) or nil
+		if type(twin) == "table" and twin.class == item.class then
+			if Load.ClearTwin then Load.ClearTwin(ply) end
+			local live = Load.LiveSlot and Load.LiveSlot(ply)
+			local keep = { false, false }
+			if live == 1 or live == 2 then keep[live] = item.class else keep[1] = item.class end
+			if Load.Restore then Load.Restore(ply, keep) end
+			return true
+		end
 		ply:StripWeapon(item.class)
+		twin = Load and Load.Twin and Load.Twin(ply) or nil
+		if type(twin) == "table" and twin.class == item.class then
+			if type(ply.Give) == "function" then
+				local wep = ply:Give(item.class, true)
+				if (not wep or (type(wep.IsValid) == "function" and wep:IsValid() == false)) and type(ply.GetWeapon) == "function" then
+					wep = ply:GetWeapon(item.class)
+				end
+				if wep and Load.ApplyGun then Load.ApplyGun(wep, twin) end
+			end
+			if Load.ClearTwin then Load.ClearTwin(ply) end
+			if Load.Slots then Load.Slots(ply) end
+			return ply:HasWeapon(item.class)
+		end
 		return not ply:HasWeapon(item.class)
 	elseif item.kind == "nade" then
 		ply:RemoveAmmo(1, item.ammo)
@@ -73,6 +116,13 @@ function S.Request(ply, key)
 		fresh = math.floor(tonumber(map[item.key]) or 0)
 		if fresh < 0 then fresh = 0 end
 	end
+	local refundAtt = attRefund(wep)
+	if item and item.kind == "weapon" and BALLISTICS.Loadout and type(BALLISTICS.Loadout.Twin) == "function" then
+		local twin = BALLISTICS.Loadout.Twin(ply)
+		if type(twin) == "table" and twin.class == item.class then
+			refundAtt = attRefundTwin(twin)
+		end
+	end
 	local plan = S.Plan({
 		phase = BALLISTICS.Round and BALLISTICS.Round.Phase and BALLISTICS.Round.Phase() or "lobby",
 		alive = ply:Alive() == true,
@@ -80,7 +130,7 @@ function S.Request(ply, key)
 		item = item,
 		have = item and haveOf(ply, item) or 0,
 		price = item and BALLISTICS.Catalog.Price and BALLISTICS.Catalog.Price(item.key) or 0,
-		attRefund = attRefund(wep),
+		attRefund = refundAtt,
 		fresh = fresh,
 	})
 	if not plan.ok then return false, plan.err end

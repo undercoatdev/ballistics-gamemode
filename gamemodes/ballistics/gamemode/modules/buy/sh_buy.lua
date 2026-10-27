@@ -1,7 +1,7 @@
 -- Pure buy checks. No GMod calls.
 -- Phase must be buy, the buyer alive and slotted, the price payable, limits
--- respected, a gun not already owned, both gun slots not already full, and a
--- med under MedMax.
+-- respected, both gun slots not already full (a second copy of an owned gun
+-- is allowed while a slot is free), and a med under MedMax.
 -- Purchase spends, grants, and refunds if the grant fails.
 
 BALLISTICS = BALLISTICS or {}
@@ -52,13 +52,15 @@ function BALLISTICS.Buy.ReasonText(err)
 	return "Could not buy that."
 end
 
--- Left click on the buy wheel. Guns sell when you own one bought this phase.
--- Grenades and meds stay a buy until you hold the cap, and sell only then if
--- at least one was bought this phase (fresh > 0). Right click is not this.
-function BALLISTICS.Buy.LeftAction(kind, have, max, fresh, owned)
+-- Left click on the buy wheel. Guns sell when you own one bought this phase
+-- and both gun slots are full. A free slot keeps left click as buy, even for
+-- a gun you already hold. Grenades and meds stay a buy until you hold the cap,
+-- and sell only then if at least one was bought this phase (fresh > 0).
+-- Right click is not this.
+function BALLISTICS.Buy.LeftAction(kind, have, max, fresh, owned, slotsFull)
 	fresh = countOf(fresh)
 	if kind == "weapon" then
-		if owned == true and fresh > 0 then return "sell" end
+		if owned == true and fresh > 0 and slotsFull == true then return "sell" end
 		return "buy"
 	end
 	if kind ~= "nade" and kind ~= "med" then return "buy" end
@@ -163,8 +165,10 @@ function BALLISTICS.Buy.Validate(ctx)
 		balance = 0
 	end
 	if balance < price then return false, "money" end
-	if item.kind == "weapon" and ctx.owned == true then return false, "duplicate" end
-	if item.kind == "weapon" and ctx.gunSlotsFull == true then return false, "full" end
+	if item.kind == "weapon" and ctx.gunSlotsFull == true then
+		if ctx.owned == true then return false, "duplicate" end
+		return false, "full"
+	end
 	local limits = ctx.limits
 	if type(limits) ~= "table" then limits = {} end
 	if item.kind == "weapon" then

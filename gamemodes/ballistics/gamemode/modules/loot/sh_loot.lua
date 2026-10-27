@@ -661,7 +661,19 @@ local function fail(err, you, them)
 	}
 end
 
-local function findGun(guns, class)
+-- fromSlot, when it is a gun slot, picks that copy. Otherwise the first
+-- matching class. Two copies of the same class live in different slots.
+local function findGun(guns, class, fromSlot)
+	fromSlot = whole(fromSlot, 0)
+	if fromSlot >= 1 then
+		for i = 1, #guns do
+			if guns[i].slot == fromSlot then
+				if type(class) ~= "string" or class == "" or guns[i].class == class then
+					return i, guns[i]
+				end
+			end
+		end
+	end
 	for i = 1, #guns do
 		if guns[i].class == class then return i, guns[i] end
 	end
@@ -669,15 +681,14 @@ local function findGun(guns, class)
 end
 
 -- Requested slot when it is inside 1..max and empty, otherwise the first
--- free slot. The gun keeps that slot. Fails when every slot is taken or the
--- class is already here.
+-- free slot. The gun keeps that slot. Fails when every slot is taken.
+-- A second copy of the same class is allowed (the stored twin).
 local function placeGun(guns, gun, slot, max)
 	if type(gun) ~= "table" then return false end
 	max = whole(max, L.GUNS)
 	if max < 1 then max = 1 end
 	if max > L.GUNS then max = L.GUNS end
 	if #guns >= max then return false end
-	if findGun(guns, gun.class) then return false end
 	local want = whole(slot, 0)
 	local chosen = nil
 	if want >= 1 and want <= max and not slotTaken(guns, want) then
@@ -696,8 +707,8 @@ local function placeGun(guns, gun, slot, max)
 	return true
 end
 
-local function takeGun(guns, class)
-	local idx, gun = findGun(guns, class)
+local function takeGun(guns, class, fromSlot)
+	local idx, gun = findGun(guns, class, fromSlot)
 	if not idx then return nil end
 	table.remove(guns, idx)
 	return gun
@@ -761,8 +772,9 @@ function L.Transfer(ctx)
 	if kind == "gun" then
 		-- Own side: ctx.slot is the target slot. The same slot, or one outside
 		-- 1..max, is not a move. A gun already there swaps slots.
+		-- ctx.fromSlot picks which copy when two guns share a class.
 		if fromName == toName then
-			local _, gun = findGun(source.guns, key)
+			local _, gun = findGun(source.guns, key, ctx.fromSlot)
 			if not gun then return fail("empty", originYou, originThem) end
 			local maxGuns = whole(caps.guns, L.GUNS)
 			if maxGuns < 1 then maxGuns = 1 end
@@ -783,7 +795,7 @@ function L.Transfer(ctx)
 			gun.slot = target
 			return { ok = true, you = you, them = them, drop = nil, moved = 1 }
 		end
-		local gun = takeGun(source.guns, key)
+		local gun = takeGun(source.guns, key, ctx.fromSlot)
 		if not gun then return fail("empty", originYou, originThem) end
 		if toName == "drop" then
 			return {
@@ -875,6 +887,7 @@ function L.Accepts(drag, slot, ctx)
 		amount = drag.amount or 1,
 		to = slot.side,
 		slot = slot.index,
+		fromSlot = drag.index,
 		giveOnly = ctx.giveOnly,
 		caps = ctx.caps,
 		infiniteAmmo = ctx.infinite,
@@ -1237,10 +1250,11 @@ function L.WriteAct(w, req)
 	w.string(type(req.to) == "string" and req.to or "")
 	w.uint8(u8(req.slot))
 	w.bool(req.whole == true)
+	w.uint8(u8(req.fromSlot or req.index or 0))
 end
 
 function L.ReadAct(r)
-	return {
+	local act = {
 		from = r.string(),
 		kind = r.string(),
 		key = r.string(),
@@ -1249,4 +1263,9 @@ function L.ReadAct(r)
 		slot = r.uint8(),
 		whole = r.bool() == true,
 	}
+	if type(r.uint8) == "function" then
+		local ok, n = pcall(r.uint8)
+		if ok then act.fromSlot = n end
+	end
+	return act
 end
