@@ -75,6 +75,15 @@ local SETTINGS = {
 			{ id = "arcade", label = "Arcade" },
 		},
 	},
+	{
+		path = "BulletPushForce",
+		label = "Bullet push force",
+		kind = "number",
+		min = 0,
+		max = 2,
+		decimals = 2,
+		blurb = "How hard bullets push bodies and props. 1 = TacRP normal, 0.5 = half.",
+	},
 }
 
 function V.ToMinutes(seconds)

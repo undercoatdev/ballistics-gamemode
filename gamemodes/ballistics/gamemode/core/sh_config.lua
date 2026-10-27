@@ -14,6 +14,7 @@ local DEFAULTS = {
 	TimeoutWinner = "draw",
 	FreezeInBuy = true,
 	HealthMode = "realistic",
+	BulletPushForce = 0.5,
 	ModelGood = "models/player/combine_soldier.mdl",
 	ModelBad = "models/player/combine_super_soldier.mdl",
 	ObjectiveRadius = 2 / 0.01905, -- 2 m in Hammer units
@@ -89,6 +90,7 @@ local SCHEMA = {
 	TimeoutWinner = { kind = "enum", values = { draw = true, good = true, bad = true } },
 	FreezeInBuy = { kind = "bool" },
 	HealthMode = { kind = "enum", values = { realistic = true, arcade = true } },
+	BulletPushForce = { kind = "number", min = 0, max = 2 },
 	ModelGood = { kind = "string" },
 	ModelBad = { kind = "string" },
 	ObjectiveRadius = { kind = "number", min = 16, max = 1000 },
@@ -127,7 +129,7 @@ local COST_GROUPS = {
 
 local SECTIONS = {
 	teams = { "SlotsPerTeam", "MinPerTeam" },
-	settings = { "RoundsToWin", "HealthMode" },
+	settings = { "RoundsToWin", "HealthMode", "BulletPushForce" },
 	general = {
 		"BuyTime", "RoundTime", "PostRoundTime", "TimeoutWinner",
 		"FreezeInBuy", "ModelGood", "ModelBad",
