@@ -667,7 +667,9 @@ local function addSlot(parent, slot, x, y, w, h, originX, originY)
 		if code == MOUSE_RIGHT_CODE then return end
 		onSlotPress(self.balSlot, self)
 	end
-	function pnl:OnMouseReleased()
+	function pnl:OnMouseReleased(code)
+		-- Right release only adds to the stack; the left release ends the drag.
+		if code == MOUSE_RIGHT_CODE then return end
 		if drag then finishDrag() end
 	end
 	hitSlots[#hitSlots + 1] = {
@@ -824,7 +826,9 @@ local function ensureRoot()
 		draw.SimpleText(note, "BallisticsLoot", w / 2, h - 24, Color(230, 200, 150), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
 	end
 	function root:OnMousePressed() end
-	function root:OnMouseReleased()
+	function root:OnMouseReleased(code)
+		-- Right release only adds to the stack; the left release ends the drag.
+		if code == MOUSE_RIGHT_CODE then return end
 		if drag then finishDrag() end
 	end
 	-- MakePopup keeps keyboard focus, so +use and the inventory bind never
@@ -850,7 +854,9 @@ local function ensureRoot()
 				draw.SimpleText("Give only", "BallisticsLootSmall", w - 12, 17, Color(160, 160, 168), TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
 			end
 		end
-		function pnl:OnMouseReleased()
+		function pnl:OnMouseReleased(code)
+			-- Right release only adds to the stack; the left release ends the drag.
+			if code == MOUSE_RIGHT_CODE then return end
 			if drag then finishDrag() end
 		end
 		return pnl

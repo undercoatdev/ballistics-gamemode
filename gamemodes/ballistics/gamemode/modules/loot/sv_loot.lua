@@ -985,34 +985,61 @@ local function spawnPickup(ply, class, nudge)
 	return ent
 end
 
--- Grenades: one entity with the stack count when the entity supports it,
--- otherwise one entity per grenade. Meds are always one entity per med.
+-- Grenades and meds drop as one bal_drop entity holding the whole stack.
+-- It is picked up only with E (see entities/entities/bal_drop.lua).
+local function dropModel(drop)
+	local class = drop.entity
+	if type(class) == "string" and scripted_ents and type(scripted_ents.GetStored) == "function" then
+		local ok, stored = pcall(scripted_ents.GetStored, class)
+		local t = ok and type(stored) == "table" and (stored.t or stored) or nil
+		if type(t) == "table" and type(t.Model) == "string" and t.Model ~= "" then return t.Model end
+	end
+	if drop.kind == "med" and PLAYER_BALLISTICS then
+		return PLAYER_BALLISTICS.MedModel or PLAYER_BALLISTICS.MedFallback
+	end
+	return nil
+end
+
 local function spawnStack(ply, drop)
 	if type(drop) ~= "table" then return false end
-	local class = drop.entity
 	local amount = math.floor(tonumber(drop.amount) or 0)
-	if amount < 1 then return false end
-	local made = {}
-	local function one(i)
-		local ent = spawnPickup(ply, class, (i - 1) * 8)
-		if not ent then return false end
-		made[#made + 1] = ent
-		return true
-	end
-	if not one(1) then
-		rollback(made)
+	if amount < 1 or type(drop.key) ~= "string" then return false end
+	if not (ents and type(ents.Create) == "function") then return false end
+	local ent = ents.Create(L.DROP_CLASS)
+	if not valid(ent) then return false end
+	ent.BalModel = dropModel(drop)
+	if drop.kind == "med" then ent.BalMedId = drop.id end
+	if not placeDrop(ply, ent, 0) then
+		if valid(ent) and type(ent.Remove) == "function" then pcall(ent.Remove, ent) end
 		return false
 	end
-	if drop.kind == "nade" and amount > 1 and applyAmount(made[1], amount) then
-		return true, made
+	if type(ent.SetItemKey) == "function" then pcall(ent.SetItemKey, ent, drop.key) end
+	if type(ent.SetCount) == "function" then pcall(ent.SetCount, ent, amount) end
+	ent.BalItemKey = drop.key
+	ent.BalCount = amount
+	markDrop(ent)
+	return true, { ent }
+end
+
+-- E on a bal_drop: give as many as fit. Returns how many are left on the floor.
+function L.TakeDrop(ply, key, count)
+	count = math.floor(tonumber(count) or 0)
+	if not valid(ply) or count < 1 then return 0 end
+	local item = BALLISTICS.Catalog and BALLISTICS.Catalog.Get and BALLISTICS.Catalog.Get(key)
+	if type(item) ~= "table" then return count end
+	local caps = capsNow()
+	local n = 0
+	if item.kind == "nade" and type(item.ammo) == "string" then
+		local space = (tonumber(caps.nades) or 3) - ammoCount(ply, item.ammo)
+		n = math.min(count, math.max(0, space))
+		if n > 0 then setAmmo(ply, item.ammo, ammoCount(ply, item.ammo) + n) end
+	elseif item.kind == "med" and item.id ~= nil then
+		local space = (tonumber(caps.meds) or 3) - medHave(ply, item.id)
+		n = math.min(count, math.max(0, space))
+		if n > 0 and BALLISTICS.GiveMed then BALLISTICS.GiveMed(ply, item.id, n) end
 	end
-	for i = 2, amount do
-		if not one(i) then
-			rollback(made)
-			return false
-		end
-	end
-	return true, made
+	if n < 1 and type(ply.ChatPrint) == "function" then ply:ChatPrint(L.FIT) end
+	return count - n
 end
 
 local function retarget(session)

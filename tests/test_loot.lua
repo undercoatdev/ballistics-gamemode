@@ -910,10 +910,10 @@ looter.ammo.grenade = 3
 L.OpenSelf(looter)
 ok = L.Act(looter, { from = "you", kind = "nade", key = "nade_frag", amount = 1, to = "drop", slot = 0, whole = true })
 local nades = liveDrops()
-check("a whole-stack flag still drops one grenade", ok == true and looter.ammo.grenade == 2 and #nades == 1 and nades[1].class == "tacrp_ammo_frag" and nades[1].BallisticsLootDrop == true and nades[1].nw.bal_loot_drop == true)
+check("a whole-stack flag still drops one grenade as an E-only bal_drop", ok == true and looter.ammo.grenade == 2 and #nades == 1 and nades[1].class == "bal_drop" and nades[1].BalItemKey == "nade_frag" and nades[1].BalCount == 1 and nades[1].BallisticsLootDrop == true)
 ok = L.Act(looter, { from = "you", kind = "nade", key = "nade_frag", amount = 2, to = "drop", slot = 0 })
 nades = liveDrops()
-check("each grenade is its own pickup", ok == true and looter.ammo.grenade == 0 and #nades == 3 and nades[3].class == "tacrp_ammo_frag" and nades[3].pos.y == 8 and nades[3].pos.z == L.DROP_UP and nades[3].fell == true and nades[3].BallisticsDropOwner == looter and nades[3].BallisticsLootDrop == true)
+check("a grenade stack is one bal_drop holding the count", ok == true and looter.ammo.grenade == 0 and #nades == 2 and nades[2].class == "bal_drop" and nades[2].BalCount == 2 and nades[2].pos.z == L.DROP_UP and nades[2].fell == true)
 
 settle()
 seat(looter)
@@ -922,12 +922,12 @@ looter.ammo.grenade = 3
 L.OpenSelf(looter)
 ok = L.Act(looter, { from = "you", kind = "nade", key = "nade_frag", amount = 3, to = "drop", slot = 0 })
 nades = liveDrops()
-check("a grenade entity that stores a count takes the stack", ok == true and looter.ammo.grenade == 0 and #nades == 1 and nades[1].ammoSet == 3)
+check("three grenades drop as one entity", ok == true and looter.ammo.grenade == 0 and #nades == 1 and nades[1].BalCount == 3)
 
 settle()
 seat(looter)
 looter.ammo.grenade = 2
-failAfter = 1
+failAfter = 0
 L.OpenSelf(looter)
 ok, err = L.Act(looter, { from = "you", kind = "nade", key = "nade_frag", amount = 2, to = "drop", slot = 0 })
 check("a failed grenade drop leaves them in hand", ok == false and err == "drop" and looter.ammo.grenade == 2 and #liveDrops() == 0)
@@ -940,7 +940,7 @@ L.OpenSelf(looter)
 medCalls = {}
 ok = L.Act(looter, { from = "you", kind = "med", key = "med_small", amount = 2, to = "drop", slot = 0 })
 local meds = liveDrops()
-check("each med is its own pickup", ok == true and #meds == 2 and meds[1].class == "pb_med_small" and meds[2].class == "pb_med_small" and meds[1].BallisticsLootDrop == true and meds[2].pos.y == 8 and meds[2].pos.z == L.DROP_UP and meds[1].fell == true and meds[1].BallisticsDropOwner == looter)
+check("meds drop as one E-only bal_drop", ok == true and #meds == 1 and meds[1].class == "bal_drop" and meds[1].BalItemKey == "med_small" and meds[1].BalCount == 2 and meds[1].BalMedId == 2 and meds[1].BallisticsLootDrop == true)
 check("meds leave through GiveMed", looter.pbMed.counts[2] == 0 and #medCalls == 1 and medCalls[1].id == 2 and medCalls[1].n == -2)
 
 settle()
@@ -1155,5 +1155,10 @@ do
 	local r = L.StackIconRect("med", 110, 112)
 	check("tall med slot puts a 56 px icon centred below the text", r ~= nil and r[3] == 56 and r[1] == 27 and r[2] >= 44 and r[2] + r[3] <= 112)
 	check("short slots and guns keep the side icon", L.StackIconRect("nade", 110, 48) == nil and L.StackIconRect("gun", 110, 112) == nil)
+end
+do
+	looter.ammo.grenade = 0
+	local left = L.TakeDrop and L.TakeDrop(looter, "nade_frag", 5)
+	check("E on a dropped stack gives up to the cap and leaves the rest", left == 2 and looter.ammo.grenade == 3)
 end
 if failed then os.exit(1) end

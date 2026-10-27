@@ -310,6 +310,19 @@ local function restoreWeapons(ply, list)
 	if BALLISTICS.Loadout and type(BALLISTICS.Loadout.Restore) == "function" then
 		BALLISTICS.Loadout.Restore(ply, ordered)
 	end
+	-- A carried-over gun is drawn instead of the knife (first slot, else the
+	-- second). Equip selects now and next tick; one more pass after the spawn
+	-- loadout so its knife select cannot win.
+	local first = ordered[1]
+	if first and BALLISTICS.Loadout and type(BALLISTICS.Loadout.Equip) == "function" then
+		BALLISTICS.Loadout.Equip(ply, first)
+		if timer and timer.Simple then
+			timer.Simple(0.2, function()
+				if IsValid and not IsValid(ply) then return end
+				BALLISTICS.Loadout.Equip(ply, first)
+			end)
+		end
+	end
 end
 
 local function restoreAmmo(ply, saved)

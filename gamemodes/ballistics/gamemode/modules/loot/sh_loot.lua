@@ -22,6 +22,7 @@ L.WATCH = 0.2
 L.KNIFE = "tacrp_knife"
 L.FIT = "Can't fit any more of this item"
 L.GUNS = 2
+L.DROP_CLASS = "bal_drop"
 L.DROP_DIST = 40
 L.DROP_UP = 48
 L.DROP_GRACE = 1.5
