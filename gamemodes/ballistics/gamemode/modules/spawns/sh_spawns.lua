@@ -23,6 +23,8 @@ D.BOX_MAX = 8192
 -- Team markers at the capture centres. They are not solid and cannot be moved.
 D.FLAG_MODEL_GOOD = "models/props_c17/cashregister01a.mdl"
 D.FLAG_MODEL_BAD = "models/combine_helicopter/helicopter_bomb01.mdl"
+-- Flag props are lifted this many units (1 ft) so they sit on the floor, not in it.
+D.FLAG_LIFT = 12
 
 function D.flagModel(team)
 	if team == "bad" or team == 2 then return D.FLAG_MODEL_BAD end

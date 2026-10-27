@@ -22,6 +22,10 @@ check("BallisticsKeep is kept", C.ShouldRemove({ class = "prop_ragdoll", keep = 
 check("a flag team is kept", C.ShouldRemove({ class = "prop_ragdoll", flagTeam = 1 }) == false)
 check("flag team 0 does not spare a ragdoll", C.ShouldRemove({ class = "prop_ragdoll", flagTeam = 0 }) == true)
 check("empty info removes nothing", C.ShouldRemove(nil) == false)
+check("a loot drop on the floor is removed", C.ShouldRemove({ class = "tacrp_mp5", lootDrop = true }) == true)
+check("a held loot drop stays", C.ShouldRemove({ class = "tacrp_mp5", lootDrop = true, held = true }) == false)
+check("an unmarked weapon stays", C.ShouldRemove({ class = "tacrp_mp5" }) == false)
+check("a player stays even if marked as a loot drop", C.ShouldRemove({ class = "tacrp_mp5", lootDrop = true, isPlayer = true }) == false)
 
 local function readAll(path)
 	local f = io.open(path, "r")
@@ -100,6 +104,19 @@ check("loose ragdoll is removed", removed[ragC] == true)
 check("spawn flag stays", removed[flag] ~= true)
 check("kept-body list is empty", #PLAYER_BALLISTICS.Bodies == 0)
 check("decals cleared and clients told", worldDecals == true and flag.decals == true and broadcast == "bal_cleanup")
+
+local gun = ent("tacrp_mp5")
+gun.BallisticsLootDrop = true
+local heldGun = ent("tacrp_ak47")
+heldGun.BallisticsLootDrop = true
+function heldGun:GetOwner() return alive end
+local plain = ent("tacrp_mp5")
+ents.GetAll = function() return { gun, heldGun, plain, alive } end
+removed = {}
+BALLISTICS.Cleanup.Round()
+check("round cleanup removes a marked gun", removed[gun] == true)
+check("round cleanup keeps a held marked gun", removed[heldGun] ~= true)
+check("round cleanup keeps an unmarked gun", removed[plain] ~= true)
 
 -- Client decal pass clears world and entity decals, and repeats later.
 do

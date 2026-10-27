@@ -128,7 +128,7 @@ local function makeProp(flag, teamId)
 	local x, y, z = snap(flag.pos.x, flag.pos.y, flag.pos.z)
 	local model = D.flagModel and D.flagModel(teamId) or D.FLAG_MODEL_GOOD
 	ent:SetModel(model)
-	ent:SetPos(Vector(x, y, z))
+	ent:SetPos(Vector(x, y, z + (D.FLAG_LIFT or 12))) -- models sink into the floor otherwise
 	ent:SetAngles(Angle(0, flag.ang and flag.ang.y or 0, 0))
 	sealFlag(ent)
 	ent:Spawn()

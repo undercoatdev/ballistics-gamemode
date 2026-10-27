@@ -198,6 +198,33 @@ ok = BALLISTICS.Buy.Validate(ctx({
 check("grenade limit 0 is unlimited", ok == true)
 
 ok, err = BALLISTICS.Buy.Validate(ctx({
+	item = BALLISTICS.Catalog.Get("nade_frag"),
+	price = 500,
+	grenadeCount = 3,
+	grenadeMax = 3,
+}))
+check("grenade carry cap is refused", ok == false and err == "nadecap")
+check("grenade carry cap says so", BALLISTICS.Buy.ReasonText("nadecap") == "You cannot carry more of that grenade.")
+result = purchase({
+	item = BALLISTICS.Catalog.Get("nade_frag"),
+	price = 500,
+	grenadeCount = 3,
+	grenadeMax = 3,
+}, {
+	spend = function() error("spent") end,
+	grant = function() error("granted") end,
+})
+check("grenade carry cap does not spend", result.ok == false and result.err == "nadecap" and result.spent == false)
+BALLISTICS.Config.GrenadesMax = 0
+ok = BALLISTICS.Buy.Validate(ctx({
+	item = BALLISTICS.Catalog.Get("nade_frag"),
+	price = 500,
+	grenadeCount = 9,
+}))
+check("validate ignores GrenadesMax unless the caller passes it", ok == true)
+BALLISTICS.Config.GrenadesMax = 3
+
+ok, err = BALLISTICS.Buy.Validate(ctx({
 	item = BALLISTICS.Catalog.Get("med_pills"),
 	price = 50,
 	medCount = 5,
@@ -484,6 +511,33 @@ ply.pbMed.counts[1] = 5
 medMax = 5
 buyOk, buyErr = BALLISTICS.Buy.Request(ply, "med_pills")
 check("server med cap does not spend", buyOk == false and buyErr == "medcap" and BALLISTICS.Money.Get(ply) == 1000 and #medCalls == 0)
+
+fresh()
+BALLISTICS.Config.MedsMax = 3
+ply.pbMed.counts[1] = 3
+medMax = 5
+buyOk, buyErr = BALLISTICS.Buy.Request(ply, "med_pills")
+check("MedsMax blocks a buy the med addon would allow", buyOk == false and buyErr == "medcap" and BALLISTICS.Money.Get(ply) == 1000 and #medCalls == 0)
+BALLISTICS.Config.MedsMax = 3
+
+fresh()
+function ply:GetAmmoCount(ammoType)
+	local stock = self.ammoStock
+	if type(stock) ~= "table" then return 0 end
+	return stock[ammoType] or 0
+end
+ply.ammoStock = { grenade = 3 }
+local buySent = 0
+local realBuySend = BALLISTICS.Net.Send
+BALLISTICS.Net.Send = function(name, target, payload)
+	if name == "bal_buy_ok" then buySent = buySent + 1 end
+	if realBuySend then return realBuySend(name, target, payload) end
+end
+buyOk, buyErr = BALLISTICS.Buy.Request(ply, "nade_frag")
+BALLISTICS.Net.Send = realBuySend
+check("grenade carry cap does not spend", buyOk == false and buyErr == "nadecap" and BALLISTICS.Money.Get(ply) == 1000 and #ply.ammo == 0 and buySent == 0)
+check("grenade cap tells the player", ply.chats[#ply.chats] == "Ballistics: You cannot carry more of that grenade.")
+ply.ammoStock = nil
 
 fresh()
 lying = true

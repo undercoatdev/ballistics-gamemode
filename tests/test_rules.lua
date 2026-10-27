@@ -74,7 +74,7 @@ local generalPaths = {
 	"RoundTime", "BuyTime", "PostRoundTime", "StartMoney", "MaxMoney",
 	"HealedUpOrgans",
 	"CaptureTimeOne", "CaptureTimeTwo", "CaptureDecay", "CaptureContestedFreeze",
-	"ObjectiveRadius", "CustomizeRadius", "BuyAmmoMags",
+	"ObjectiveRadius", "CustomizeRadius", "BuyAmmoMags", "MedsMax", "GrenadesMax",
 }
 local generalOk = #general == #generalPaths
 for i = 1, #generalPaths do
@@ -88,6 +88,8 @@ check("buy time stays in seconds", generalMap.BuyTime.display == 20 and generalM
 check("radii are shown in metres", generalMap.ObjectiveRadius.kind == "metres" and generalMap.ObjectiveRadius.unit == "m" and math.abs(generalMap.ObjectiveRadius.display - 2) < 1e-6 and math.abs(generalMap.CustomizeRadius.display - 2) < 1e-6)
 check("capture flags are booleans", generalMap.CaptureDecay.kind == "bool" and generalMap.CaptureDecay.display == true and generalMap.CaptureContestedFreeze.display == true)
 check("magazines per gun", generalMap.BuyAmmoMags.label == "Magazines per gun" and generalMap.BuyAmmoMags.display == 0 and generalMap.BuyAmmoMags.blurb == "0 = infinite ammo.")
+check("meds max row", generalMap.MedsMax.label == "Meds max" and generalMap.MedsMax.kind == "int" and generalMap.MedsMax.display == 3 and generalMap.MedsMax.min == 0 and generalMap.MedsMax.max == 100 and generalMap.MedsMax.blurb == "Most of one med a player can carry. The buy menu and looting both stop here.")
+check("grenades max row", generalMap.GrenadesMax.label == "Grenades max" and generalMap.GrenadesMax.kind == "int" and generalMap.GrenadesMax.display == 3 and generalMap.GrenadesMax.min == 0 and generalMap.GrenadesMax.max == 100 and generalMap.GrenadesMax.blurb == "Most of one throwable a player can carry. The buy menu and looting both stop here.")
 local organBlurb = "At each new round every organ heals this many units (capped at max). Destroyed organs always come back working, just weak."
 check("healed organs row", generalMap.HealedUpOrgans.label == "Healed up organs" and generalMap.HealedUpOrgans.kind == "int" and generalMap.HealedUpOrgans.display == 10 and generalMap.HealedUpOrgans.min == 0 and generalMap.HealedUpOrgans.max == 100 and generalMap.HealedUpOrgans.blurb == organBlurb)
 
@@ -136,6 +138,9 @@ local function dirty()
 	C.Set("BuyTime", 30)
 	C.Set("HealedUpOrgans", 33)
 	C.Set("BuyAmmoMags", 9)
+	C.Set("MedsMax", 9)
+	C.Set("GrenadesMax", 8)
+	C.Set("LootRange", 200)
 end
 
 local function nearRadius()
@@ -164,7 +169,7 @@ check("gains reset restores gains only", C.Gains.kill == 500 and C.Gains.round_w
 
 dirty()
 C.ResetSection(V.ResetPayload("general").section)
-check("general reset restores general only", C.StartMoney == 1000 and C.RoundTime == 600 and C.BuyTime == 20 and C.CaptureDecay == true and nearRadius() and C.Gains.kill == 15 and C.Costs.tacrp_mp5 == 11 and C.AttCosts.perk == 14 and C.SlotsPerTeam == 8 and C.BuyLimits.weapon_per_round == 2 and C.HealedUpOrgans == 10 and C.BuyAmmoMags == 0)
+check("general reset restores general only", C.StartMoney == 1000 and C.RoundTime == 600 and C.BuyTime == 20 and C.CaptureDecay == true and nearRadius() and C.Gains.kill == 15 and C.Costs.tacrp_mp5 == 11 and C.AttCosts.perk == 14 and C.SlotsPerTeam == 8 and C.BuyLimits.weapon_per_round == 2 and C.HealedUpOrgans == 10 and C.BuyAmmoMags == 0 and C.MedsMax == 3 and C.GrenadesMax == 3 and C.LootRange == 96)
 check("general reset leaves Admin Settings keys", C.HealthMode == "arcade" and C.RoundsToWin == 3)
 
 dirty()
@@ -178,7 +183,7 @@ check("costs reset restores every item price and not attachments", C.Costs.tacrp
 
 dirty()
 C.ResetSection(V.ResetPayload("rules").section)
-check("rules reset restores rules and leaves teams and buy limits", C.Costs.tacrp_mp5 == 600 and C.Costs.nade_frag == 500 and C.Costs.med_pills == 50 and C.AttCosts.perk == 700 and C.AttRefundOnDetach == false and C.Gains.kill == 500 and C.Gains.round_win == 1000 and C.StartMoney == 1000 and C.RoundTime == 600 and C.HealthMode == "arcade" and C.CaptureDecay == true and nearRadius() and C.SlotsPerTeam == 8 and C.BuyLimits.weapon_per_round == 2 and C.HealedUpOrgans == 10 and C.BuyAmmoMags == 0)
+check("rules reset restores rules and leaves teams and buy limits", C.Costs.tacrp_mp5 == 600 and C.Costs.nade_frag == 500 and C.Costs.med_pills == 50 and C.AttCosts.perk == 700 and C.AttRefundOnDetach == false and C.Gains.kill == 500 and C.Gains.round_win == 1000 and C.StartMoney == 1000 and C.RoundTime == 600 and C.HealthMode == "arcade" and C.CaptureDecay == true and nearRadius() and C.SlotsPerTeam == 8 and C.BuyLimits.weapon_per_round == 2 and C.HealedUpOrgans == 10 and C.BuyAmmoMags == 0 and C.MedsMax == 3 and C.GrenadesMax == 3 and C.LootRange == 96)
 
 dirty()
 local unknownOk = C.ResetSection("nope")

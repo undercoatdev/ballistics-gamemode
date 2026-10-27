@@ -1,5 +1,6 @@
--- What a round cleanup may delete. Ragdolls only. Flags, players, and anything
--- marked BallisticsKeep stay. No GMod calls.
+-- What a round cleanup may delete. Ragdolls, and guns this gamemode dropped
+-- on the floor (lootDrop). Flags, players, held weapons, and anything marked
+-- BallisticsKeep stay. No GMod calls.
 
 BALLISTICS = BALLISTICS or {}
 BALLISTICS.Cleanup = BALLISTICS.Cleanup or {}
@@ -20,5 +21,9 @@ function BALLISTICS.Cleanup.ShouldRemove(info)
 	if info.keep == true then return false end
 	local flag = info.flagTeam
 	if flag ~= nil and flag ~= 0 and flag ~= "" and flag ~= false then return false end
+	if info.lootDrop == true then
+		if info.held == true then return false end
+		return true
+	end
 	return BALLISTICS.Cleanup.IsRagdollClass(info.class) == true
 end

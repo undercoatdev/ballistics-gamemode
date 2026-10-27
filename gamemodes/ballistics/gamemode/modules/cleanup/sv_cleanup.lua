@@ -63,12 +63,22 @@ local function flagTeam(ent)
 	return teamId
 end
 
+local function heldWeapon(ent)
+	if type(ent.GetOwner) ~= "function" then return false end
+	local ok, owner = pcall(ent.GetOwner, ent)
+	if not ok or owner == nil or owner == false then return false end
+	if type(owner.IsValid) == "function" and owner:IsValid() == false then return false end
+	return type(owner.IsPlayer) == "function" and owner:IsPlayer() == true
+end
+
 local function describe(ent)
 	return {
 		class = classOf(ent),
 		isPlayer = type(ent.IsPlayer) == "function" and ent:IsPlayer() == true or false,
 		keep = ent.BallisticsKeep == true,
 		flagTeam = flagTeam(ent),
+		lootDrop = ent.BallisticsLootDrop == true,
+		held = heldWeapon(ent),
 	}
 end
 
@@ -133,6 +143,18 @@ local function dropBodies()
 	pb.Bodies = kept
 end
 
+local function dropLooseGuns()
+	if not (ents and ents.GetAll) then return end
+	local all = ents.GetAll()
+	if type(all) ~= "table" then return end
+	for i = 1, #all do
+		local ent = all[i]
+		if ent ~= nil and ent.BallisticsLootDrop == true then
+			removeEnt(ent)
+		end
+	end
+end
+
 local function dropLooseRagdolls()
 	if not (ents and ents.FindByClass) then return end
 	local list = ents.FindByClass("prop_ragdoll")
@@ -166,6 +188,7 @@ end
 function BALLISTICS.Cleanup.Round()
 	dropBodies()
 	dropLooseRagdolls()
+	dropLooseGuns()
 	dropDecals()
 	if BALLISTICS.Net and BALLISTICS.Net.Broadcast then
 		BALLISTICS.Net.Broadcast("bal_cleanup")

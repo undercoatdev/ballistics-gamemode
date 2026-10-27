@@ -27,6 +27,7 @@ local REASONS = {
 	full = "Gun slots full",
 	limit = "You have reached the buy limit.",
 	medcap = "You cannot carry more of that med.",
+	nadecap = "You cannot carry more of that grenade.",
 	give = "Could not give that item.",
 	med = "Could not give that med.",
 	player = "Could not buy that.",
@@ -149,6 +150,12 @@ function BALLISTICS.Buy.Validate(ctx)
 	elseif item.kind == "nade" then
 		local cap = countOf(limits.nade_each)
 		if cap > 0 and countOf(ctx.nadeCount) >= cap then return false, "limit" end
+		-- nil leaves old callers alone. A set cap, including 0, is a full stop.
+		if ctx.grenadeMax ~= nil then
+			local gmax = whole(ctx.grenadeMax)
+			if gmax == nil or gmax < 0 then gmax = 0 end
+			if countOf(ctx.grenadeCount) >= gmax then return false, "nadecap" end
+		end
 	elseif item.kind == "med" then
 		local max = whole(ctx.medMax)
 		if max == nil or max < 0 then max = 0 end

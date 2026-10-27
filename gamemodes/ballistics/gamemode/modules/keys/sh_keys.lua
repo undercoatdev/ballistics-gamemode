@@ -173,6 +173,8 @@ function K.Rows(binds)
 		line(binds.inspect or "G", "Medical / self-inspect"),
 		line(binds.blindfire or "H", "Blindfire menu"),
 		line(binds.safety or "E", "Safety / melee"),
+		line("E (tap)", "Drag / drop body"),
+		line("E (hold)", "Loot inventory / E close"),
 		line(binds.teams or "F2", "Teams (lobby)"),
 		line("1 2 3", "Weapons"),
 	}

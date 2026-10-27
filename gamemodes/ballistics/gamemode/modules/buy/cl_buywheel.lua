@@ -128,16 +128,42 @@ local function playing()
 	return BALLISTICS.IsPlayingTeam(ply:Team()) == true
 end
 
+local function configuredCap(name, fallback)
+	local n = BALLISTICS.Config and BALLISTICS.Config[name]
+	n = tonumber(n)
+	if n == nil or n ~= n then return fallback end
+	n = math.floor(n)
+	if n < 0 then n = 0 end
+	return n
+end
+
+local function ammoCount(ammoType)
+	local ply = localPly()
+	if not ply or type(ply.GetAmmoCount) ~= "function" then return 0 end
+	local ok, n = pcall(ply.GetAmmoCount, ply, ammoType)
+	n = ok and tonumber(n) or 0
+	if not n or n ~= n or n < 0 then return 0 end
+	return math.floor(n)
+end
+
 local function clientCtx(item)
 	local ply = localPly()
 	local alive = ply and type(ply.Alive) == "function" and ply:Alive() == true or false
 	local medMax, medCount = 0, 0
+	local grenadeMax, grenadeCount = nil, 0
 	if item.kind == "med" then
-		if BALLISTICS.MedMax then medMax = BALLISTICS.MedMax() or 0 end
+		medMax = configuredCap("MedsMax", 3)
+		if BALLISTICS.MedMax then
+			local pbMax = tonumber(BALLISTICS.MedMax()) or 0
+			if pbMax < medMax then medMax = pbMax end
+		end
 		local pb = PLAYER_BALLISTICS
 		if pb and type(pb.MedAvailable) == "function" and ply then
 			medCount = tonumber(pb.MedAvailable(ply, item.id)) or 0
 		end
+	elseif item.kind == "nade" then
+		grenadeMax = configuredCap("GrenadesMax", 3)
+		grenadeCount = ammoCount(item.ammo)
 	end
 	local menu = nil
 	if BALLISTICS.BuyMenuEnabled then menu = BALLISTICS.BuyMenuEnabled() == true end
@@ -156,6 +182,8 @@ local function clientCtx(item)
 		nadeCount = 0,
 		medCount = medCount,
 		medMax = medMax,
+		grenadeCount = grenadeCount,
+		grenadeMax = grenadeMax,
 	}
 end
 

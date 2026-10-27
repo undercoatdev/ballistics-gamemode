@@ -122,6 +122,25 @@ local function clearNote(ply)
 	if type(ply.SetNW2String) == "function" then ply:SetNW2String("bal_buy_note", "") end
 end
 
+local function carryMax(name, fallback)
+	local n = BALLISTICS.Config and BALLISTICS.Config[name]
+	n = tonumber(n)
+	if n == nil or n ~= n or n == math.huge or n == -math.huge then return fallback end
+	n = math.floor(n)
+	if n < 0 then n = 0 end
+	if n > 100 then n = 100 end
+	return n
+end
+
+local function nadeHave(ply, ammoType)
+	if type(ammoType) ~= "string" or ammoType == "" then return 0 end
+	if type(ply.GetAmmoCount) ~= "function" then return 0 end
+	local ok, n = pcall(ply.GetAmmoCount, ply, ammoType)
+	n = ok and tonumber(n) or 0
+	if n == nil or n ~= n or n < 0 then return 0 end
+	return math.floor(n)
+end
+
 local function medHave(ply, id)
 	local pb = PLAYER_BALLISTICS
 	if pb and type(pb.MedBag) == "function" then
@@ -329,10 +348,18 @@ function BALLISTICS.Buy.Request(ply, key)
 	end
 	local row = record(id)
 	local medCount, medMax = 0, 0
+	local grenadeCount, grenadeMax = 0, nil
 	if item and item.kind == "med" then
-		if BALLISTICS.MedMax then medMax = BALLISTICS.MedMax() or 0 end
+		medMax = carryMax("MedsMax", 3)
+		if BALLISTICS.MedMax then
+			local pbMax = tonumber(BALLISTICS.MedMax()) or 0
+			if pbMax < medMax then medMax = pbMax end
+		end
 		local have = medHave(ply, item.id)
 		if have ~= nil then medCount = have end
+	elseif item and item.kind == "nade" then
+		grenadeMax = carryMax("GrenadesMax", 3)
+		grenadeCount = nadeHave(ply, item.ammo)
 	end
 	local limits = BALLISTICS.Config and BALLISTICS.Config.BuyLimits or {}
 	local ctx = {
@@ -350,6 +377,8 @@ function BALLISTICS.Buy.Request(ply, key)
 		limits = limits,
 		medCount = medCount,
 		medMax = medMax,
+		grenadeCount = grenadeCount,
+		grenadeMax = grenadeMax,
 	}
 	local result = BALLISTICS.Buy.Purchase(ctx, {
 		spend = function(amount)

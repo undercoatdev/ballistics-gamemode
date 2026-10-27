@@ -62,6 +62,24 @@ local GENERAL = {
 		decimals = 0,
 		blurb = "0 = infinite ammo.",
 	},
+	{
+		path = "MedsMax",
+		label = "Meds max",
+		kind = "int",
+		min = 0,
+		max = 100,
+		decimals = 0,
+		blurb = "Most of one med a player can carry. The buy menu and looting both stop here.",
+	},
+	{
+		path = "GrenadesMax",
+		label = "Grenades max",
+		kind = "int",
+		min = 0,
+		max = 100,
+		decimals = 0,
+		blurb = "Most of one throwable a player can carry. The buy menu and looting both stop here.",
+	},
 }
 
 local SETTINGS = {
