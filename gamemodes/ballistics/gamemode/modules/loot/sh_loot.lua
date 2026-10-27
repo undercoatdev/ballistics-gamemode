@@ -48,9 +48,14 @@ local function clamp(n, lo, hi, fallback)
 	return n
 end
 
+-- GMod Vectors are userdata, not tables. The old table-only check read every
+-- Vector as 0,0,0: distances were 0 and the hold always saw the body "moved".
 local function coord(v, key)
-	if type(v) ~= "table" then return 0 end
-	return tonumber(v[key]) or 0
+	if v == nil then return 0 end
+	local t = type(v)
+	if t ~= "table" and t ~= "userdata" then return 0 end
+	local ok, n = pcall(function() return v[key] end)
+	return ok and tonumber(n) or 0
 end
 
 function L.Note(err)

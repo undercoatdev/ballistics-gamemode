@@ -1,5 +1,8 @@
 if not SERVER then return end
 local S = BALLISTICS.Sell
+-- GOOD/BAD are not globals (sv_buy keeps them local); nil here refused every sale.
+local GOOD = TEAM_GOOD or 1
+local BAD = TEAM_BAD or 2
 
 local function valid(e) return e ~= nil and (not IsValid or IsValid(e)) end
 

@@ -699,4 +699,12 @@ check("a new round does not keep the old snapshot", ok == true and classes(L.Las
 check("use counts from the raw key when the usercmd has none", L.UseDown(false, true) == true)
 check("use counts from the usercmd", L.UseDown(true, false) == true)
 check("no use when neither", L.UseDown(false, false) == false)
+-- Vectors are userdata in GMod: distance and moved must read them.
+local function uvec(x, y, z)
+	local u = newproxy(true)
+	getmetatable(u).__index = function(_, k) return ({ x = x, y = y, z = z })[k] end
+	return u
+end
+check("distance reads userdata vectors", math.abs(L.Dist(uvec(0, 0, 0), uvec(30, 40, 0)) - 50) < 1e-6)
+check("a still body has not moved", L.Moved({ x = 10, y = 20, z = 30 }, uvec(10, 20, 30), 24) == false)
 if failed then os.exit(1) end
