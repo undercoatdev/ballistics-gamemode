@@ -371,4 +371,19 @@ do
 	check("no snapshot is all red", not BALLISTICS.LobbyView.ChecklistReady(CL(nil, nil)))
 end
 
+do
+	-- The client has no BALLISTICS.PlayerId (server file), so cl_lobby must
+	-- supply one with the server's id scheme or your own slot never reads "mine".
+	local src = io.open("gamemodes/ballistics/gamemode/modules/lobby/cl_lobby.lua"):read("*a")
+	local body = src:match("local function clientPlayerId%(ply%).-\nend\n")
+	local fn = body and loadstring(body .. "\nreturn clientPlayerId")()
+	local human = { SteamID64 = function() return "7656119" end, IsBot = function() return false end }
+	local bot = { IsBot = function() return true end, UserID = function() return 12 end }
+	check("client player id matches the server for humans and bots", fn ~= nil and fn(human) == "7656119" and fn(bot) == "bot:12")
+	check("client installs the id when the server one is missing", src:find("if not BALLISTICS.PlayerId then BALLISTICS.PlayerId = clientPlayerId end", 1, true) ~= nil)
+	local v = { columns = { { team = 1, slots = { { mine = true, empty = false } } } } }
+	local ok, d = pcall(BALLISTICS.LobbyView.Click, v, 1, 1, { phase = "lobby" })
+	check("clicking your own slot leaves it", ok and type(d) == "table" and (d.action == "leave" or d.reason ~= "taken"))
+end
+
 if failed then os.exit(1) end

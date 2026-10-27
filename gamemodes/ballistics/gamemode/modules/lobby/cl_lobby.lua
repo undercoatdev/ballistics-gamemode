@@ -57,6 +57,32 @@ local function localPly()
 	return ply
 end
 
+-- BALLISTICS.PlayerId lives in core/sv_slots.lua (server only), so on the
+-- client "mine" never matched and clicking your own slot said "taken".
+-- Same id scheme as the server: bots "bot:<UserID>", humans SteamID64.
+local function clientPlayerId(ply)
+	if ply == nil then return nil end
+	if type(ply.IsBot) == "function" and ply:IsBot() == true then
+		local uid = type(ply.UserID) == "function" and ply:UserID() or nil
+		if uid ~= nil and uid ~= 0 then return "bot:" .. tostring(uid) end
+		local idx = type(ply.EntIndex) == "function" and ply:EntIndex() or nil
+		if idx ~= nil and idx ~= 0 then return "bot:" .. tostring(idx) end
+		return nil
+	end
+	if type(ply.SteamID64) == "function" then
+		local id = ply:SteamID64()
+		if type(id) == "string" and id ~= "" and id ~= "0" then return id end
+	end
+	if type(ply.UserID) == "function" then
+		local uid = ply:UserID()
+		if uid and uid ~= 0 then return "uid:" .. tostring(uid) end
+	end
+	if type(ply.EntIndex) == "function" then return "ent:" .. tostring(ply:EntIndex()) end
+	return tostring(ply)
+end
+if not BALLISTICS.PlayerId then BALLISTICS.PlayerId = clientPlayerId end
+BALLISTICS.Lobby.ClientPlayerId = clientPlayerId
+
 local function localId()
 	local ply = localPly()
 	if not ply or not BALLISTICS.PlayerId then return nil end
