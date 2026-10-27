@@ -293,4 +293,14 @@ check("old saved keys (version 0 or 1) migrate once", K.NeedsMigration(0, 2) and
 check("migrated keys are not reset again", not K.NeedsMigration(2, 2) and not K.NeedsMigration(3, 2))
 check("default codes are 3 for throwables and 4 for inventory", K.KEY_3 == 4 and K.KEY_4 == 5)
 
+do
+	local IN2 = K.IN_GRENADE2
+	local i1 = K.Intent({ menu = false })
+	check("TacRP's H / own +grenade2 cannot open the wheel", K.ApplyButtons(IN2, i1) == 0)
+	local i2 = K.Intent({ menu = true })
+	check("holding the throwables key opens the wheel", K.ApplyButtons(0, i2) == IN2)
+	local i3 = K.Intent({ menu = true, boundToThrow2 = true })
+	check("a +grenade2 bind on our own key still works", K.ApplyButtons(IN2, i3) == IN2)
+end
+
 if failed then os.exit(1) end

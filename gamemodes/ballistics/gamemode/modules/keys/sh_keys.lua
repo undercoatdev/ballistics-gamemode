@@ -129,7 +129,12 @@ function K.Intent(opts)
 	local add1 = opts.pulsing == true and opts.boundToThrow1 ~= true
 	local add2 = opts.menu == true and opts.boundToThrow2 ~= true
 	local strip = opts.gDown == true and opts.grenade1Bound ~= true and not add1
-	return { add1 = add1, add2 = add2, strip = strip }
+	-- The grenade wheel belongs to the throwables key only. TacRP adds
+	-- IN_GRENADE2 from a hardcoded H when +grenade2 is unbound (fresh clients),
+	-- or from the player's own +grenade2 bind; both are stripped unless this
+	-- tick is our hold (or the player's +grenade2 bind IS our key).
+	local strip2 = not add2 and not (opts.menu == true and opts.boundToThrow2 == true)
+	return { add1 = add1, add2 = add2, strip = strip, strip2 = strip2 }
 end
 
 local function hasBit(n, mask)
@@ -150,6 +155,7 @@ function K.ApplyButtons(buttons, intent)
 	intent = type(intent) == "table" and intent or {}
 	if intent.strip then buttons = setBit(buttons, K.IN_GRENADE1, false) end
 	if intent.add1 then buttons = setBit(buttons, K.IN_GRENADE1, true) end
+	if intent.strip2 then buttons = setBit(buttons, K.IN_GRENADE2, false) end
 	if intent.add2 then buttons = setBit(buttons, K.IN_GRENADE2, true) end
 	return buttons
 end

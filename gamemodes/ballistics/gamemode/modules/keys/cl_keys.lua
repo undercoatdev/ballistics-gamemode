@@ -128,6 +128,8 @@ end
 local function pointBackup()
 	if type(TacRP) ~= "table" or type(K.DeadBackup) ~= "function" then return end
 	TacRP.GRENADE1_Backup = K.DeadBackup(keyDown)
+	-- H was TacRP's fallback for the grenade wheel; point it at a dead key too.
+	TacRP.GRENADE2_Backup = K.DeadBackup(keyDown)
 end
 
 local function armHints()
