@@ -945,7 +945,8 @@ if BALLISTICS.Net and BALLISTICS.Net.Register then
 		local ent = nil
 		idx = tonumber(idx) or 0
 		if idx > 0 and Entity then ent = Entity(idx) end
-		L.Open(ply, ent)
+		local ok, why = L.Open(ply, ent)
+		print("[Ballistics loot] open request from " .. tostring(ply) .. " -> " .. tostring(ent) .. ": " .. tostring(ok) .. " " .. tostring(why or ""))
 	end, {
 		rate = 4,
 		read = function()

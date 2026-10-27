@@ -251,8 +251,16 @@ local function useDown(ply)
 	return L.UseDown(cmd, useKeyDown())
 end
 
-local debugCv = CreateClientConVar and CreateClientConVar("bal_loot_debug", "0", false, false, "1 = print why the loot hold cancels") or nil
+local debugCv = CreateClientConVar and CreateClientConVar("bal_loot_debug", "1", false, false, "1 = print why the loot hold cancels") or nil
 local lastWhy
+local lastGate
+-- TEMP: always-on gate trace while hold-E is being debugged.
+local function gate(text)
+	if not (debugCv and debugCv:GetBool()) or text == lastGate then return end
+	lastGate = text
+	print("[Ballistics loot] " .. text)
+end
+print("[Ballistics loot] client module loaded")
 
 local function buyOpen()
 	return BALLISTICS.BuyWheel and BALLISTICS.BuyWheel.IsOpen and BALLISTICS.BuyWheel.IsOpen() == true
@@ -714,6 +722,17 @@ local function thinkHold(ply)
 	local useNow = useDown(ply)
 	local edge = useNow and not useWas
 	useWas = useNow
+	if useNow then
+		local tr0 = aimTrace(ply, L.Range(BALLISTICS.Config) + 16)
+		local e0 = tr0 and tr0.Entity
+		local i0 = describe(ply, e0)
+		gate(string.format("E held | phase=%s buy=%s window=%s latch=%s | aim=%s player=%s rag=%s self=%s aimOk=%s dist=%.0f range=%s",
+			tostring(phaseOf(ply)), tostring(buyOpen()), tostring(windowOpen()), tostring(useLatch),
+			valid(e0) and tostring(e0) or "none", tostring(i0.isPlayer), tostring(i0.isRagdoll), tostring(i0.isSelf), tostring(L.AimOk(i0)),
+			valid(e0) and distTo(ply, e0) or -1, tostring(L.Range(BALLISTICS.Config))))
+	else
+		lastGate = nil
+	end
 	if windowOpen() then
 		if edge and not useLatch then
 			closeWindow()
@@ -742,6 +761,7 @@ local function thinkHold(ply)
 	local los = aimed and tr ~= nil and (tr.Entity == ent or tr.Fraction == 1 or tr.Hit == false)
 	if hold == nil then
 		if down and aimed and inRange and los then
+			gate("ring start")
 			hold = L.BeginHold(now(), copyPos(posOf(ent)))
 			hold.ent = ent
 			hold.sent = false
@@ -775,6 +795,7 @@ local function thinkHold(ply)
 	if tick.done and hold.sent ~= true then
 		hold.sent = true
 		useLatch = true
+		gate("hold done, asking server to open")
 		sendOpen(hold.ent)
 	end
 end
