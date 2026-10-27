@@ -631,6 +631,49 @@ function D.groundPoint(mx, my, sw, sh, cam)
 	}
 end
 
+-- Screen ray for the overhead camera. fov is horizontal, matching util.AimVector
+-- and CalcView. (0,0) is the top-left. Pitch 90 aims the centre straight down.
+function D.AimDir(angles, fov, mx, my, sw, sh)
+	if type(angles) ~= "table" then return nil end
+	sw, sh = tonumber(sw), tonumber(sh)
+	if not sw or not sh or sw <= 0 or sh <= 0 then return nil end
+	mx, my = tonumber(mx) or 0, tonumber(my) or 0
+	local function comp(v)
+		v = tonumber(v)
+		if not finite(v) then return 0 end
+		return v
+	end
+	local pitch = comp(angles.p ~= nil and angles.p or angles[1])
+	local yaw = comp(angles.y ~= nil and angles.y or angles[2])
+	local roll = comp(angles.r ~= nil and angles.r or angles[3])
+	fov = tonumber(fov)
+	if not finite(fov) then fov = 90 end
+	local sp, cp = math.sin(math.rad(pitch)), math.cos(math.rad(pitch))
+	local syaw, cyaw = math.sin(math.rad(yaw)), math.cos(math.rad(yaw))
+	local sr, cr = math.sin(math.rad(roll)), math.cos(math.rad(roll))
+	local fx, fy, fz = cp * cyaw, cp * syaw, -sp
+	local rx = -sr * sp * cyaw + cr * syaw
+	local ry = -sr * sp * syaw - cr * cyaw
+	local rz = -sr * cp
+	local ux = cr * sp * cyaw + sr * syaw
+	local uy = cr * sp * syaw - sr * cyaw
+	local uz = cr * cp
+	local tanHalf = math.tan(math.rad(fov) * 0.5)
+	if not finite(tanHalf) then return nil end
+	local aspect = sw / sh
+	local nx = (mx / sw) * 2 - 1
+	local ny = 1 - (my / sh) * 2
+	local sx = nx * tanHalf
+	local sy = ny * tanHalf / aspect
+	local x = fx + rx * sx + ux * sy
+	local y = fy + ry * sx + uy * sy
+	local z = fz + rz * sx + uz * sy
+	local len2 = x * x + y * y + z * z
+	if len2 < 1e-12 then return nil end
+	local inv = 1 / math.sqrt(len2)
+	return Vector(x * inv, y * inv, z * inv)
+end
+
 function D.covers(cam, x, y)
 	if type(cam) ~= "table" then return false end
 	local up, right = D.screenAxes(cam.yaw or 0)
@@ -679,7 +722,7 @@ function D.overview(mins, maxs, fov, aspect)
 	local minx, miny, minz = comp(mins, "x"), comp(mins, "y"), comp(mins, "z")
 	local maxx, maxy, maxz = comp(maxs, "x"), comp(maxs, "y"), comp(maxs, "z")
 	if not (minx and miny and minz and maxx and maxy and maxz) then
-		return { x = 0, y = 0, z = 4096, yaw = 0, halfH = 2048, halfW = 2048 * aspect, ortho = true }
+		return { x = 0, y = 0, z = 4096, yaw = 0, halfH = 2048, halfW = 2048 * aspect, ortho = false }
 	end
 	if maxx < minx then minx, maxx = maxx, minx end
 	if maxy < miny then miny, maxy = maxy, miny end
@@ -687,7 +730,7 @@ function D.overview(mins, maxs, fov, aspect)
 	local spanX = maxx - minx
 	local spanY = maxy - miny
 	if spanX < 64 or spanY < 64 then
-		return { x = 0, y = 0, z = 4096, yaw = 0, halfH = 2048, halfW = 2048 * aspect, ortho = true }
+		return { x = 0, y = 0, z = 4096, yaw = 0, halfH = 2048, halfW = 2048 * aspect, ortho = false }
 	end
 	local needH = spanX * 0.5 * 1.08
 	local needW = spanY * 0.5 * 1.08
@@ -702,7 +745,7 @@ function D.overview(mins, maxs, fov, aspect)
 		yaw = 0,
 		halfH = halfH,
 		halfW = halfW,
-		ortho = true,
+		ortho = false,
 		groundZ = minz,
 	}
 end
@@ -744,13 +787,36 @@ function D.SliceStart(z, slice)
 	return z
 end
 
--- Slider range around a ground height: a storey below to about five above.
-D.SLICE_BELOW, D.SLICE_ABOVE, D.SLICE_STEP = 512, 1536, 8
+-- 8-unit steps. Missing or flat world bounds fall back to a full map around ground.
+D.SLICE_STEP = 8
+D.SLICE_FALLBACK = 16384
 
-function D.SliceRange(ground)
+local function snapStepDown(v)
+	return math.floor(v / D.SLICE_STEP + 1e-9) * D.SLICE_STEP
+end
+
+local function snapStepUp(v)
+	return math.ceil(v / D.SLICE_STEP - 1e-9) * D.SLICE_STEP
+end
+
+-- Absolute window. World Z is shifted by ground and snapped out to the step
+-- so tunnels under the floor stay on the slider. The top value is "no cut".
+function D.SliceRange(ground, worldBottom, worldTop)
 	ground = tonumber(ground)
 	if not finite(ground) then ground = 0 end
-	return ground - D.SLICE_BELOW, ground + D.SLICE_ABOVE
+	local function fallback()
+		return ground - D.SLICE_FALLBACK, ground + D.SLICE_FALLBACK
+	end
+	local lo, hi = tonumber(worldBottom), tonumber(worldTop)
+	if not finite(lo) or not finite(hi) then return fallback() end
+	if hi < lo then lo, hi = hi, lo end
+	if hi - lo < 1 then return fallback() end
+	local relLo = snapStepDown(lo - ground)
+	local relHi = snapStepUp(hi - ground)
+	if relLo > 0 then relLo = 0 end
+	if relHi < 0 then relHi = 0 end
+	if relHi <= relLo then return fallback() end
+	return ground + relLo, ground + relHi
 end
 
 function D.SliceSnap(v, lo, hi)

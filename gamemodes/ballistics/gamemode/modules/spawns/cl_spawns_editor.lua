@@ -1,5 +1,5 @@
 -- Overhead spawn editor and the flag circles everyone sees.
--- Scroll zooms, WASD pans, click traces straight down and asks the server to place.
+-- Scroll zooms, WASD pans, click traces the perspective ray and asks the server to place.
 -- Slice height clips the world above a Z. Traces start on that plane.
 
 if not CLIENT then return end
@@ -248,7 +248,7 @@ local function frameMap()
 	if sky and framed.z > sky - 96 then framed.z = sky - 96 end
 	if ground and framed.z < ground + 64 then framed.z = ground + 64 end
 	if ground then framed.groundZ = ground end
-	framed.ortho = true
+	framed.ortho = false
 	return framed
 end
 
@@ -303,15 +303,32 @@ local function findGround()
 	return 0
 end
 
--- Range comes from ground zero, not the world bounds (skybox roofs are far up).
+-- World model Z, relative to the floor under you, so a cut can reach tunnels.
 local function measureSlice()
 	local mins, maxs = worldBounds()
 	mapXY = nil
 	local bottom, top = D.SliceBounds(mins, maxs)
 	if bottom and top and (top - bottom) >= 1 then mapXY = xyBounds(mins, maxs) end
 	sliceGround = findGround()
-	sliceBottom, sliceTop = D.SliceRange(sliceGround)
+	sliceBottom, sliceTop = D.SliceRange(sliceGround, bottom, top)
 	sliceZ = sliceTop
+end
+
+-- No cut is an empty box. The number is the height relative to the floor.
+local function sliceCutText(z)
+	if not finiteNum(z) or not finiteNum(sliceTop) or z >= sliceTop then return "" end
+	return D.SliceLabel(z, sliceGround)
+end
+
+local function writeSliceBox(box, z)
+	if not box or (IsValid and not IsValid(box)) then return end
+	if box.SetPlaceholderText then box:SetPlaceholderText("No cut") end
+	local text = sliceCutText(z)
+	if box.GetValue and box:GetValue() == text then return end
+	local prev = muteSlice
+	muteSlice = true
+	box:SetText(text)
+	muteSlice = prev
 end
 
 local function applySliceSlider()
@@ -321,9 +338,8 @@ local function applySliceSlider()
 	if slider.SetMin then slider:SetMin(sliceBottom - sliceGround) end
 	if slider.SetMax then slider:SetMax(sliceTop - sliceGround) end
 	if slider.SetValue then slider:SetValue((sliceZ or sliceTop) - sliceGround) end
-	local box = toolbar.balSliceBox
-	if IsValid(box) then box:SetText(sliceZ and sliceZ < sliceTop and D.SliceLabel(sliceZ, sliceGround) or "No cut") end
 	muteSlice = false
+	writeSliceBox(toolbar.balSliceBox, sliceZ)
 end
 
 -- Top of the range is no cut. A rounded slider tick on the max counts as the top.
@@ -421,22 +437,17 @@ local function zoom(direction)
 	local now = (RealTime and RealTime()) or 0
 	if wheelAt > 0 and (now - wheelAt) < 0.01 then return end
 	wheelAt = now
-	local ratio = aspect()
-	if cam.ortho then
-		cam.halfH, cam.halfW = D.zoom(cam.halfH, direction, ratio)
+	local ground = cam.groundZ or 0
+	local dist = cam.z - ground
+	if dist < 200 then dist = 200 end
+	if (tonumber(direction) or 0) > 0 then
+		dist = dist * 0.85
 	else
-		local ground = cam.groundZ or 0
-		local dist = cam.z - ground
-		if dist < 200 then dist = 200 end
-		if (tonumber(direction) or 0) > 0 then
-			dist = dist * 0.85
-		else
-			dist = dist * 1.18
-		end
-		if dist < 200 then dist = 200 end
-		if dist > 80000 then dist = 80000 end
-		cam.z = ground + dist
+		dist = dist * 1.18
 	end
+	if dist < 200 then dist = 200 end
+	if dist > 80000 then dist = 80000 end
+	cam.z = ground + dist
 end
 
 local function teamOf(flagSide)
@@ -500,27 +511,16 @@ hook.Add("PostDrawTranslucentRenderables", "Ballistics_FlagRings", function(_, s
 end)
 
 local function cameraView()
-	local ratio = aspect()
-	if cam.ortho then
-		cam.halfW = cam.halfH * ratio
-	end
-	local viewTable = {
+	-- Close zooms stay above the floor (zoom keeps cam.z at least 200 over groundZ),
+	-- so a fixed near plane never swallows it. Far plane reaches the whole map.
+	return {
 		origin = Vector(cam.x, cam.y, cam.z),
 		angles = Angle(90, cam.yaw or 0, 0),
 		fov = 90,
-		znear = 1,
+		znear = 0.1,
 		zfar = 200000,
 		drawviewer = false,
 	}
-	if cam.ortho then
-		viewTable.ortho = {
-			left = -cam.halfW,
-			right = cam.halfW,
-			top = -cam.halfH,
-			bottom = cam.halfH,
-		}
-	end
-	return viewTable
 end
 
 hook.Add("CalcView", "Ballistics_SpawnEditor", function()
@@ -570,14 +570,8 @@ local keyZoomAt = 0
 
 hook.Add("Think", "Ballistics_SpawnEditor", function()
 	if not editing or not cam or not input or not input.IsKeyDown or not KEY_W then return end
-	local ratio = aspect()
-	local speed
-	if cam.ortho then
-		speed = (cam.halfH or 1000) * 1.4 * ((FrameTime and FrameTime()) or 0.015)
-	else
-		local dist = cam.z - (cam.groundZ or 0)
-		speed = math.max(200, dist * 0.9) * ((FrameTime and FrameTime()) or 0.015)
-	end
+	local dist = cam.z - (cam.groundZ or 0)
+	local speed = math.max(200, dist * 0.9) * ((FrameTime and FrameTime()) or 0.015)
 	local dx, dy = D.pan(cam.yaw or 0, {
 		w = input.IsKeyDown(KEY_W),
 		a = input.IsKeyDown(KEY_A),
@@ -586,7 +580,6 @@ hook.Add("Think", "Ballistics_SpawnEditor", function()
 	}, speed)
 	cam.x = cam.x + dx
 	cam.y = cam.y + dy
-	if cam.ortho then cam.halfW = cam.halfH * ratio end
 	-- Zoom: GMod has no GUIMouseWheeled hook and binds don't fire while the
 	-- screen clicker is on, so take the wheel from the world panel, plus E/Q
 	-- (and PgUp/PgDn) as keyboard zoom.
@@ -653,32 +646,19 @@ local function placeAtCursor()
 	local mx = (gui and gui.MouseX and gui.MouseX()) or 0
 	local my = (gui and gui.MouseY and gui.MouseY()) or 0
 	local mask = MASK_SOLID_BRUSHONLY or 16395
-	local tr
-	if cam.ortho ~= false then
-		local hit = D.groundPoint(mx, my, sw, sh, cam)
-		if not hit then return end
-		local startPos, endPos = clipTrace(
-			Vector(hit.x, hit.y, cam.z),
-			Vector(hit.x, hit.y, cam.z - 200000)
-		)
-		if not startPos or not endPos then return end
-		tr = util.TraceLine({
-			start = startPos,
-			endpos = endPos,
-			mask = mask,
-		})
-	elseif gui and gui.ScreenToVector then
-		local dir = gui.ScreenToVector(mx, my)
-		local origin = Vector(cam.x, cam.y, cam.z)
-		if not dir then return end
-		local startPos, endPos = clipTrace(origin, origin + dir * 200000)
-		if not startPos or not endPos then return end
-		tr = util.TraceLine({
-			start = startPos,
-			endpos = endPos,
-			mask = mask,
-		})
-	end
+	-- Same camera CalcView / RenderScene draw with. gui.ScreenToVector follows the
+	-- engine view, which disagrees once a clip plane is pushed.
+	local dir = D.AimDir(Angle(90, cam.yaw or 0, 0), 90, mx, my, sw, sh)
+	if not dir then return end
+	local origin = Vector(cam.x, cam.y, cam.z)
+	dir = Vector(dir.x, dir.y, dir.z)
+	local startPos, endPos = clipTrace(origin, origin + dir * 200000)
+	if not startPos or not endPos then return end
+	local tr = util.TraceLine({
+		start = startPos,
+		endpos = endPos,
+		mask = mask,
+	})
 	if not tr or not tr.Hit or tr.HitSky or not tr.HitPos then return end
 	if side == "box" then
 		local lift = (D.BOX_HEIGHT or 128) * 0.5
@@ -784,19 +764,6 @@ local function ensureToolbar()
 		squad:SetTooltip("Place and resize the firing squad box. Arrows or shift+wheel rotate it.")
 	end
 
-	local ortho = vgui.Create("DButton", row)
-	ortho:Dock(FILL)
-	ortho:SetText("Ortho")
-	ortho.DoClick = function()
-		if not cam then return end
-		cam.ortho = not cam.ortho
-		if not cam.ortho then
-			local ground = cam.groundZ or 0
-			cam.z = ground + D.fitDistance(cam.halfH, 90)
-		end
-		ortho:SetText(cam.ortho and "Ortho" or "Perspective")
-	end
-
 	toolbar.balStatus = vgui.Create("DLabel", toolbar)
 	toolbar.balStatus:Dock(TOP)
 	toolbar.balStatus:SetTall(18)
@@ -857,12 +824,67 @@ local function ensureToolbar()
 	local box = vgui.Create("DTextEntry", tools)
 	box:Dock(LEFT)
 	box:SetWide(70)
-	box:SetNumeric(false)
+	if box.SetNumeric then
+		box:SetNumeric(true)
+	else
+		-- Digits, one leading minus, and a decimal. Anything else is rejected.
+		box.AllowInput = function(_, char)
+			if type(char) ~= "string" or #char ~= 1 then return true end
+			if char:match("%d") or char == "." or char == "-" then return false end
+			return true
+		end
+	end
+	if box.SetPlaceholderText then
+		box:SetPlaceholderText("No cut")
+		if box.SetPlaceholderColor then box:SetPlaceholderColor(Color(150, 150, 155, 160)) end
+	else
+		local paint = box.Paint
+		box.Paint = function(pnl, w, h)
+			if paint then paint(pnl, w, h) end
+			if tostring(pnl:GetValue() or "") ~= "" then return end
+			if pnl.HasFocus and pnl:HasFocus() then return end
+			if not draw or not draw.SimpleText then return end
+			local font = (pnl.GetFont and pnl:GetFont()) or "DermaDefault"
+			draw.SimpleText("No cut", font, 4, h * 0.5, Color(160, 160, 160, 150), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+		end
+	end
 	if box.SetTooltip then box:SetTooltip("Exact height relative to the floor, e.g. +128 or -64. Enter to apply.") end
+	-- Paste skips SetNumeric. Keep the field numeric and never keep "No cut" as text.
+	box.OnChange = function(pnl)
+		if muteSlice then return end
+		local raw = tostring(pnl:GetValue() or "")
+		local body = raw:gsub("%s", "")
+		if body == "No cut" then body = "" end
+		local sign = ""
+		if body:sub(1, 1) == "+" or body:sub(1, 1) == "-" then
+			sign = body:sub(1, 1)
+			body = body:sub(2)
+		end
+		local out, dot = {}, false
+		for i = 1, #body do
+			local ch = body:sub(i, i)
+			if ch:match("%d") then
+				out[#out + 1] = ch
+			elseif ch == "." and not dot then
+				dot = true
+				out[#out + 1] = ch
+			end
+		end
+		local cleaned = sign .. table.concat(out)
+		if cleaned == raw then return end
+		muteSlice = true
+		pnl:SetText(cleaned)
+		if pnl.SetCaretPos then pnl:SetCaretPos(#cleaned) end
+		muteSlice = false
+	end
 	box.OnEnter = function(pnl)
-		local txt = tostring(pnl:GetValue() or ""):gsub("%s", ""):gsub("^%+", "")
+		local txt = tostring(pnl:GetValue() or ""):gsub("%s", "")
 		local rel = tonumber(txt)
-		if rel then setSlice(sliceGround + rel) else applySliceSlider() end
+		if txt == "" or txt == "No cut" or not rel then
+			applySliceSlider()
+			return
+		end
+		setSlice(sliceGround + rel)
 	end
 	box.OnLoseFocus = function(pnl) pnl:OnEnter() end
 	toolbar.balSliceBox = box
@@ -883,9 +905,7 @@ local function ensureToolbar()
 		local z = D.SliceSnap(sliceGround + (tonumber(val) or 0), sliceBottom, sliceTop)
 		if not z then return end
 		sliceZ = z
-		muteSlice = true
-		if IsValid(box) then box:SetText(z < sliceTop and D.SliceLabel(z, sliceGround) or "No cut") end
-		muteSlice = false
+		writeSliceBox(box, z)
 	end
 	-- Wheel over any part of the slider nudges by 16 and does not zoom the map.
 	local function wheel(_, delta)
@@ -965,9 +985,3 @@ function BALLISTICS.Spawns.BeginEdit()
 	end
 	syncCursor()
 end
-
-hook.Add("OnScreenSizeChanged", "Ballistics_SpawnEditor", function()
-	if cam and cam.ortho then
-		cam.halfW = cam.halfH * aspect()
-	end
-end)
