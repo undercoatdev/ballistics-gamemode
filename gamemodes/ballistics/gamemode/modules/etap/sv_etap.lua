@@ -1,6 +1,7 @@
 if not SERVER then return end
 local E = BALLISTICS.ETap
 local presses = setmetatable({}, { __mode = "k" })
+local lastTaps = setmetatable({}, { __mode = "k" })
 
 local function dragKey(ply)
 	local fallback = KEY_E or 15
@@ -36,7 +37,8 @@ hook.Add("PlayerButtonUp", "Ballistics_ETap", function(ply, button)
 	local press = presses[ply]
 	presses[ply] = nil
 	local dragging = PB.Drags and PB.Drags[ply] ~= nil
-	local act = E.OnRelease(press, CurTime(), dragging)
+	local act, tapAt = E.OnRelease(press, CurTime(), dragging, lastTaps[ply])
+	lastTaps[ply] = tapAt
 	if act == "drop" and PB.DragRelease then
 		PB.DragRelease(ply, "key")
 	elseif act == "grab" and PB.DragTryGrab then

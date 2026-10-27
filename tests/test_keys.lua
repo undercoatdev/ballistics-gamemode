@@ -99,7 +99,7 @@ local rows = K.Rows({
 	teams = "F2",
 	med = "B",
 })
-check("the list has the real binds", #rows == 11 and rows[1].action == "Customize / buy wheel" and rows[2].key == "3" and rows[2].action == "Tap quick throw / hold menu" and rows[3].action == "Medical / self-inspect" and rows[4].key == "MOUSE3" and rows[4].action == "Blindfire menu" and rows[6].key == "E (tap)" and rows[6].action == "Drag / drop body" and rows[7].key == "E (hold)" and rows[7].action == "Loot inventory / E close" and rows[8].key == "F2" and rows[9].key == "4" and rows[9].action == "Inventory" and rows[10].key == "1 2" and rows[10].action == "Weapons" and rows[11].key == "B" and rows[11].action == "Medical wheel")
+check("the list has the real binds", #rows == 11 and rows[1].action == "Customize / buy wheel" and rows[2].key == "3" and rows[2].action == "Tap quick throw / hold menu" and rows[3].action == "Medical / self-inspect" and rows[4].key == "MOUSE3" and rows[4].action == "Blindfire menu" and rows[6].key == "E (double-tap)" and rows[6].action == "Drag / drop body" and rows[7].key == "E (hold 1s)" and rows[7].action == "Loot inventory / E close" and rows[8].key == "F2" and rows[9].key == "4" and rows[9].action == "Inventory" and rows[10].key == "1 2" and rows[10].action == "Weapons" and rows[11].key == "B" and rows[11].action == "Medical wheel")
 local noMed = K.Rows({ med = "" })
 check("a missing medical wheel is left off the list", #noMed == 10)
 check("slot keys share one line", noMed[10].key == "1 2" and noMed[10].action == "Weapons")
@@ -216,7 +216,7 @@ hook.Run("Think")
 check("the list stays closed after spawn", BALLISTICS.Keys.ListOpen() == false)
 local hinted = BALLISTICS.Keys.HintRows()
 local medRow = hinted[#hinted]
-check("hints read the live binds", hinted[1].key == "C" and hinted[2].key == "3" and hinted[3].key == "G" and hinted[4].key == "H" and hinted[5].key == "E" and hinted[6].key == "E (tap)" and hinted[6].action == "Drag / drop body" and hinted[7].key == "E (hold)" and hinted[7].action == "Loot inventory / E close" and hinted[8].key == "F2" and hinted[9].key == "4" and hinted[9].action == "Inventory" and hinted[10].key == "1 2" and hinted[10].action == "Weapons" and medRow.action == "Medical wheel" and medRow.key == "B")
+check("hints read the live binds", hinted[1].key == "C" and hinted[2].key == "3" and hinted[3].key == "G" and hinted[4].key == "H" and hinted[5].key == "E" and hinted[6].key == "E (double-tap)" and hinted[6].action == "Drag / drop body" and hinted[7].key == "E (hold 1s)" and hinted[7].action == "Loot inventory / E close" and hinted[8].key == "F2" and hinted[9].key == "4" and hinted[9].action == "Inventory" and hinted[10].key == "1 2" and hinted[10].action == "Weapons" and medRow.action == "Medical wheel" and medRow.key == "B")
 clock = 10
 hook.Run("Think")
 check("the list collapses when the reveal ends", BALLISTICS.Keys.ListOpen() == false)

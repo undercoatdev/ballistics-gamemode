@@ -185,12 +185,59 @@ local function dropDecals()
 	end
 end
 
+local function recordOf(ply)
+	local bd = BODY_DAMAGE
+	if not bd or type(bd.FindRecord) ~= "function" then return nil end
+	local ok, rec = pcall(bd.FindRecord, ply)
+	if ok and type(rec) == "table" then return rec end
+	return nil
+end
+
+-- A knocked-out player's puppet is a prop_ragdoll. If the sweep below removes
+-- it, Player Ballistics keeps a NULL rec.puppet and its next ReleaseDown (on
+-- respawn: GiveOrgans -> ClearOrgans -> DetachLife) calls Remove on NULL.
+-- Let PB stand the player up and remove its own puppet first.
+local function releaseKnockouts()
+	local pb = PLAYER_BALLISTICS
+	eachPlayer(function(ply)
+		local rec = recordOf(ply)
+		if not rec or rec.puppet == nil then return end
+		if valid(rec.puppet) and rec.unconscious and pb and type(pb.ReleaseDown) == "function" then
+			pcall(pb.ReleaseDown, ply)
+		end
+		if not valid(rec.puppet) then rec.puppet = nil end
+	end)
+end
+
+-- After the sweep, no record may still point at a removed ragdoll.
+local function clearDeadPointers()
+	eachPlayer(function(ply)
+		local rec = recordOf(ply)
+		if not rec then return end
+		if rec.puppet ~= nil and not valid(rec.puppet) then rec.puppet = nil end
+		if rec.corpse ~= nil and not valid(rec.corpse) then rec.corpse = nil end
+	end)
+end
+BALLISTICS.Cleanup.ClearDeadPointers = clearDeadPointers
+
 function BALLISTICS.Cleanup.Round()
+	releaseKnockouts()
 	dropBodies()
 	dropLooseRagdolls()
 	dropLooseGuns()
 	dropDecals()
+	clearDeadPointers()
 	if BALLISTICS.Net and BALLISTICS.Net.Broadcast then
 		BALLISTICS.Net.Broadcast("bal_cleanup")
 	end
+end
+
+-- PB's GiveOrgans runs a tick after PlayerSpawn; drop stale ragdoll pointers
+-- before that, whatever removed the ragdoll.
+if hook and hook.Add then
+	hook.Add("PlayerSpawn", "Ballistics_CleanupPointers", function(ply)
+		local rec = recordOf(ply)
+		if not rec then return end
+		if rec.puppet ~= nil and not valid(rec.puppet) then rec.puppet = nil end
+	end)
 end
