@@ -222,3 +222,11 @@ function BALLISTICS.Buy.Purchase(ctx, deps)
 		price = price,
 	}
 end
+
+-- Owned count of med id from PB's client med state { counts = { [id] = n } }.
+function BALLISTICS.Buy.MedFromState(state, id)
+	if type(state) ~= "table" or type(state.counts) ~= "table" then return 0 end
+	local n = tonumber(state.counts[math.floor(tonumber(id) or 0)]) or 0
+	if n ~= n or n < 0 then return 0 end
+	return math.floor(n)
+end

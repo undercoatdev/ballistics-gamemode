@@ -156,6 +156,12 @@ local function medHave(item)
 		if n ~= n or n < 0 then return 0 end
 		return math.floor(n)
 	end
+	-- MedAvailable is server-only (sv_medwheel); the client reads the counts
+	-- PB networks to its med wheel.
+	if pb and type(item) == "table" and BALLISTICS.Buy and type(BALLISTICS.Buy.MedFromState) == "function" then
+		local st = type(pb.MedClientState) == "function" and pb.MedClientState() or pb.MedState
+		return BALLISTICS.Buy.MedFromState(st, item.id)
+	end
 	return 0
 end
 

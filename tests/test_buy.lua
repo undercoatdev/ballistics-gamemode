@@ -871,4 +871,5 @@ BALLISTICS.BuyWheel.DrawIcon({ entity = "tacrp_ammo_smoke" }, 200, 48, host)
 check("a miss retries once the content can be mounted", #asked == 1 and asked[1] == "entities/tacrp_ammo_smoke.png|nil" and lines[1] == "[Ballistics icon] tacrp_ammo_smoke via entities entities/tacrp_ammo_smoke.png")
 print = oldPrint
 
+check("client med count reads PB's networked state", BALLISTICS.Buy.MedFromState({ counts = { 0, 3, 1, 0 } }, 2) == 3 and BALLISTICS.Buy.MedFromState(nil, 2) == 0 and BALLISTICS.Buy.MedFromState({ counts = {} }, 9) == 0)
 if failed then os.exit(1) end
