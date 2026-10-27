@@ -66,6 +66,7 @@ BALLISTICS.Manifest = {
 		"modules/.keep.lua",
 		"modules/keys/cl_keys.lua",
 		"modules/keys/sh_keys.lua",
+		"modules/keys/sh_nadewheel.lua",
 		"modules/loadout/cl_loadout.lua",
 		"modules/loadout/sh_loadout.lua",
 		"modules/loadout/sv_loadout.lua",

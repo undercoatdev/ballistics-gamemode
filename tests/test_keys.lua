@@ -215,7 +215,7 @@ end
 
 hook.Run("Think")
 check("G is no longer the grenade backup", TacRP.GRENADE1_Backup ~= 0 and TacRP.GRENADE1_Backup ~= K.KEY_G and TacRP.GRENADE1_Backup == 101)
-check("H is no longer the grenade wheel backup", TacRP.GRENADE2_Backup ~= 0 and TacRP.GRENADE2_Backup ~= K.KEY_H and TacRP.GRENADE2_Backup == 101)
+check("the grenade wheel backup is the throwables key", TacRP.GRENADE2_Backup ~= 0 and TacRP.GRENADE2_Backup ~= K.KEY_H and TacRP.GRENADE2_Backup == BALLISTICS.Keys.ThrowKey())
 local grenadeLabel = TacRP.GetBind("+grenade2")
 check("unbound grenade2 bind does not throw", grenadeLabel == "3")
 check("unbound grenade1 bind does not throw", TacRP.GetBind("+grenade1") == "3" and TacRP.GetBindKey("+grenade2") == "3")
@@ -344,6 +344,18 @@ do
 	check("holding the throwables key opens the wheel", K.ApplyButtons(0, i2) == IN2)
 	local i3 = K.Intent({ menu = true, boundToThrow2 = true })
 	check("a +grenade2 bind on our own key still works", K.ApplyButtons(IN2, i3) == IN2)
+end
+
+do
+	dofile("gamemodes/ballistics/gamemode/modules/keys/sh_nadewheel.lua")
+	local nade = { ArcticTacRP = true, CanQuickNade = false, SubCatType = "9Throwable" }
+	check("a held TacRP grenade gets the wheel back", K.UnlockNade(nade) == true and nade.CanQuickNade == true)
+	check("unlock runs once", K.UnlockNade(nade) == false)
+	local gun = { ArcticTacRP = true, CanQuickNade = true }
+	check("guns are left alone", K.UnlockNade(gun) == false)
+	check("non-TacRP weapons are left alone", K.UnlockNade({ CanQuickNade = false, SubCatType = "9Throwable" }) == false)
+	local src = io.open("gamemodes/ballistics/gamemode/modules/keys/cl_keys.lua"):read("*a")
+	check("the wheel fallback key is the throwables key", src:find("TacRP.GRENADE2_Backup = BALLISTICS.Keys.ThrowKey()", 1, true) ~= nil)
 end
 
 if failed then os.exit(1) end

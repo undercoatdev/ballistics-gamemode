@@ -178,8 +178,10 @@ local function pointBackup()
 	if type(TacRP) ~= "table" or type(K.DeadBackup) ~= "function" then return end
 	local code = backupCode()
 	TacRP.GRENADE1_Backup = code
-	-- H was TacRP's fallback for the grenade wheel; point it at a dead key too.
-	TacRP.GRENADE2_Backup = code
+	-- TacRP reads the wheel key from GRENADE2_Backup when +grenade2 is unbound
+	-- (fresh clients). That was H; point it at our throwables key so the
+	-- wheel follows bal_throw_key and H does nothing for it.
+	TacRP.GRENADE2_Backup = BALLISTICS.Keys.ThrowKey()
 	tryWrapBind()
 end
 
