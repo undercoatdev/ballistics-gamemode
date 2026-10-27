@@ -248,10 +248,6 @@ function BALLISTICS.Keys.HintRows()
 	local medCode = convar("playerballistics_med_key") and convarInt("playerballistics_med_key", 0) or 0
 	local med = nil
 	if medCode > 0 then med = keyLabel(medCode, "B") end
-	local guns = "SCROLL / SLOT"
-	if type(K.SwitchLabel) == "function" then
-		guns = K.SwitchLabel(bindLabel("invnext", ""), bindLabel("slot1", ""))
-	end
 	if type(K.Rows) ~= "function" then return {} end
 	return K.Rows({
 		customize = bindLabel("+menu_context", "C"),
@@ -262,7 +258,6 @@ function BALLISTICS.Keys.HintRows()
 		teams = bindLabel("gm_showteam", "F2"),
 		admin = bindLabel("gm_showspare1", "F3"),
 		isAdmin = BALLISTICS.ClientIsAdmin and BALLISTICS.ClientIsAdmin() == true or false,
-		guns = guns,
 		med = med,
 	})
 end

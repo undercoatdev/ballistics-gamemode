@@ -103,6 +103,25 @@ local function owns(class)
 	return ply:HasWeapon(class) == true
 end
 
+local function gunCount()
+	local list = BALLISTICS.Catalog and BALLISTICS.Catalog.Weapons and BALLISTICS.Catalog.Weapons() or {}
+	local n = 0
+	for i = 1, #list do
+		local class = list[i] and list[i].class
+		if owns(class) then n = n + 1 end
+	end
+	return n
+end
+
+local function slotsFull(item)
+	if type(item) ~= "table" or item.kind ~= "weapon" then return false end
+	local maxGuns = 2
+	if BALLISTICS.Loadout and tonumber(BALLISTICS.Loadout.MAX_GUNS) then
+		maxGuns = BALLISTICS.Loadout.MAX_GUNS
+	end
+	return gunCount() >= maxGuns
+end
+
 local function playing()
 	local ply = localPly()
 	if not ply or type(ply.Team) ~= "function" or not BALLISTICS.IsPlayingTeam then return false end
@@ -131,6 +150,7 @@ local function clientCtx(item)
 		price = BALLISTICS.Catalog and BALLISTICS.Catalog.Price and BALLISTICS.Catalog.Price(item.key) or nil,
 		balance = moneyOf(),
 		owned = item.kind == "weapon" and owns(item.class) or false,
+		gunSlotsFull = slotsFull(item),
 		limits = BALLISTICS.Config and BALLISTICS.Config.BuyLimits or {},
 		weaponBuys = 0,
 		nadeCount = 0,
@@ -167,7 +187,8 @@ local function paintItem(self, w, h)
 	local item = self.balItem or {}
 	local price = BALLISTICS.Catalog and BALLISTICS.Catalog.Price and BALLISTICS.Catalog.Price(item.key) or nil
 	local owned = item.kind == "weapon" and owns(item.class)
-	local afford = type(price) == "number" and moneyOf() >= price and not owned
+	local full = item.kind == "weapon" and not owned and slotsFull(item)
+	local afford = type(price) == "number" and moneyOf() >= price and not owned and not full
 	if owned or not afford then
 		surface.SetDrawColor(28, 28, 32, 255)
 	elseif self.Hovered then
@@ -188,6 +209,8 @@ local function paintItem(self, w, h)
 	local priceCol = Color(190, 80, 80)
 	if owned then
 		priceText = "Owned"
+	elseif full then
+		priceText = "Full"
 	elseif type(price) == "number" then
 		priceText = "$" .. tostring(price)
 		if afford then priceCol = Color(230, 210, 140) end
@@ -214,6 +237,7 @@ local function refill()
 		btn:SetSize(bw, bh)
 		btn.balItem = item
 		btn.Paint = paintItem
+		if btn.SetKeyboardInputEnabled then btn:SetKeyboardInputEnabled(false) end
 		btn.DoClick = function()
 			tryBuy(item)
 		end
@@ -351,6 +375,7 @@ local function ensureRoot()
 		btn:SetText("")
 		btn.balTab = id
 		btn.Paint = paintTab
+		if btn.SetKeyboardInputEnabled then btn:SetKeyboardInputEnabled(false) end
 		btn.DoClick = function()
 			tab = id
 			refill()
@@ -392,53 +417,20 @@ function BALLISTICS.BuyWheel.IsOpen()
 	return held == true and valid(root) and root:IsVisible()
 end
 
-local function ownedList()
-	local ply = localPly()
-	local out = {}
-	if not ply or type(ply.GetWeapons) ~= "function" then return out, nil end
-	for _, w in ipairs(ply:GetWeapons()) do
-		if valid(w) then
-			out[#out + 1] = {
-				class = w:GetClass(),
-				slot = w.GetSlot and w:GetSlot() or 0,
-				pos = w.GetSlotPos and w:GetSlotPos() or 0,
-			}
-		end
-	end
-	local active = ply.GetActiveWeapon and ply:GetActiveWeapon()
-	return out, valid(active) and active:GetClass() or nil
-end
-
-local function pickWeapon(action)
-	local W = BALLISTICS.WeaponPick
-	if not W or action == nil then return false end
-	local list, current = ownedList()
-	local class
-	if action == "next" then
-		class = W.Cycle(list, current, 1)
-	elseif action == "prev" then
-		class = W.Cycle(list, current, -1)
-	else
-		class = W.Slot(list, current, action)
-	end
-	if not class or class == current then return false end
-	RunConsoleCommand("bal_select", class)
-	if surface and surface.PlaySound then surface.PlaySound("common/wpn_moveselect.wav") end
-	return true
-end
-
--- The popup takes the wheel and keys, so do weapon select here.
+-- The popup eats slot keys, so select loadout slots here. The scroll wheel is
+-- left to the list. invnext/invprev are blocked in PlayerBindPress, and slot4
+-- is left for the throwables key.
 function BALLISTICS.BuyWheel.HookWeaponPick(pnl)
 	if not valid(pnl) or pnl.balWeaponPick then return end
 	pnl.balWeaponPick = true
-	pnl.OnMouseWheeled = function(_, delta)
-		return pickWeapon(delta > 0 and "prev" or "next")
-	end
 	local oldKey = pnl.OnKeyCodePressed
 	pnl.OnKeyCodePressed = function(self, code)
 		local bind = input and input.LookupKeyBinding and input.LookupKeyBinding(code)
-		local action = BALLISTICS.WeaponPick and BALLISTICS.WeaponPick.BindAction(bind)
-		if action ~= nil then return pickWeapon(action) end
+		local slot = BALLISTICS.Loadout and BALLISTICS.Loadout.BindSlot and BALLISTICS.Loadout.BindSlot(bind)
+		if slot ~= nil then
+			if RunConsoleCommand then RunConsoleCommand("bal_slot", tostring(slot)) end
+			return true
+		end
 		if oldKey then return oldKey(self, code) end
 	end
 end

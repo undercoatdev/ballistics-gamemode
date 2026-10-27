@@ -202,6 +202,31 @@ local function fillClip(wep, clip)
 	if current == nil or current < clip then pcall(wep.SetClip1, wep, clip) end
 end
 
+local function slotsFull(ply)
+	local maxGuns = 2
+	if BALLISTICS.Loadout and tonumber(BALLISTICS.Loadout.MAX_GUNS) then
+		maxGuns = BALLISTICS.Loadout.MAX_GUNS
+	end
+	if not (BALLISTICS.Loadout and type(BALLISTICS.Loadout.GunCount) == "function") then
+		return false
+	end
+	return BALLISTICS.Loadout.GunCount(ply) >= maxGuns
+end
+
+-- Select the new gun now and again next tick. TacRP deploy can switch back
+-- in the same frame as Give, which would leave C customizing the old weapon.
+local function tookGun(ply, class)
+	if BALLISTICS.Loadout and type(BALLISTICS.Loadout.NoteGun) == "function" then
+		BALLISTICS.Loadout.NoteGun(ply, class)
+	end
+	if BALLISTICS.Loadout and type(BALLISTICS.Loadout.Equip) == "function" then
+		BALLISTICS.Loadout.Equip(ply, class)
+	elseif type(ply.SelectWeapon) == "function" then
+		ply:SelectWeapon(class)
+	end
+	return true
+end
+
 local function grantWeapon(ply, item)
 	if type(ply.HasWeapon) == "function" and ply:HasWeapon(item.class) == true then
 		return false, "duplicate"
@@ -221,7 +246,7 @@ local function grantWeapon(ply, item)
 	local mags = buyMags()
 	if BALLISTICS.Ammo and BALLISTICS.Ammo.WritesReserve and not BALLISTICS.Ammo.WritesReserve(mags) then
 		fillClip(wep, clip)
-		return true
+		return tookGun(ply, item.class)
 	end
 	local rounds = 0
 	if BALLISTICS.Buy.AmmoRounds then
@@ -235,14 +260,14 @@ local function grantWeapon(ply, item)
 		end
 		ply:SetAmmo(target, ammoType)
 		fillClip(wep, clip)
-		return true
+		return tookGun(ply, item.class)
 	end
 	if rounds > 0 and not giveAmmo(ply, rounds, ammoType) then
 		stripWeapon(ply, item.class)
 		return false, "give"
 	end
 	fillClip(wep, clip)
-	return true
+	return tookGun(ply, item.class)
 end
 
 local function grantNade(ply, item)
@@ -319,6 +344,7 @@ function BALLISTICS.Buy.Request(ply, key)
 		price = price,
 		balance = balance,
 		owned = owned,
+		gunSlotsFull = item ~= nil and item.kind == "weapon" and slotsFull(ply) or false,
 		weaponBuys = row.weapons,
 		nadeCount = item and row.nades[item.key] or 0,
 		limits = limits,

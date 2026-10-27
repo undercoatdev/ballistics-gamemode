@@ -162,6 +162,35 @@ hook.Run("Ballistics_RoundEnd", "good", "elimination")
 hook.Run("Ballistics_PhaseChanged", "squad", "lobby")
 check("lobby drops carried gear", BALLISTICS.Gear.WillKeep(winner) == false)
 
+-- Carried guns come back in the order they occupied, not GetWeapons order.
+do
+	dofile("gamemodes/ballistics/gamemode/modules/loadout/sh_loadout.lua")
+	dofile("gamemodes/ballistics/gamemode/modules/loadout/sv_loadout.lua")
+	local ak = makeGun("tacrp_ex_ak47", "optic_ak", 10)
+	local pistol = makeGun("tacrp_ex_m1911", "optic_pistol", 3)
+	winner.alive = true
+	winner.weapons = { knife }
+	BALLISTICS.Loadout.Reset(winner, "tacrp_knife")
+	BALLISTICS.Loadout.NoteGun(winner, "tacrp_ex_ak47")
+	winner.weapons = { knife, ak }
+	BALLISTICS.Loadout.NoteGun(winner, "tacrp_ex_m1911")
+	winner.weapons = { pistol, knife, ak }
+	hook.Run("Ballistics_RoundEnd", "good", "elimination")
+	local order = {}
+	local prevGive = winner.Give
+	function winner:Give(class, noAmmo)
+		order[#order + 1] = class
+		local wep = prevGive(self, class, noAmmo)
+		self.weapons[#self.weapons + 1] = wep
+		return wep
+	end
+	winner.weapons = {}
+	BALLISTICS.Gear.ApplySpawn(winner)
+	check("kept guns restore in slot order", order[1] == "tacrp_ex_ak47" and order[2] == "tacrp_ex_m1911" and #order == 2)
+	local guns = BALLISTICS.Loadout.Guns(winner)
+	check("restored guns keep that slot order", guns[1] == "tacrp_ex_ak47" and guns[2] == "tacrp_ex_m1911")
+end
+
 -- TacRP autosave forced off on the client so bought guns start bare.
 do
 	local val = 1

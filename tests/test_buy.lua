@@ -24,6 +24,8 @@ dofile("gamemodes/ballistics/gamemode/core/sv_money.lua")
 dofile("gamemodes/ballistics/gamemode/core/sv_round.lua")
 dofile("gamemodes/ballistics/gamemode/modules/buy/sh_buy.lua")
 dofile("gamemodes/ballistics/gamemode/modules/buy/sv_buy.lua")
+dofile("gamemodes/ballistics/gamemode/modules/loadout/sh_loadout.lua")
+dofile("gamemodes/ballistics/gamemode/modules/loadout/sv_loadout.lua")
 -- These server buys assert three magazines. 0 is covered in the reserve block.
 BALLISTICS.Config.BuyAmmoMags = 3
 
@@ -46,6 +48,7 @@ check("wheel exposes Open Hide IsOpen", buySrc:find("BuyWheel.Open", 1, true)
 	and buySrc:find("BuyWheel.Hide", 1, true)
 	and buySrc:find("BuyWheel.IsOpen", 1, true))
 check("weapon tab groups by category", buySrc:find("WeaponGroups", 1, true) ~= nil)
+check("buy wheel does not switch weapons on the scroll wheel", buySrc:find("bal_slot", 1, true) ~= nil and not buySrc:find("OnMouseWheeled", 1, true))
 
 local compiled = loadfile("gamemodes/ballistics/gamemode/modules/buy/cl_buywheel.lua")
 check("client wheel compiles", compiled ~= nil)
@@ -142,6 +145,22 @@ result = purchase({ owned = true }, {
 	grant = function() error("granted") end,
 })
 check("duplicate gun does not spend", result.ok == false and result.err == "duplicate" and result.spent == false)
+ok, err = BALLISTICS.Buy.Validate(ctx({ gunSlotsFull = true }))
+check("full gun slots are refused", ok == false and err == "full")
+result = purchase({ gunSlotsFull = true }, {
+	spend = function() error("spent") end,
+	grant = function() error("granted") end,
+})
+check("full gun slots do not spend", result.ok == false and result.err == "full" and result.spent == false)
+check("full gun slots say so", BALLISTICS.Buy.ReasonText("full") == "Gun slots full")
+ok, err = BALLISTICS.Buy.Validate(ctx({ owned = true, gunSlotsFull = true }))
+check("an owned gun is still a duplicate when slots are full", ok == false and err == "duplicate")
+ok = BALLISTICS.Buy.Validate(ctx({
+	item = BALLISTICS.Catalog.Get("nade_frag"),
+	price = 1,
+	gunSlotsFull = true,
+}))
+check("a throwable ignores full gun slots", ok == true)
 
 ok = BALLISTICS.Buy.Validate(ctx({
 	item = BALLISTICS.Catalog.Get("nade_frag"),
@@ -583,6 +602,50 @@ do
 	check("successful buy plays the sound for the buyer", #sent == 1 and sent[1] == ply)
 	BALLISTICS.Buy.Request(ply, "tacrp_ex_m1911")
 	check("refused buy plays no sound", #sent == 1)
+	BALLISTICS.Net.Send = realSend
+end
+
+-- Two guns fill the loadout. A third is refused with no charge and no cha-ching.
+do
+	local sent = {}
+	local realSend = BALLISTICS.Net.Send
+	BALLISTICS.Net.Send = function(name, target, payload)
+		if name == "bal_buy_ok" then sent[#sent + 1] = target end
+		if realSend then return realSend(name, target, payload) end
+	end
+	local queued = {}
+	local oldTimer = timer.Simple
+	timer.Simple = function(delay, fn) queued[#queued + 1] = { delay = delay, fn = fn } end
+	fresh()
+	BALLISTICS.Loadout.Reset(ply, "tacrp_knife")
+	function ply:SelectWeapon(class) self.selected = class end
+	buyOk = BALLISTICS.Buy.Request(ply, "tacrp_ex_m1911")
+	check("the bought gun is selected", buyOk == true and ply.selected == "tacrp_ex_m1911")
+	check("select runs again next tick", #queued == 1 and queued[1].delay == 0)
+	ply.selected = nil
+	queued[1].fn()
+	check("the deferred select still equips the bought gun", ply.selected == "tacrp_ex_m1911")
+	buyOk = BALLISTICS.Buy.Request(ply, "tacrp_skorpion")
+	check("the second gun takes the other slot and is selected", buyOk == true and ply.selected == "tacrp_skorpion" and BALLISTICS.Loadout.GunCount(ply) == 2)
+	local guns = BALLISTICS.Loadout.Guns(ply)
+	check("guns stay in buy order", guns[1] == "tacrp_ex_m1911" and guns[2] == "tacrp_skorpion")
+	BALLISTICS.Money.Refund(ply, 5000)
+	local before = BALLISTICS.Money.Get(ply)
+	local gives = #ply.giveCalls
+	buyOk, buyErr = BALLISTICS.Buy.Request(ply, "tacrp_mp5")
+	check("a third gun is refused", buyOk == false and buyErr == "full")
+	check("a third gun does not charge", BALLISTICS.Money.Get(ply) == before)
+	check("a third gun is not given", ply:HasWeapon("tacrp_mp5") == false and #ply.giveCalls == gives)
+	check("a third gun tells the player", ply.chats[#ply.chats] == "Ballistics: Gun slots full")
+	check("a third gun plays no cha-ching", #sent == 2)
+	buyOk, buyErr = BALLISTICS.Buy.Request(ply, "tacrp_ex_m1911")
+	check("the owned gun is still a duplicate", buyOk == false and buyErr == "duplicate" and BALLISTICS.Money.Get(ply) == before and #sent == 2)
+	buyOk = BALLISTICS.Buy.Request(ply, "nade_smoke")
+	check("a throwable still buys when gun slots are full", buyOk == true and BALLISTICS.Money.Get(ply) == before - 200 and #sent == 3)
+	before = BALLISTICS.Money.Get(ply)
+	buyOk = BALLISTICS.Buy.Request(ply, "med_pills")
+	check("a med still buys when gun slots are full", buyOk == true and BALLISTICS.Money.Get(ply) == before - 50 and ply.pbMed.counts[1] == 1 and #sent == 4)
+	timer.Simple = oldTimer
 	BALLISTICS.Net.Send = realSend
 end
 

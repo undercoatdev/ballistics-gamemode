@@ -146,6 +146,10 @@ function BALLISTICS.Player.ApplyLoadout(ply)
 	end
 	if ply.Give then ply:Give(KNIFE) end
 	if ply.SelectWeapon then ply:SelectWeapon(KNIFE) end
+	-- Slot 1 is this knife. Gun slots start empty; carried gear fills them after.
+	if BALLISTICS.Loadout and type(BALLISTICS.Loadout.Reset) == "function" then
+		BALLISTICS.Loadout.Reset(ply, KNIFE)
+	end
 	if GM and GM.PlayerSetModel then GM:PlayerSetModel(ply) end
 end
 

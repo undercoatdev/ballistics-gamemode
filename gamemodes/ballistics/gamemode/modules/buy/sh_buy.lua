@@ -1,6 +1,7 @@
 -- Pure buy checks. No GMod calls.
 -- Phase must be buy, the buyer alive and slotted, the price payable, limits
--- respected, a gun not already owned, and a med under MedMax.
+-- respected, a gun not already owned, both gun slots not already full, and a
+-- med under MedMax.
 -- Purchase spends, grants, and refunds if the grant fails.
 
 BALLISTICS = BALLISTICS or {}
@@ -23,6 +24,7 @@ local REASONS = {
 	price = "That item has no price.",
 	money = "Not enough money.",
 	duplicate = "You already have that weapon.",
+	full = "Gun slots full",
 	limit = "You have reached the buy limit.",
 	medcap = "You cannot carry more of that med.",
 	give = "Could not give that item.",
@@ -138,6 +140,7 @@ function BALLISTICS.Buy.Validate(ctx)
 	end
 	if balance < price then return false, "money" end
 	if item.kind == "weapon" and ctx.owned == true then return false, "duplicate" end
+	if item.kind == "weapon" and ctx.gunSlotsFull == true then return false, "full" end
 	local limits = ctx.limits
 	if type(limits) ~= "table" then limits = {} end
 	if item.kind == "weapon" then

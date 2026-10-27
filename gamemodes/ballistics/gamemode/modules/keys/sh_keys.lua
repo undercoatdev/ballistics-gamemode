@@ -174,7 +174,9 @@ function K.Rows(binds)
 		line(binds.blindfire or "H", "Blindfire menu"),
 		line(binds.safety or "E", "Safety / melee"),
 		line(binds.teams or "F2", "Teams (lobby)"),
-		line(binds.guns or "SCROLL / SLOT", "Switch gun in buy"),
+		line("1", "Knife"),
+		line("2", "Gun"),
+		line("3", "Gun"),
 	}
 	if binds.isAdmin == true then
 		rows[#rows + 1] = line(binds.admin or "F3", "Admin")
@@ -183,19 +185,6 @@ function K.Rows(binds)
 		rows[#rows + 1] = line(binds.med, "Medical wheel")
 	end
 	return rows
-end
-
-function K.SwitchLabel(scroll, slot)
-	local function clean(v)
-		if type(v) ~= "string" or v == "" then return nil end
-		return string.upper(v)
-	end
-	local a = clean(scroll)
-	local b = clean(slot)
-	if a and b then return a .. " / " .. b end
-	if a then return a end
-	if b then return b end
-	return "SCROLL / SLOT"
 end
 
 function K.Scale(scrW)

@@ -1,5 +1,6 @@
 -- Snapshot a living winner's gear when the round ends and put it back after
--- the next buy spawn's ApplyLoadout. Attachments go through the weapon's
+-- the next buy spawn's ApplyLoadout. Guns are restored in loadout slot order
+-- (slot 2, then slot 3). Attachments go through the weapon's
 -- original Attach (saved by the price wrapper) with BallisticsAttRestore set,
 -- so the price wrapper does not charge. A death before that spawn drops the
 -- snapshot. Match start clears every snapshot.
@@ -103,15 +104,45 @@ local function numberCall(fn, self)
 	return math.floor(got)
 end
 
+local function meleeClass(ply)
+	if BALLISTICS.Loadout and type(BALLISTICS.Loadout.Knife) == "function" then
+		local knife = BALLISTICS.Loadout.Knife(ply)
+		if type(knife) == "string" and knife ~= "" then return knife end
+	end
+	return nil
+end
+
+-- Ranked guns stay in acquisition order. Anything the loadout does not know
+-- keeps its place after them. A removed gun already shifted down in Guns().
+local function inSlotOrder(ply, list)
+	local rank = {}
+	if BALLISTICS.Loadout and type(BALLISTICS.Loadout.Guns) == "function" then
+		local guns = BALLISTICS.Loadout.Guns(ply) or {}
+		for i = 1, #guns do rank[guns[i]] = i end
+	end
+	local indexed = {}
+	for i = 1, #list do indexed[i] = { row = list[i], i = i } end
+	table.sort(indexed, function(a, b)
+		local ra = rank[a.row.class] or (1000 + a.i)
+		local rb = rank[b.row.class] or (1000 + b.i)
+		if ra ~= rb then return ra < rb end
+		return a.i < b.i
+	end)
+	local out = {}
+	for i = 1, #indexed do out[i] = indexed[i].row end
+	return out
+end
+
 local function captureWeapons(ply)
 	local list = {}
 	if type(ply.GetWeapons) ~= "function" then return list end
 	local ok, weps = pcall(ply.GetWeapons, ply)
 	if not ok or type(weps) ~= "table" then return list end
+	local melee = meleeClass(ply)
 	for i = 1, #weps do
 		local wep = weps[i]
 		local class = wep ~= nil and weaponClass(wep) or nil
-		if class and class ~= KNIFE then
+		if class and class ~= KNIFE and class ~= melee then
 			local atts = {}
 			if type(wep.Attachments) == "table" then
 				for slot, slottbl in pairs(wep.Attachments) do
@@ -131,7 +162,7 @@ local function captureWeapons(ply)
 			}
 		end
 	end
-	return list
+	return inSlotOrder(ply, list)
 end
 
 local function ammoName(id, stored)
@@ -258,9 +289,11 @@ end
 
 local function restoreWeapons(ply, list)
 	if type(list) ~= "table" then return end
+	local melee = meleeClass(ply)
+	local ordered = {}
 	for i = 1, #list do
 		local row = list[i]
-		if type(row) == "table" and type(row.class) == "string" and row.class ~= KNIFE then
+		if type(row) == "table" and type(row.class) == "string" and row.class ~= KNIFE and row.class ~= melee then
 			local wep = giveWeapon(ply, row.class)
 			if wep ~= nil then
 				local atts = row.attachments or {}
@@ -270,8 +303,12 @@ local function restoreWeapons(ply, list)
 				if type(wep.SetClip1) == "function" then pcall(wep.SetClip1, wep, tonumber(row.clip1) or 0) end
 				if type(wep.SetClip2) == "function" then pcall(wep.SetClip2, wep, tonumber(row.clip2) or 0) end
 				if type(wep.NetworkWeapon) == "function" then pcall(wep.NetworkWeapon, wep) end
+				ordered[#ordered + 1] = row.class
 			end
 		end
+	end
+	if BALLISTICS.Loadout and type(BALLISTICS.Loadout.Restore) == "function" then
+		BALLISTICS.Loadout.Restore(ply, ordered)
 	end
 end
 
