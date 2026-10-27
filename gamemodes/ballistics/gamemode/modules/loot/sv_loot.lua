@@ -3,6 +3,9 @@
 -- awake targets use the weapons they are actually holding.
 -- Dropped guns are real weapon entities in front of the looter, marked
 -- BallisticsLootDrop so round cleanup can remove the ones nobody picked up.
+-- Own inventory drops grenades as the catalog ammo entity (one each, unless
+-- that entity accepts an ammo count) and meds as the catalog med entity,
+-- one per med. Ammo rows are not dropped.
 -- +use is not hooked here. Player Ballistics drag stays on its own key.
 
 if not SERVER then return end
@@ -11,6 +14,8 @@ BALLISTICS = BALLISTICS or {}
 BALLISTICS.Loot = BALLISTICS.Loot or {}
 
 local L = BALLISTICS.Loot
+local GOOD = TEAM_GOOD or 1
+local BAD = TEAM_BAD or 2
 
 local snaps = {}
 local byBody = {}
@@ -111,6 +116,31 @@ local function consciousOf(ply)
 	if not aliveOf(ply) then return false end
 	if BALLISTICS.IsConscious then return BALLISTICS.IsConscious(ply) == true end
 	return true
+end
+
+-- Dead is its own error. Spectating is an observer mode while still alive.
+local function spectatingOf(ply)
+	if not aliveOf(ply) then return false end
+	if type(ply.GetObserverMode) ~= "function" then return false end
+	local ok, mode = pcall(ply.GetObserverMode, ply)
+	if not ok or type(mode) ~= "number" then return false end
+	return mode ~= (OBS_MODE_NONE or 0)
+end
+
+local function slottedOf(ply)
+	if not (BALLISTICS.Slots and type(BALLISTICS.Slots.TeamOf) == "function") then return false end
+	local teamId = BALLISTICS.Slots.TeamOf(ply)
+	return teamId == GOOD or teamId == BAD
+end
+
+local function selfCtx(ply)
+	return {
+		phase = phase(),
+		alive = aliveOf(ply),
+		spectating = spectatingOf(ply),
+		slotted = slottedOf(ply),
+		conscious = consciousOf(ply),
+	}
 end
 
 local function pointOf(ent)
@@ -493,6 +523,20 @@ local function publishSession(session, note)
 	}))
 end
 
+local function publishSelf(session, note)
+	local you = L.ReadLive(session.looter)
+	local caps = capsNow()
+	local infinite = L.InfiniteAmmo(BALLISTICS.Config, phase())
+	publish(session.looter, L.View(you, L.Blank(), {
+		open = true,
+		self = true,
+		giveOnly = false,
+		infinite = infinite,
+		note = note or "",
+		caps = caps,
+	}))
+end
+
 function L.Close(ply, err)
 	local id = playerId(ply)
 	if not id then return false end
@@ -575,6 +619,35 @@ function L.Open(ply, ent)
 		snaps[subject.ownerId] = L.Blank()
 	end
 	publishSession(sessions[id], "")
+	return true
+end
+
+-- looter == owner. No body lock, no range, no line of sight.
+function L.OpenSelf(ply)
+	if not valid(ply) then return false, "alive" end
+	local id = playerId(ply)
+	if not id then return false, "alive" end
+	local ok, err = L.CanOpenSelf(selfCtx(ply))
+	if not ok then
+		tell(ply, err)
+		publish(ply, { open = false, note = L.Note(err) or "" })
+		return false, err
+	end
+	local previous = sessions[id]
+	if previous and previous.key then
+		L.Unlock(locks, previous.key, id)
+	end
+	sessions[id] = {
+		looter = ply,
+		looterId = id,
+		ent = ply,
+		owner = ply,
+		ownerId = id,
+		key = nil,
+		mode = "self",
+		self = true,
+	}
+	publishSelf(sessions[id], "")
 	return true
 end
 
@@ -717,11 +790,14 @@ local function asVector(pos)
 	return pos
 end
 
-local function spawnDrop(ply, gun)
-	if not (ents and type(ents.Create) == "function") then return false end
-	if type(gun) ~= "table" or type(gun.class) ~= "string" or gun.class == "" then return false end
-	local ent = ents.Create(gun.class)
-	if not valid(ent) then return false end
+local function markDrop(ent)
+	ent.BallisticsLootDrop = true
+	if type(ent.SetNW2Bool) == "function" then
+		pcall(ent.SetNW2Bool, ent, "bal_loot_drop", true)
+	end
+end
+
+local function dropSpot(ply, nudge)
 	local origin = type(ply.GetPos) == "function" and ply:GetPos() or { x = 0, y = 0, z = 0 }
 	local forward = { x = 1, y = 0, z = 0 }
 	if type(ply.GetForward) == "function" then
@@ -729,6 +805,13 @@ local function spawnDrop(ply, gun)
 		if ok and got ~= nil then forward = got end
 	end
 	local pos = L.DropPos(origin, forward, 40)
+	nudge = tonumber(nudge) or 0
+	if nudge ~= 0 then pos.y = (tonumber(pos.y) or 0) + nudge end
+	return pos
+end
+
+local function placeDrop(ply, ent, nudge)
+	local pos = dropSpot(ply, nudge)
 	if type(ent.SetPos) == "function" then pcall(ent.SetPos, ent, asVector(pos)) end
 	if type(ply.EyeAngles) == "function" and type(ent.SetAngles) == "function" then
 		local ok, ang = pcall(ply.EyeAngles, ply)
@@ -743,17 +826,91 @@ local function spawnDrop(ply, gun)
 	end
 	if not valid(ent) then return false end
 	if type(ent.Activate) == "function" then pcall(ent.Activate, ent) end
+	return true
+end
+
+local function spawnDrop(ply, gun)
+	if not (ents and type(ents.Create) == "function") then return false end
+	if type(gun) ~= "table" or type(gun.class) ~= "string" or gun.class == "" then return false end
+	local ent = ents.Create(gun.class)
+	if not valid(ent) then return false end
+	if not placeDrop(ply, ent, 0) then return false end
 	local atts = gun.attachments or {}
 	for i = 1, #atts do
 		installAtt(ent, atts[i].slot, atts[i].att)
 	end
 	if type(ent.SetClip1) == "function" then pcall(ent.SetClip1, ent, tonumber(gun.clip1) or 0) end
 	if type(ent.SetClip2) == "function" then pcall(ent.SetClip2, ent, tonumber(gun.clip2) or 0) end
-	ent.BallisticsLootDrop = true
-	if type(ent.SetNW2Bool) == "function" then
-		pcall(ent.SetNW2Bool, ent, "bal_loot_drop", true)
-	end
+	markDrop(ent)
 	return true
+end
+
+-- A pickup that stores a count can take the whole stack. TacRP grenade ammo
+-- entities grant 1 and have none of these, so each grenade is its own entity.
+local function applyAmount(ent, n)
+	n = math.floor(tonumber(n) or 0)
+	if n < 1 or ent == nil then return false end
+	if type(ent.SetAmmoCount) == "function" then
+		local ok = pcall(ent.SetAmmoCount, ent, n)
+		if ok then return true end
+	end
+	if type(ent.SetAmmo) == "function" then
+		local ok = pcall(ent.SetAmmo, ent, n)
+		if ok then return true end
+	end
+	if type(ent.AmmoCount) == "number" then
+		ent.AmmoCount = n
+		return true
+	end
+	return false
+end
+
+local function rollback(list)
+	if type(list) ~= "table" then return end
+	for i = 1, #list do
+		local ent = list[i]
+		if valid(ent) and type(ent.Remove) == "function" then pcall(ent.Remove, ent) end
+	end
+end
+
+local function spawnPickup(ply, class, nudge)
+	if not (ents and type(ents.Create) == "function") then return nil end
+	if type(class) ~= "string" or class == "" then return nil end
+	local ent = ents.Create(class)
+	if not valid(ent) then return nil end
+	if not placeDrop(ply, ent, nudge) then return nil end
+	markDrop(ent)
+	return ent
+end
+
+-- Grenades: one entity with the stack count when the entity supports it,
+-- otherwise one entity per grenade. Meds are always one entity per med.
+local function spawnStack(ply, drop)
+	if type(drop) ~= "table" then return false end
+	local class = drop.entity
+	local amount = math.floor(tonumber(drop.amount) or 0)
+	if amount < 1 then return false end
+	local made = {}
+	local function one(i)
+		local ent = spawnPickup(ply, class, (i - 1) * 8)
+		if not ent then return false end
+		made[#made + 1] = ent
+		return true
+	end
+	if not one(1) then
+		rollback(made)
+		return false
+	end
+	if drop.kind == "nade" and amount > 1 and applyAmount(made[1], amount) then
+		return true, made
+	end
+	for i = 2, amount do
+		if not one(i) then
+			rollback(made)
+			return false
+		end
+	end
+	return true, made
 end
 
 local function retarget(session)
@@ -783,6 +940,72 @@ function L.HasSession(ply)
 	return session ~= nil and session.looter == ply
 end
 
+local function actSelf(ply, session, req)
+	if req.kind == "close" then
+		L.Close(ply, nil)
+		return true
+	end
+	local shut, why = L.ShouldCloseSelf(selfCtx(ply))
+	if shut then
+		L.Close(ply, why)
+		return false, why
+	end
+	-- Own slots do not move. Only a drop of a gun, grenade, or med.
+	if req.from ~= "you" or req.to ~= "drop" then
+		publishSelf(session, "")
+		return false, "side"
+	end
+	if req.kind == "ammo" then
+		publishSelf(session, L.Note("ammo") or "")
+		return false, "ammo"
+	end
+	if req.kind ~= "gun" and req.kind ~= "nade" and req.kind ~= "med" then
+		publishSelf(session, "")
+		return false, "kind"
+	end
+	local infinite = L.InfiniteAmmo(BALLISTICS.Config, phase())
+	local you = L.ReadLive(ply)
+	local result = L.Transfer({
+		you = you,
+		them = L.Blank(),
+		from = "you",
+		kind = req.kind,
+		key = req.key,
+		amount = req.amount,
+		to = "drop",
+		slot = 0,
+		whole = false,
+		selfDrop = true,
+		giveOnly = false,
+		caps = capsNow(),
+		infiniteAmmo = infinite,
+		knife = knifeOf(ply),
+	})
+	if not result.ok then
+		publishSelf(session, result.note or "")
+		return false, result.err
+	end
+	local spawned, made
+	if req.kind == "gun" then
+		spawned = spawnDrop(ply, result.drop)
+	else
+		spawned, made = spawnStack(ply, result.drop)
+	end
+	if not spawned then
+		publishSelf(session, "Could not drop that.")
+		return false, "drop"
+	end
+	-- Same writes as a loot transfer: StripWeapon, SetAmmo down to the
+	-- remainder (grenades), GiveMed(ply, id, -n) for meds.
+	if not applyLive(ply, you, result.you, infinite) then
+		rollback(made)
+		publishSelf(session, "Could not move that.")
+		return false, "give"
+	end
+	publishSelf(session, "")
+	return true
+end
+
 function L.Act(ply, req)
 	local id = playerId(ply)
 	local session = id and sessions[id] or nil
@@ -791,6 +1014,9 @@ function L.Act(ply, req)
 		return false, "phase"
 	end
 	req = type(req) == "table" and req or {}
+	if session.self == true then
+		return actSelf(ply, session, req)
+	end
 	if req.kind == "close" then
 		L.Close(ply, nil)
 		return true
@@ -902,6 +1128,9 @@ function L.Watch()
 			if not valid(ply) then
 				L.Unlock(locks, session.key, session.looterId)
 				sessions[ids[i]] = nil
+			elseif session.self == true then
+				local shut, why = L.ShouldCloseSelf(selfCtx(ply))
+				if shut then L.Close(ply, why) end
 			else
 				local keep = retarget(session)
 				local dist = keep and distTo(ply, session.ent) or math.huge
@@ -954,6 +1183,10 @@ if BALLISTICS.Net and BALLISTICS.Net.Register then
 		end,
 	})
 
+	BALLISTICS.Net.Register("bal_loot_self", function(ply)
+		L.OpenSelf(ply)
+	end, { rate = 8 })
+
 	BALLISTICS.Net.Register("bal_loot_act", function(ply, req)
 		L.Act(ply, req)
 	end, {
@@ -989,7 +1222,7 @@ if hook and hook.Add then
 		local id = playerId(ply)
 		if id and sessions[id] then L.Close(ply, "alive") end
 		for _, session in pairs(sessions) do
-			if session.owner == ply or session.ownerId == id then
+			if session.self ~= true and (session.owner == ply or session.ownerId == id) then
 				session.mode = "dead"
 				session.owner = valid(ply) and ply or session.owner
 				publishSession(session, "")

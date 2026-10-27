@@ -6,6 +6,10 @@
 -- The hold is client-side. Opening still has to pass the server checks.
 -- +use is not swallowed: doors, Player Ballistics drag, and TacRP safety /
 -- melee keep the button. A drag that moves the body cancels the hold.
+-- Own inventory is the same window with the other side hidden. A gun,
+-- grenade, or med released outside that panel drops on the floor. Ammo rows
+-- do not drop: a loose reserve has no pickup entity. Grenades use the
+-- throwable's ammo entity; meds use the Player Ballistics med entity.
 
 BALLISTICS = BALLISTICS or {}
 BALLISTICS.Loot = BALLISTICS.Loot or {}
@@ -28,6 +32,9 @@ local NOTES = {
 	giveonly = "They're awake.",
 	down = "You can't loot right now.",
 	alive = "You can't loot right now.",
+	spec = "You can't loot right now.",
+	slot = "You are not in a slot.",
+	ammo = "Ammo can't be dropped.",
 	target = "Nothing to loot.",
 	self = "Nothing to loot.",
 }
@@ -212,6 +219,24 @@ function L.AimOk(info)
 	return false
 end
 
+-- Own inventory: live/post, alive, not spectating, slotted, conscious.
+-- No target, range, or line of sight.
+function L.CanOpenSelf(ctx)
+	ctx = type(ctx) == "table" and ctx or {}
+	if not L.PhaseOk(ctx.phase) then return false, "phase" end
+	if ctx.alive ~= true then return false, "alive" end
+	if ctx.spectating == true then return false, "spec" end
+	if ctx.slotted ~= true then return false, "slot" end
+	if ctx.conscious ~= true then return false, "down" end
+	return true
+end
+
+function L.ShouldCloseSelf(ctx)
+	local ok, err = L.CanOpenSelf(ctx)
+	if ok then return false end
+	return true, err
+end
+
 function L.CanOpen(ctx)
 	ctx = type(ctx) == "table" and ctx or {}
 	if not L.PhaseOk(ctx.phase) then return false, "phase" end
@@ -295,11 +320,24 @@ function L.DoubleClick(prev, now, slotId, window)
 	return true
 end
 
+-- Self inventory has no other side, so a double-click does not move a stack.
+function L.WantsWhole(selfMode, double)
+	if selfMode == true then return false end
+	return double == true
+end
+
 -- Left release. The same slot cancels, so the first half of a double-click
 -- does not move one item. A gun released outside both cards drops. A miss
 -- inside a card, or anything else released outside, cancels.
-function L.Release(drag, target, inside)
+-- Self mode (4th arg): outside the panel drops a gun, grenade, or med.
+-- Ammo still cancels. A slot on your own panel is not a move.
+function L.Release(drag, target, inside, selfMode)
 	if type(drag) ~= "table" then return "cancel" end
+	if selfMode == true then
+		if type(target) == "table" or inside == true then return "cancel" end
+		if drag.kind == "gun" or drag.kind == "nade" or drag.kind == "med" then return "drop" end
+		return "cancel"
+	end
 	if type(target) == "table" then
 		local origin = {
 			side = drag.from,
@@ -555,9 +593,35 @@ function L.Transfer(ctx)
 		return { ok = true, you = you, them = them, drop = nil, moved = 1 }
 	end
 
-	-- Only a gun can leave the window. A stack has nowhere to land.
+	-- Only a gun leaves a loot window. Own inventory may also drop a grenade
+	-- or med stack (selfDrop). Ammo never drops: there is no pickup entity
+	-- for a loose reserve. Grenade ammo is the throwable row, not this one.
 	if toName == "drop" then
-		return fail("kind", originYou, originThem)
+		if ctx.selfDrop ~= true or (kind ~= "nade" and kind ~= "med") then
+			return fail("kind", originYou, originThem)
+		end
+		local mapName = kind == "nade" and "nades" or "meds"
+		local sourceCount = countOf(source[mapName], key)
+		if sourceCount < 1 then return fail("empty", originYou, originThem) end
+		local amount = whole(ctx.amount, 1)
+		if amount == nil or amount < 1 then return fail("amount", originYou, originThem) end
+		if amount > sourceCount then amount = sourceCount end
+		putCount(source[mapName], key, sourceCount - amount)
+		local item = BALLISTICS.Catalog and BALLISTICS.Catalog.Get and BALLISTICS.Catalog.Get(key)
+		return {
+			ok = true,
+			you = you,
+			them = them,
+			drop = {
+				kind = kind,
+				key = key,
+				amount = amount,
+				entity = type(item) == "table" and item.entity or nil,
+				ammo = type(item) == "table" and item.ammo or nil,
+				id = type(item) == "table" and item.id or nil,
+			},
+			moved = amount,
+		}
 	end
 
 	local mapName = kind == "nade" and "nades" or (kind == "med" and "meds" or "ammo")
@@ -711,12 +775,28 @@ function L.View(you, them, opts)
 	local ammoKeys = L.AmmoKeys(you, them, infinite)
 	return {
 		open = opts.open ~= false,
+		self = opts.self == true,
 		giveOnly = opts.giveOnly == true,
 		infinite = infinite,
 		note = type(opts.note) == "string" and opts.note or "",
 		caps = caps,
 		you = L.SideView(you, caps, infinite, ammoKeys),
 		them = L.SideView(them, caps, infinite, ammoKeys),
+	}
+end
+
+-- One centred card, the same size as a loot half. The other side is hidden.
+function L.SelfBox(scrW, scrH)
+	local box = L.PanelBox(scrW, scrH)
+	local w = box.left.w
+	local sw = tonumber(scrW) or 0
+	if sw ~= sw or sw < 1 then sw = 1280 end
+	local x = math.floor((sw - w) / 2)
+	if x < 0 then x = 0 end
+	return {
+		gap = 0,
+		left = { x = x, y = box.left.y, w = w, h = box.left.h },
+		right = { x = 0, y = 0, w = 0, h = 0 },
 	}
 end
 
@@ -890,6 +970,7 @@ function L.WriteState(w, state)
 	w.bool(state.open == true)
 	w.string(type(state.note) == "string" and state.note or "")
 	if state.open ~= true then return end
+	w.bool(state.self == true)
 	w.bool(state.giveOnly == true)
 	w.bool(state.infinite == true)
 	local caps = state.caps or {}
@@ -907,6 +988,7 @@ function L.ReadState(r)
 	if not open then
 		return { open = false, note = note }
 	end
+	local selfMode = r.bool() == true
 	local giveOnly = r.bool() == true
 	local infinite = r.bool() == true
 	local caps = {
@@ -917,6 +999,7 @@ function L.ReadState(r)
 	return {
 		open = true,
 		note = note,
+		self = selfMode,
 		giveOnly = giveOnly,
 		infinite = infinite,
 		caps = caps,

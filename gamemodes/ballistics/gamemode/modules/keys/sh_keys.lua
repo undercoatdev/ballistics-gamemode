@@ -10,6 +10,7 @@ local K = BALLISTICS.Keys
 -- Source BUTTON and KEY enums used when the game constants are missing.
 K.KEY_NONE = 0
 K.KEY_4 = 5
+K.KEY_5 = 6
 K.KEY_G = 17
 K.KEY_H = 18
 K.KEY_F1 = 92
@@ -154,11 +155,14 @@ function K.SameBind(bind, keyCode, lookup, codeOf)
 	return tonumber(code) ~= nil and tonumber(code) == tonumber(keyCode)
 end
 
-function K.BlockBind(bind, throwKey)
+-- inventoryKey blocks slot5 only while the inventory bind is the 5 key, same
+-- as slot4 and the throw key. Another inventory key leaves weapon slot 5 alone.
+function K.BlockBind(bind, throwKey, inventoryKey)
 	if type(bind) ~= "string" then return false end
 	local name = string.lower(bind)
 	if name == "gm_showhelp" then return true end
 	if tonumber(throwKey) == K.KEY_4 and name == "slot4" then return true end
+	if tonumber(inventoryKey) == K.KEY_5 and name == "slot5" then return true end
 	return false
 end
 
@@ -176,6 +180,7 @@ function K.Rows(binds)
 		line("E (tap)", "Drag / drop body"),
 		line("E (hold)", "Loot inventory / E close"),
 		line(binds.teams or "F2", "Teams (lobby)"),
+		line(binds.inventory or "5", "Inventory"),
 		line("1 2 3", "Weapons"),
 	}
 	if binds.isAdmin == true then

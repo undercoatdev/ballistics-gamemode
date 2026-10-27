@@ -26,6 +26,7 @@ local MESSAGES = {
 	"bal_sell",
 	"bal_sell_ok",
 	"bal_loot_open",
+	"bal_loot_self",
 	"bal_loot_act",
 	"bal_loot_state",
 }

@@ -2,6 +2,8 @@
 -- The use button is only watched. It is not consumed, so doors, body drag,
 -- and weapon binds keep working. The ring starts only while the crosshair
 -- is on a lootable player or body.
+-- bal_inventory_key (default 5) toggles the same window in self mode: only
+-- "Your inventory". The key is polled, because the popup owns the keyboard.
 
 if not CLIENT then return end
 
@@ -40,6 +42,8 @@ local sizedW, sizedH = 0, 0
 local hitSlots = {}
 local viewYou
 local viewThem
+local invEdge = (BALLISTICS.FKeys and BALLISTICS.FKeys.NewEdge and BALLISTICS.FKeys.NewEdge()) or { down = false, last = -math.huge }
+local chatOpen = false
 
 local function valid(ent)
 	if ent == nil or ent == false then return false end
@@ -369,9 +373,18 @@ local function acceptCtx()
 end
 
 local function slotTone(slot)
+	if state.self == true then return "idle" end
 	if type(drag) ~= "table" or type(slot) ~= "table" then return "idle" end
 	if L.Accepts(drag, slot, acceptCtx()) then return "yes" end
 	return "no"
+end
+
+local function activeBox()
+	local sw, sh = screen()
+	if state.self == true and type(L.SelfBox) == "function" then
+		return L.SelfBox(sw, sh)
+	end
+	return L.PanelBox(sw, sh)
 end
 
 local function paintRing(cx, cy, radius, thick, frac)
@@ -462,6 +475,7 @@ local function onSlotPress(slot)
 	if L.DoubleClick(lastClick, t, id, DOUBLE) then
 		lastClick = nil
 		drag = nil
+		if type(L.WantsWhole) == "function" and not L.WantsWhole(state.self == true, true) then return end
 		local other = L.OtherSide(slot.side)
 		if not other then return end
 		sendAct({
@@ -496,18 +510,22 @@ local function finishDrag()
 	drag = nil
 	rightWas = false
 	local x, y = cursor()
-	local sw, sh = screen()
-	local box = L.PanelBox(sw, sh)
+	local box = activeBox()
 	local insideCards = inside(x, y, box.left) or inside(x, y, box.right)
 	local target = slotAt(x, y)
-	local action = L.Release(current, target, insideCards)
-	if action == "cancel" then return end
+	local action = L.Release(current, target, insideCards, state.self == true)
+	if action == "cancel" then
+		if state.self == true and current.kind == "ammo" and not insideCards and type(target) ~= "table" then
+			state.note = L.Note("ammo") or ""
+		end
+		return
+	end
 	if action == "drop" then
 		sendAct({
 			from = current.from,
-			kind = "gun",
+			kind = current.kind,
 			key = current.key,
-			amount = 1,
+			amount = current.amount or 1,
 			to = "drop",
 			slot = 0,
 			whole = false,
@@ -639,16 +657,28 @@ local function layout()
 	local sw, sh = screen()
 	root:SetPos(0, 0)
 	root:SetSize(sw, sh)
-	local box = L.PanelBox(sw, sh)
+	local selfMode = state.self == true
+	local box = activeBox()
 	leftCard:SetPos(box.left.x, box.left.y)
 	leftCard:SetSize(box.left.w, box.left.h)
-	rightCard:SetPos(box.right.x, box.right.y)
-	rightCard:SetSize(box.right.w, box.right.h)
+	leftCard:SetVisible(true)
+	if selfMode then
+		rightCard:SetVisible(false)
+		rightCard:SetMouseInputEnabled(false)
+		rightCard:SetPos(0, 0)
+		rightCard:SetSize(0, 0)
+		clearKids(rightCard)
+	else
+		rightCard:SetVisible(true)
+		rightCard:SetMouseInputEnabled(true)
+		rightCard:SetPos(box.right.x, box.right.y)
+		rightCard:SetSize(box.right.w, box.right.h)
+	end
 	hitSlots = {}
 	viewYou = L.InvFromSide(state.you)
-	viewThem = L.InvFromSide(state.them)
+	viewThem = selfMode and L.InvFromSide(nil) or L.InvFromSide(state.them)
 	fillCard(leftCard, "you", state.you, box.left)
-	fillCard(rightCard, "them", state.them, box.right)
+	if not selfMode then fillCard(rightCard, "them", state.them, box.right) end
 	sizedW, sizedH = sw, sh
 end
 
@@ -710,6 +740,83 @@ local function showWindow()
 	mark()
 end
 
+local function inventoryKey()
+	if BALLISTICS.Keys and type(BALLISTICS.Keys.InventoryKey) == "function" then
+		return BALLISTICS.Keys.InventoryKey()
+	end
+	return (BALLISTICS.Keys and BALLISTICS.Keys.KEY_5) or 6
+end
+
+local function keyDownCode(code)
+	if not input or type(input.IsKeyDown) ~= "function" then return false end
+	local ok, down = pcall(input.IsKeyDown, code)
+	return ok and down == true
+end
+
+-- Same skip as the F2/F3 poll: chat, console, the game menu, a text entry.
+local function typingBlocked()
+	if chatOpen then return true end
+	local ply = localPly()
+	if ply and type(ply.IsTyping) == "function" then
+		local ok, on = pcall(ply.IsTyping, ply)
+		if ok and on == true then return true end
+	end
+	if gui and gui.IsConsoleVisible and gui.IsConsoleVisible() then return true end
+	if gui and gui.IsGameUIVisible and gui.IsGameUIVisible() then return true end
+	local f = vgui and vgui.GetKeyboardFocus and vgui.GetKeyboardFocus()
+	if valid(f) and f.GetClassName and f:GetClassName() == "TextEntry" then return true end
+	return false
+end
+
+local function selfAllowed(ply)
+	local teamId = nil
+	if type(ply.Team) == "function" then
+		local ok, id = pcall(ply.Team, ply)
+		if ok then teamId = id end
+	end
+	local slotted = BALLISTICS.IsPlayingTeam and BALLISTICS.IsPlayingTeam(teamId) == true
+	local spectating = false
+	if type(ply.Alive) == "function" and ply:Alive() == true and type(ply.GetObserverMode) == "function" then
+		local ok, mode = pcall(ply.GetObserverMode, ply)
+		if ok and type(mode) == "number" and mode ~= (OBS_MODE_NONE or 0) then spectating = true end
+	end
+	local conscious = true
+	if BALLISTICS.IsConscious then
+		conscious = BALLISTICS.IsConscious(ply) == true
+	elseif ply.pbDown == true then
+		conscious = false
+	end
+	return L.CanOpenSelf({
+		phase = phaseOf(ply),
+		alive = type(ply.Alive) == "function" and ply:Alive() == true,
+		spectating = spectating,
+		slotted = slotted,
+		conscious = conscious,
+	})
+end
+
+local function sendSelf()
+	if not (net and net.Start and net.SendToServer) then return end
+	net.Start("bal_loot_self")
+	net.SendToServer()
+end
+
+local function thinkInventoryKey()
+	local F = BALLISTICS.FKeys
+	if not F or type(F.Step) ~= "function" then return end
+	local key = inventoryKey()
+	local down = key > 0 and keyDownCode(key)
+	local t = (RealTime and RealTime()) or 0
+	if not F.Step(invEdge, down == true, t, typingBlocked()) then return end
+	if state.open == true and state.self == true then
+		closeWindow()
+		return
+	end
+	local ply = localPly()
+	if not ply or not selfAllowed(ply) then return end
+	sendSelf()
+end
+
 local function applyState(nextState)
 	if type(nextState) ~= "table" then return end
 	state = nextState
@@ -721,6 +828,10 @@ local function applyState(nextState)
 	end
 	clearHold()
 	showWindow()
+end
+
+function L.ApplyClientState(nextState)
+	applyState(nextState)
 end
 
 local function thinkHold(ply)
@@ -838,9 +949,12 @@ if BALLISTICS.Net and BALLISTICS.Net.Register then
 end
 
 if hook and hook.Add then
+	hook.Add("StartChat", "Ballistics_Loot", function() chatOpen = true end)
+	hook.Add("FinishChat", "Ballistics_Loot", function() chatOpen = false end)
 	hook.Add("Think", "Ballistics_Loot", function()
 		local ply = localPly()
 		if ply then thinkHold(ply) end
+		thinkInventoryKey()
 		if windowOpen() then
 			local sw, sh = screen()
 			if sw ~= sizedW or sh ~= sizedH then

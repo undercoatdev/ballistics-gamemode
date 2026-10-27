@@ -26,7 +26,7 @@ check("key logic does not touch the game", not pure:find("hook.Add", 1, true)
 	and not pure:find("CreateClientConVar", 1, true))
 
 local K = BALLISTICS.Keys
-check("the throw key names", K.KeyName(K.KEY_4) == "4" and K.KeyName(K.KEY_G) == "G" and K.KeyName(K.KEY_F1) == "F1" and K.KeyName(12) == "B")
+check("the throw key names", K.KeyName(K.KEY_4) == "4" and K.KeyName(K.KEY_5) == "5" and K.KeyName(K.KEY_G) == "G" and K.KeyName(K.KEY_F1) == "F1" and K.KeyName(12) == "B")
 check("a dead backup is key none when nothing is down", K.DeadBackup(function() return false end) == 0)
 check("a dead backup skips a key that reports down", K.DeadBackup(function(code) return code == 0 end) == 101)
 
@@ -83,6 +83,9 @@ check("F1 is swallowed", K.BlockBind("gm_showhelp", K.KEY_4) == true)
 check("slot4 is swallowed while the throw key is 4", K.BlockBind("slot4", K.KEY_4) == true)
 check("slot4 is left alone for another throw key", K.BlockBind("slot4", K.KEY_G) == false)
 check("attack is not swallowed", K.BlockBind("+attack", K.KEY_4) == false)
+check("slot5 is swallowed while the inventory key is 5", K.BlockBind("slot5", K.KEY_4, K.KEY_5) == true)
+check("slot5 is left alone for another inventory key", K.BlockBind("slot5", K.KEY_G, K.KEY_G) == false)
+check("slot4 still swallows when inventory is 5", K.BlockBind("slot4", K.KEY_4, K.KEY_5) == true)
 
 local rows = K.Rows({
 	customize = "C",
@@ -93,10 +96,11 @@ local rows = K.Rows({
 	teams = "F2",
 	med = "B",
 })
-check("the list has the real binds", #rows == 10 and rows[1].action == "Customize / buy wheel" and rows[2].key == "4" and rows[2].action == "Tap quick throw / hold menu" and rows[3].action == "Medical / self-inspect" and rows[4].key == "MOUSE3" and rows[4].action == "Blindfire menu" and rows[6].key == "E (tap)" and rows[6].action == "Drag / drop body" and rows[7].key == "E (hold)" and rows[7].action == "Loot inventory / E close" and rows[8].key == "F2" and rows[9].key == "1 2 3" and rows[9].action == "Weapons" and rows[10].key == "B" and rows[10].action == "Medical wheel")
+check("the list has the real binds", #rows == 11 and rows[1].action == "Customize / buy wheel" and rows[2].key == "4" and rows[2].action == "Tap quick throw / hold menu" and rows[3].action == "Medical / self-inspect" and rows[4].key == "MOUSE3" and rows[4].action == "Blindfire menu" and rows[6].key == "E (tap)" and rows[6].action == "Drag / drop body" and rows[7].key == "E (hold)" and rows[7].action == "Loot inventory / E close" and rows[8].key == "F2" and rows[9].key == "5" and rows[9].action == "Inventory" and rows[10].key == "1 2 3" and rows[10].action == "Weapons" and rows[11].key == "B" and rows[11].action == "Medical wheel")
 local noMed = K.Rows({ med = "" })
-check("a missing medical wheel is left off the list", #noMed == 9)
-check("slot keys share one line", noMed[9].key == "1 2 3" and noMed[9].action == "Weapons")
+check("a missing medical wheel is left off the list", #noMed == 10)
+check("slot keys share one line", noMed[10].key == "1 2 3" and noMed[10].action == "Weapons")
+check("inventory defaults to 5", noMed[9].key == "5" and noMed[9].action == "Inventory")
 
 local box = K.PanelBox(8, 640, 480, true)
 check("the open list sits on the DrawHints anchor", box.x == 8 and box.y == math.floor(240 - box.h / 2) and box.h == 8 * 12 and box.w == 140)
@@ -168,6 +172,7 @@ end)
 CLIENT = true
 dofile("gamemodes/ballistics/gamemode/modules/keys/cl_keys.lua")
 check("the throw convar is archived on 4", created.bal_throw_key and created.bal_throw_key.default == "5" and created.bal_throw_key.save == true)
+check("the inventory convar is archived on 5", created.bal_inventory_key and created.bal_inventory_key.default == "6" and created.bal_inventory_key.save == true)
 check("hints are forced off and the old value is kept for later", convars.tacrp_hints == 0)
 
 local function move(at)
@@ -208,7 +213,7 @@ hook.Run("Think")
 check("the list stays closed after spawn", BALLISTICS.Keys.ListOpen() == false)
 local hinted = BALLISTICS.Keys.HintRows()
 local medRow = hinted[#hinted]
-check("hints read the live binds", hinted[1].key == "C" and hinted[2].key == "4" and hinted[3].key == "G" and hinted[4].key == "H" and hinted[5].key == "E" and hinted[6].key == "E (tap)" and hinted[6].action == "Drag / drop body" and hinted[7].key == "E (hold)" and hinted[7].action == "Loot inventory / E close" and hinted[8].key == "F2" and hinted[9].key == "1 2 3" and hinted[9].action == "Weapons" and medRow.action == "Medical wheel" and medRow.key == "B")
+check("hints read the live binds", hinted[1].key == "C" and hinted[2].key == "4" and hinted[3].key == "G" and hinted[4].key == "H" and hinted[5].key == "E" and hinted[6].key == "E (tap)" and hinted[6].action == "Drag / drop body" and hinted[7].key == "E (hold)" and hinted[7].action == "Loot inventory / E close" and hinted[8].key == "F2" and hinted[9].key == "5" and hinted[9].action == "Inventory" and hinted[10].key == "1 2 3" and hinted[10].action == "Weapons" and medRow.action == "Medical wheel" and medRow.key == "B")
 clock = 10
 hook.Run("Think")
 check("the list collapses when the reveal ends", BALLISTICS.Keys.ListOpen() == false)
@@ -217,10 +222,14 @@ keys[K.KEY_F1] = false
 hook.Run("Think")
 check("F1 closes the list", hook.Run("PlayerBindPress", nil, "gm_showhelp", true) == true and BALLISTICS.Keys.ListOpen() == false)
 check("slot4 is swallowed", hook.Run("PlayerBindPress", nil, "slot4", true) == true)
+check("slot5 is swallowed", hook.Run("PlayerBindPress", nil, "slot5", true) == true)
 check("attack is not swallowed by the keys hook", hook.Run("PlayerBindPress", nil, "+attack", true) == nil)
 convars.bal_throw_key = K.KEY_G
 check("slot4 works again when the throw key is not 4", hook.Run("PlayerBindPress", nil, "slot4", true) == nil)
 convars.bal_throw_key = K.KEY_4
+convars.bal_inventory_key = K.KEY_G
+check("slot5 works again when the inventory key is not 5", hook.Run("PlayerBindPress", nil, "slot5", true) == nil)
+convars.bal_inventory_key = K.KEY_5
 
 className = "tacrp_mp5"
 clock = 20

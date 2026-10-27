@@ -11,6 +11,7 @@ BALLISTICS.Keys = BALLISTICS.Keys or {}
 local K = BALLISTICS.Keys
 local HINTS = "tacrp_hints"
 local THROW = "bal_throw_key"
+local INV = "bal_inventory_key"
 
 local throwState = (K.Fresh and K.Fresh()) or { down = false, ticks = 0, menu = false }
 local wrapped = setmetatable({}, { __mode = "k" })
@@ -25,6 +26,7 @@ local hintsRunning = false
 
 if CreateClientConVar then
 	CreateClientConVar(THROW, tostring(K.KEY_4 or 5), true, false, "Throwables key (KEY_ enum). Tap quick throw, hold the menu. Default is 4.")
+	CreateClientConVar(INV, tostring(K.KEY_5 or 6), true, false, "Inventory key (KEY_ enum). Toggles your inventory. Default is 5.")
 end
 
 local function convar(name)
@@ -45,6 +47,12 @@ end
 
 function BALLISTICS.Keys.ThrowKey()
 	local n = convarInt(THROW, K.KEY_4 or 5)
+	if n < 0 then n = 0 end
+	return n
+end
+
+function BALLISTICS.Keys.InventoryKey()
+	local n = convarInt(INV, K.KEY_5 or 6)
 	if n < 0 then n = 0 end
 	return n
 end
@@ -252,6 +260,7 @@ function BALLISTICS.Keys.HintRows()
 	return K.Rows({
 		customize = bindLabel("+menu_context", "C"),
 		throw = keyLabel(throw, "4"),
+		inventory = keyLabel(BALLISTICS.Keys.InventoryKey(), "5"),
 		inspect = keyLabel(inspect, "G"),
 		blindfire = bindLabel("+zoom", "H"),
 		safety = bindLabel("+use", "E"),
@@ -338,7 +347,8 @@ if hook and hook.Add then
 		watchLife()
 	end)
 	hook.Add("PlayerBindPress", "Ballistics_Keys", function(_, bind, pressed)
-		if type(K.BlockBind) ~= "function" or not K.BlockBind(bind, BALLISTICS.Keys.ThrowKey()) then return end
+		local invKey = BALLISTICS.Keys.InventoryKey and BALLISTICS.Keys.InventoryKey() or nil
+		if type(K.BlockBind) ~= "function" or not K.BlockBind(bind, BALLISTICS.Keys.ThrowKey(), invKey) then return end
 		if pressed ~= false and type(bind) == "string" and string.lower(bind) == "gm_showhelp" then
 			if not f1Latch then
 				f1Latch = true

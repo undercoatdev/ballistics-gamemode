@@ -172,6 +172,39 @@ local stackDrop = L.Transfer({
 	them = L.Blank(), from = "you", kind = "nade", key = "nade_frag", amount = 1, to = "drop",
 })
 check("a stack cannot be dropped", stackDrop.ok == false and stackDrop.err == "kind")
+local selfNade = L.Transfer({
+	you = { guns = {}, nades = { nade_frag = 3 }, meds = {}, ammo = {} },
+	them = L.Blank(), from = "you", kind = "nade", key = "nade_frag", amount = 5, to = "drop",
+	selfDrop = true,
+})
+check("own inventory drops a grenade stack", selfNade.ok == true and selfNade.drop.entity == "tacrp_ammo_frag" and selfNade.drop.amount == 3 and selfNade.drop.ammo == "grenade" and selfNade.you.nades.nade_frag == 0)
+local selfMed = L.Transfer({
+	you = { guns = {}, nades = {}, meds = { med_small = 2 }, ammo = {} },
+	them = L.Blank(), from = "you", kind = "med", key = "med_small", amount = 2, to = "drop",
+	selfDrop = true,
+})
+check("own inventory drops a med stack", selfMed.ok == true and selfMed.drop.entity == "pb_med_small" and selfMed.drop.id == 2 and selfMed.drop.amount == 2 and selfMed.you.meds.med_small == 0)
+local selfAmmo = L.Transfer({
+	you = { guns = { { class = "tacrp_mp5", ammo = "smg1" } }, nades = {}, meds = {}, ammo = { smg1 = 5 } },
+	them = L.Blank(), from = "you", kind = "ammo", key = "smg1", amount = 5, to = "drop",
+	selfDrop = true,
+})
+check("ammo still cannot be dropped", selfAmmo.ok == false and selfAmmo.err == "kind")
+check("a double-click does nothing on your own inventory", L.WantsWhole(true, true) == false and L.WantsWhole(false, true) == true)
+local openSelf = L.CanOpenSelf({ phase = "live", alive = true, spectating = false, slotted = true, conscious = true })
+check("own inventory opens in live", openSelf == true)
+local shutSelf, shutWhy = L.CanOpenSelf({ phase = "buy", alive = true, spectating = false, slotted = true, conscious = true })
+check("own inventory is closed in buy", shutSelf == false and shutWhy == "phase")
+local deadSelf, deadWhy = L.CanOpenSelf({ phase = "post", alive = false, spectating = false, slotted = true, conscious = false })
+check("a dead player cannot open their inventory", deadSelf == false and deadWhy == "alive")
+local specSelf, specWhy = L.CanOpenSelf({ phase = "live", alive = true, spectating = true, slotted = true, conscious = true })
+check("a spectator cannot open their inventory", specSelf == false and specWhy == "spec")
+local slotSelf, slotWhy = L.CanOpenSelf({ phase = "live", alive = true, spectating = false, slotted = false, conscious = true })
+check("an unslotted player cannot open their inventory", slotSelf == false and slotWhy == "slot")
+local koSelf, koWhy = L.CanOpenSelf({ phase = "live", alive = true, spectating = false, slotted = true, conscious = false })
+check("a knocked-out player cannot open their inventory", koSelf == false and koWhy == "down")
+local closeSelf, closeWhy = L.ShouldCloseSelf({ phase = "lobby", alive = true, spectating = false, slotted = true, conscious = true })
+check("leaving live closes own inventory", closeSelf == true and closeWhy == "phase")
 
 local keys = L.AmmoKeys(
 	{ guns = { { class = "tacrp_mp5", ammo = "smg1" }, { class = "tacrp_ex_m1911", ammo = "pistol" } } },
@@ -206,9 +239,15 @@ check("releasing on another slot moves", L.Release(origin, { side = "them", kind
 check("a gun released outside drops", L.Release(origin, nil, false) == "drop")
 check("a gun released inside the card cancels", L.Release(origin, nil, true) == "cancel")
 check("a stack released outside cancels", L.Release({ from = "you", kind = "nade", key = "nade_frag", index = 0 }, nil, false) == "cancel")
+check("own inventory drops a grenade released outside", L.Release({ from = "you", kind = "nade", key = "nade_frag", index = 0 }, nil, false, true) == "drop")
+check("own inventory drops a med released outside", L.Release({ from = "you", kind = "med", key = "med_small", index = 0 }, nil, false, true) == "drop")
+check("own inventory cancels ammo released outside", L.Release({ from = "you", kind = "ammo", key = "smg1", index = 0 }, nil, false, true) == "cancel")
+check("own inventory does not move between slots", L.Release({ from = "you", kind = "gun", key = "tacrp_mp5", index = 1 }, { side = "you", kind = "gun", key = "", index = 2 }, true, true) == "cancel")
 
 local box = L.PanelBox(1280, 720)
 check("the two halves leave a gap", box.right.x == box.left.x + box.left.w + box.gap and box.gap == 16 and box.left.y == box.right.y and box.left.w == box.right.w)
+local one = L.SelfBox(1280, 720)
+check("own inventory is one centred card", one.left.w == box.left.w and one.left.h == box.left.h and one.left.x == math.floor((1280 - one.left.w) / 2) and one.right.w == 0)
 
 local function pipe()
 	local q, i = {}, 1
@@ -231,7 +270,12 @@ local view = L.View(you, them, { open = true, giveOnly = false, infinite = false
 local w, r = pipe()
 L.WriteState(w, view)
 local back = L.ReadState(r)
-check("state round-trips", back.open == true and back.giveOnly == false and back.infinite == false and back.caps.meds == 3 and back.you.guns[1].class == "tacrp_mp5" and back.you.guns[1].clip1 == 12 and back.you.guns[1].attachments[1].att == "optic_test" and back.you.guns[2].class == nil)
+check("state round-trips", back.open == true and back.self == false and back.giveOnly == false and back.infinite == false and back.caps.meds == 3 and back.you.guns[1].class == "tacrp_mp5" and back.you.guns[1].clip1 == 12 and back.you.guns[1].attachments[1].att == "optic_test" and back.you.guns[2].class == nil)
+local selfView = L.View(you, L.Blank(), { open = true, self = true, infinite = false, note = "", caps = L.Caps(nil) })
+w, r = pipe()
+L.WriteState(w, selfView)
+local selfBack = L.ReadState(r)
+check("a self state round-trips", selfBack.open == true and selfBack.self == true and selfBack.you.guns[1].class == "tacrp_mp5" and selfBack.them.guns[1].class == nil)
 local rebuilt = L.InvFromSide(back.you)
 check("a side rebuilds into an inventory", rebuilt.guns[1].class == "tacrp_mp5" and rebuilt.nades.nade_frag == 2 and rebuilt.meds.med_pills == 1 and rebuilt.ammo.smg1 == 40)
 w, r = pipe()
@@ -260,6 +304,8 @@ check("the client does not consume the use button", not clientSrc:find("RemoveKe
 check("the client keeps the keyboard for movement", clientSrc:find("SetKeyboardInputEnabled", 1, true) ~= nil)
 check("the server does not hook the use button", not serverSrc:find("PlayerButtonDown", 1, true) and not serverSrc:find("RemoveKey", 1, true))
 check("loot has no init hook", not clientSrc:find('hook.Add("Initialize"', 1, true) and not clientSrc:find('hook.Add("InitPostEntity"', 1, true) and not serverSrc:find('hook.Add("Initialize"', 1, true) and not serverSrc:find('hook.Add("InitPostEntity"', 1, true))
+check("the inventory key is polled", clientSrc:find("bal_loot_self", 1, true) ~= nil and clientSrc:find("IsKeyDown", 1, true) ~= nil and clientSrc:find("IsGameUIVisible", 1, true) ~= nil)
+check("the server opens a self session", serverSrc:find("function L.OpenSelf", 1, true) ~= nil and serverSrc:find("bal_loot_self", 1, true) ~= nil)
 
 -- Server session. Players are tables; the server only calls methods.
 local phaseName = "live"
@@ -317,6 +363,7 @@ local function makePly(sid)
 		ammo = {},
 		pbMed = { counts = { 0, 0, 0, 0 } },
 		chats = {},
+		obs = 0,
 	}
 	function p:IsValid() return true end
 	function p:IsPlayer() return true end
@@ -347,6 +394,7 @@ local function makePly(sid)
 		end
 		self.order = kept
 	end
+	function p:GetObserverMode() return self.obs or 0 end
 	function p:GetAmmoCount(ammoType) return self.ammo[ammoType] or 0 end
 	function p:SetAmmo(n, ammoType) self.ammo[ammoType] = n end
 	function p:ChatPrint(text) self.chats[#self.chats + 1] = text end
@@ -368,16 +416,26 @@ player.GetAll = function() return { looter, victim, other } end
 
 local droppedEnts = {}
 local failCreate = false
+local failAfter = nil
+local stackPickup = false
 ents = ents or {}
 function ents.Create(class)
 	if failCreate then return nil end
+	if failAfter ~= nil then
+		if failAfter <= 0 then return nil end
+		failAfter = failAfter - 1
+	end
 	local e = makeWep(class, "pistol", 0, nil)
 	e.nw = {}
 	function e:SetPos(pos) self.pos = pos end
 	function e:SetAngles(ang) self.ang = ang end
 	function e:Spawn() end
 	function e:Activate() end
+	function e:Remove() self.removed = true end
 	function e:SetNW2Bool(key, value) self.nw[key] = value end
+	if stackPickup then
+		function e:SetAmmo(n) self.ammoSet = n end
+	end
 	droppedEnts[#droppedEnts + 1] = e
 	return e
 end
@@ -395,6 +453,7 @@ local function wipe(p)
 	p.chats = {}
 	p.alive = true
 	p.pbDown = false
+	p.obs = 0
 	p.pos = { x = 0, y = 0, z = 0 }
 	if BALLISTICS.Loadout and BALLISTICS.Loadout.Reset then
 		BALLISTICS.Loadout.Reset(p, "tacrp_knife")
@@ -406,6 +465,8 @@ local function settle()
 	see = true
 	pbMax = 5
 	failCreate = false
+	failAfter = nil
+	stackPickup = false
 	BALLISTICS.Config.BuyAmmoMags = 3
 	BALLISTICS.Config.MedsMax = 3
 	BALLISTICS.Config.GrenadesMax = 3
@@ -695,6 +756,131 @@ function freshRag:NearestPoint() return self:WorldSpaceCenter() end
 ok = L.Open(looter, freshRag)
 check("a new round does not keep the old snapshot", ok == true and classes(L.Last(looter).them)[1] == nil)
 
+local GOOD = TEAM_GOOD or 1
+local function seat(p, slot)
+	return BALLISTICS.Slots.Take(p, GOOD, slot or 1)
+end
+local function liveDrops()
+	local list = {}
+	for i = 1, #droppedEnts do
+		if not droppedEnts[i].removed then list[#list + 1] = droppedEnts[i] end
+	end
+	return list
+end
+
+settle()
+ok, err = L.OpenSelf(looter)
+check("an unslotted player cannot open their own inventory", ok == false and err == "slot")
+seat(looter)
+phaseName = "buy"
+ok, err = L.OpenSelf(looter)
+check("own inventory is refused during buy", ok == false and err == "phase")
+phaseName = "post"
+ok = L.OpenSelf(looter)
+check("own inventory opens after the round", ok == true and L.Last(looter).open == true and L.Last(looter).self == true and L.Last(looter).giveOnly == false)
+see = false
+looter.pos = { x = 0, y = 0, z = 900 }
+ok = L.OpenSelf(looter)
+check("own inventory ignores range and line of sight", ok == true and L.Last(looter).self == true)
+
+settle()
+seat(looter)
+looter.alive = false
+ok, err = L.OpenSelf(looter)
+check("a dead player cannot open their own inventory", ok == false and err == "alive")
+settle()
+seat(looter)
+looter.pbDown = true
+ok, err = L.OpenSelf(looter)
+check("a knocked-out player cannot open their own inventory", ok == false and err == "down")
+settle()
+seat(looter)
+looter.obs = 4
+ok, err = L.OpenSelf(looter)
+check("a spectator cannot open their own inventory", ok == false and err == "spec")
+
+settle()
+seat(looter)
+arm(looter, "tacrp_mp5", { ammo = "smg1", clip = 3, att = "supp" })
+L.Open(looter, victim)
+L.OpenSelf(looter)
+check("opening your inventory drops the body lock", L.Last(looter).self == true)
+ok = L.Open(other, victim)
+check("someone else can loot that body", ok == true)
+L.Act(other, { kind = "close" })
+ok = L.Act(looter, { from = "you", kind = "gun", key = "tacrp_mp5", amount = 1, to = "drop", slot = 0 })
+local selfGun = liveDrops()[1]
+check("dropping your gun keeps the mag and the attachment", ok == true and selfGun ~= nil and selfGun.class == "tacrp_mp5" and selfGun.clip1 == 3 and selfGun.Attachments[1].Installed == "supp" and selfGun.BallisticsLootDrop == true and selfGun.pos.x == 40 and selfGun.pos.z == 8)
+check("the dropped gun leaves your inventory", looter.weapons.tacrp_mp5 == nil and classes(L.Last(looter).you)[1] == nil)
+
+settle()
+seat(looter)
+looter.ammo.grenade = 3
+L.OpenSelf(looter)
+ok = L.Act(looter, { from = "you", kind = "nade", key = "nade_frag", amount = 1, to = "drop", slot = 0, whole = true })
+local nades = liveDrops()
+check("a whole-stack flag still drops one grenade", ok == true and looter.ammo.grenade == 2 and #nades == 1 and nades[1].class == "tacrp_ammo_frag" and nades[1].BallisticsLootDrop == true and nades[1].nw.bal_loot_drop == true)
+ok = L.Act(looter, { from = "you", kind = "nade", key = "nade_frag", amount = 2, to = "drop", slot = 0 })
+nades = liveDrops()
+check("each grenade is its own pickup", ok == true and looter.ammo.grenade == 0 and #nades == 3 and nades[3].class == "tacrp_ammo_frag" and nades[3].pos.y == 8 and nades[3].BallisticsLootDrop == true)
+
+settle()
+seat(looter)
+stackPickup = true
+looter.ammo.grenade = 3
+L.OpenSelf(looter)
+ok = L.Act(looter, { from = "you", kind = "nade", key = "nade_frag", amount = 3, to = "drop", slot = 0 })
+nades = liveDrops()
+check("a grenade entity that stores a count takes the stack", ok == true and looter.ammo.grenade == 0 and #nades == 1 and nades[1].ammoSet == 3)
+
+settle()
+seat(looter)
+looter.ammo.grenade = 2
+failAfter = 1
+L.OpenSelf(looter)
+ok, err = L.Act(looter, { from = "you", kind = "nade", key = "nade_frag", amount = 2, to = "drop", slot = 0 })
+check("a failed grenade drop leaves them in hand", ok == false and err == "drop" and looter.ammo.grenade == 2 and #liveDrops() == 0)
+
+settle()
+seat(looter)
+looter.pbMed.counts[2] = 2
+stackPickup = true
+L.OpenSelf(looter)
+medCalls = {}
+ok = L.Act(looter, { from = "you", kind = "med", key = "med_small", amount = 2, to = "drop", slot = 0 })
+local meds = liveDrops()
+check("each med is its own pickup", ok == true and #meds == 2 and meds[1].class == "pb_med_small" and meds[2].class == "pb_med_small" and meds[1].BallisticsLootDrop == true and meds[2].pos.y == 8)
+check("meds leave through GiveMed", looter.pbMed.counts[2] == 0 and #medCalls == 1 and medCalls[1].id == 2 and medCalls[1].n == -2)
+
+settle()
+seat(looter)
+arm(looter, "tacrp_mp5", { ammo = "smg1" })
+looter.ammo.smg1 = 10
+L.OpenSelf(looter)
+ok, err = L.Act(looter, { from = "you", kind = "ammo", key = "smg1", amount = 4, to = "drop", slot = 0 })
+check("ammo cannot be dropped from your inventory", ok == false and err == "ammo" and looter.ammo.smg1 == 10 and L.Last(looter).note == "Ammo can't be dropped." and #liveDrops() == 0)
+ok, err = L.Act(looter, { from = "you", kind = "gun", key = "tacrp_mp5", amount = 1, to = "them", slot = 0 })
+check("own inventory does not move onto another side", ok == false and err == "side" and looter.weapons.tacrp_mp5 ~= nil)
+
+settle()
+seat(looter)
+L.OpenSelf(looter)
+looter.pbDown = true
+L.Watch()
+check("falling unconscious closes your inventory", L.Last(looter).open == false)
+settle()
+seat(looter)
+L.OpenSelf(looter)
+BALLISTICS.Slots.Leave(looter)
+L.Watch()
+check("leaving the slot closes your inventory", L.Last(looter).open == false)
+settle()
+seat(looter)
+L.OpenSelf(looter)
+looter.alive = false
+hook.Run("PlayerDeath", looter)
+check("dying closes your inventory", L.Last(looter).open ~= true)
+
 -- Singleplayer: KeyDown(IN_USE) is false client-side, the bound key still counts.
 check("use counts from the raw key when the usercmd has none", L.UseDown(false, true) == true)
 check("use counts from the usercmd", L.UseDown(true, false) == true)
@@ -715,4 +901,125 @@ local cat = { Get = function(k) return k == "nade_frag" and { key = k, entity = 
 check("gun slot icon by class", L.IconItem({ kind = "gun", class = "tacrp_mp5" }, cat).class == "tacrp_mp5")
 check("grenade slot icon from catalog", L.IconItem({ kind = "nade", key = "nade_frag" }, cat).entity == "tacrp_ammo_frag")
 check("empty and ammo slots have no icon", L.IconItem({ kind = "gun", empty = true }, cat) == nil and L.IconItem({ kind = "ammo", key = "pistol" }, cat) == nil)
+
+-- Client: the 5 key toggles your inventory and stays quiet while blocked.
+CLIENT = true
+dofile("gamemodes/ballistics/gamemode/modules/fkeys/sh_fkeys.lua")
+local phaseNow, aliveNow, teamNow, obsNow, downNow = "live", true, 1, 0, false
+local keysDown = {}
+local menuUp, consoleUp = false, false
+local sent = {}
+local clockRt = 0
+function RealTime() return clockRt end
+function IsValid(ent) return ent ~= nil and ent ~= false end
+input = {
+	IsKeyDown = function(code) return keysDown[code] == true end,
+	IsMouseDown = function() return false end,
+	LookupBinding = function() return "e" end,
+	GetKeyCode = function() return 0 end,
+}
+gui = {
+	IsGameUIVisible = function() return menuUp end,
+	IsConsoleVisible = function() return consoleUp end,
+	HideGameUI = function() end,
+}
+BALLISTICS.Keys = BALLISTICS.Keys or {}
+function BALLISTICS.Keys.InventoryKey() return 6 end
+function LocalPlayer()
+	return {
+		IsValid = function() return true end,
+		Alive = function() return aliveNow end,
+		Team = function() return teamNow end,
+		pbDown = downNow,
+		GetObserverMode = function() return obsNow end,
+		GetNW2String = function(_, key)
+			if key == "bal_phase" then return phaseNow end
+			return ""
+		end,
+		KeyDown = function() return false end,
+	}
+end
+function net.Start(name) sent[#sent + 1] = name end
+function net.SendToServer() end
+dofile("gamemodes/ballistics/gamemode/modules/loot/cl_loot.lua")
+
+local function releaseKey()
+	keysDown[6] = false
+	hook.Run("Think")
+end
+local function tap(at)
+	clockRt = at
+	keysDown[6] = true
+	hook.Run("Think")
+	local n = #sent
+	releaseKey()
+	return n
+end
+local function resetGate()
+	phaseNow, aliveNow, teamNow, obsNow, downNow = "live", true, 1, 0, false
+	menuUp, consoleUp = false
+	sent = {}
+	releaseKey()
+end
+
+resetGate()
+tap(1)
+check("5 asks the server to open your inventory", #sent == 1 and sent[1] == "bal_loot_self")
+tap(1.1)
+check("a second tap inside the debounce does nothing", #sent == 1)
+tap(2)
+check("a later tap asks again", #sent == 2 and sent[2] == "bal_loot_self")
+
+resetGate()
+L.ApplyClientState({
+	open = true, self = true, note = "", giveOnly = false, infinite = false,
+	caps = { meds = 3, nades = 3, guns = 2 },
+	you = { guns = {}, nades = {}, meds = {}, ammo = {} },
+	them = { guns = {}, nades = {}, meds = {}, ammo = {} },
+})
+tap(5)
+check("5 again closes your inventory", #sent == 1 and sent[1] == "bal_loot_act")
+
+resetGate()
+L.ApplyClientState({ open = true, self = true, note = "", you = {}, them = {} })
+sent = {}
+local esc = hook.Run("OnPauseMenuShow")
+check("escape sends the close", esc == false and #sent == 1 and sent[1] == "bal_loot_act")
+
+resetGate()
+phaseNow = "buy"
+tap(10)
+check("5 does nothing during buy", #sent == 0)
+phaseNow = "post"
+tap(11)
+check("5 opens during the post round", #sent == 1 and sent[1] == "bal_loot_self")
+resetGate()
+aliveNow = false
+tap(12)
+check("5 does nothing while dead", #sent == 0)
+resetGate()
+obsNow = 4
+tap(13)
+check("5 does nothing while spectating", #sent == 0)
+resetGate()
+teamNow = TEAM_SPEC or 1002
+tap(14)
+check("5 does nothing while unslotted", #sent == 0)
+resetGate()
+downNow = true
+tap(15)
+check("5 does nothing while knocked out", #sent == 0)
+resetGate()
+hook.Run("StartChat")
+tap(16)
+hook.Run("FinishChat")
+check("5 does nothing while typing", #sent == 0)
+resetGate()
+menuUp = true
+tap(17)
+check("5 does nothing in a menu", #sent == 0)
+resetGate()
+consoleUp = true
+tap(18)
+check("5 does nothing in the console", #sent == 0)
 if failed then os.exit(1) end
