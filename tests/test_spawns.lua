@@ -179,6 +179,21 @@ check("scroll in shrinks the window", near(zoomed, 85))
 zoomed = D.zoom(70, 1, 1)
 check("zoom does not go below 64", zoomed == 64)
 
+local sb, st = D.SliceBounds({ x = 0, y = 0, z = -100.5 }, { x = 1, y = 1, z = 400 })
+check("slice bounds are the map floor and ceiling", sb == -100.5 and st == 400)
+local swappedB, swappedT = D.SliceBounds({ z = 50 }, { z = -20 })
+check("slice bounds swap an upside-down box", swappedB == -20 and swappedT == 50)
+local arrB, arrT = D.SliceBounds({ [3] = -4 }, { z = 8 })
+check("slice bounds accept a z index", arrB == -4 and arrT == 8)
+check("a flat slice range is kept", D.SliceBounds({ z = 5 }, { z = 5 }) == 5)
+check("slice bounds reject a missing or non-finite box", D.SliceBounds(nil, { z = 1 }) == nil and D.SliceBounds({ z = 0 }, { z = 0 / 0 }) == nil and D.SliceBounds({ z = 1 / 0 }, { z = 2 }) == nil)
+check("a slice clamps into the map and a bad value sits at the top", D.ClampSlice(10, -5, 20) == 10 and D.ClampSlice(-9, -5, 20) == -5 and D.ClampSlice(40, -5, 20) == 20 and D.ClampSlice(nil, -5, 20) == 20 and D.ClampSlice(3, 20, -5) == 3)
+check("clamp slice refuses a bad range", D.ClampSlice(1, nil, 5) == nil and D.ClampSlice(1, 0 / 0, 5) == nil)
+check("a trace starts at the slice when the camera is above it", D.SliceStart(5000, 120) == 120)
+check("a trace keeps a start that is already below the slice", D.SliceStart(40, 120) == 40 and D.SliceStart(120, 120) == 120)
+check("a trace with no slice keeps its start", D.SliceStart(40, nil) == 40 and D.SliceStart(40, 0 / 0) == 40)
+check("a non-finite start is not a slice start", D.SliceStart(nil, 10) == nil and D.SliceStart(1 / 0, 10) == nil)
+
 local nodes = 0
 local enabled = 0
 BALLISTICS.AdminTabs.Walk(nil, function(node)

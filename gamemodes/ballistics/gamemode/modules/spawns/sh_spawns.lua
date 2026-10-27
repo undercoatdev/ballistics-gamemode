@@ -707,6 +707,43 @@ function D.overview(mins, maxs, fov, aspect)
 	}
 end
 
+-- Overhead slice. The top value means no cut. Callers fall back when this is nil.
+local function compZ(v)
+	if type(v) ~= "table" then return nil end
+	local z = tonumber(v.z)
+	if z == nil then z = tonumber(v[3]) end
+	if not finite(z) then return nil end
+	return z
+end
+
+function D.SliceBounds(mins, maxs)
+	local a, b = compZ(mins), compZ(maxs)
+	if not a or not b then return nil end
+	if b < a then a, b = b, a end
+	return a, b
+end
+
+function D.ClampSlice(slice, bottom, top)
+	local lo, hi = tonumber(bottom), tonumber(top)
+	if not finite(lo) or not finite(hi) then return nil end
+	if hi < lo then lo, hi = hi, lo end
+	slice = tonumber(slice)
+	if not finite(slice) then return hi end
+	if slice < lo then return lo end
+	if slice > hi then return hi end
+	return slice
+end
+
+-- Trace start at min(current z, slice) so a roof above the cut is not hit.
+function D.SliceStart(z, slice)
+	z = tonumber(z)
+	if not finite(z) then return nil end
+	slice = tonumber(slice)
+	if not finite(slice) then return z end
+	if slice < z then return slice end
+	return z
+end
+
 local function clampCount(n, fallback)
 	n = math.floor(tonumber(n) or fallback)
 	if n < 1 then n = 1 end

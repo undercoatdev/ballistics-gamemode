@@ -1,5 +1,6 @@
 -- Overhead spawn editor and the flag circles everyone sees.
 -- Scroll zooms, WASD pans, click traces straight down and asks the server to place.
+-- Slice height clips the world above a Z. Traces start on that plane.
 
 if not CLIENT then return end
 
@@ -19,6 +20,13 @@ local send
 local cam = nil
 local toolbar = nil
 local wheelAt = 0
+local sliceBottom, sliceTop = 0, 0
+local sliceZ = 0
+local mapXY = nil
+local muteSlice = false
+local clipOn = false
+local clipPrev = nil
+local inScene = false
 
 local function emit()
 	for i = 1, #listeners do
@@ -244,6 +252,139 @@ local function frameMap()
 	return framed
 end
 
+local function finiteNum(n)
+	return type(n) == "number" and n == n and n ~= math.huge and n ~= -math.huge
+end
+
+local function xyBounds(mins, maxs)
+	if type(mins) ~= "table" or type(maxs) ~= "table" then return nil end
+	local x0, y0 = tonumber(mins.x), tonumber(mins.y)
+	local x1, y1 = tonumber(maxs.x), tonumber(maxs.y)
+	if not (finiteNum(x0) and finiteNum(y0) and finiteNum(x1) and finiteNum(y1)) then return nil end
+	if x1 < x0 then x0, x1 = x1, x0 end
+	if y1 < y0 then y0, y1 = y1, y0 end
+	if x1 - x0 < 1 or y1 - y0 < 1 then return nil end
+	return { minx = x0, miny = y0, maxx = x1, maxy = y1 }
+end
+
+local function worldBounds()
+	if not game or not game.GetWorld then return nil, nil end
+	local world = game.GetWorld()
+	if not world or (IsValid and not IsValid(world)) or not world.GetModelBounds then return nil, nil end
+	local a, b = world:GetModelBounds()
+	return vec3(a), vec3(b)
+end
+
+-- Map Z when it is usable, otherwise the overhead view's own vertical span.
+local function measureSlice()
+	local mins, maxs = worldBounds()
+	local bottom, top = D.SliceBounds(mins, maxs)
+	mapXY = nil
+	if bottom and top and (top - bottom) >= 1 then
+		mapXY = xyBounds(mins, maxs)
+	else
+		local hi = (cam and tonumber(cam.z)) or 4096
+		local lo = cam and tonumber(cam.groundZ) or nil
+		bottom, top = D.SliceBounds({ z = lo }, { z = hi })
+		if not bottom or (top - bottom) < 1 then
+			bottom, top = D.SliceBounds({ z = hi - 8192 }, { z = hi })
+		end
+	end
+	sliceBottom = bottom or 0
+	sliceTop = top or (sliceBottom + 1)
+	if sliceTop < sliceBottom then sliceBottom, sliceTop = sliceTop, sliceBottom end
+	if sliceTop - sliceBottom < 1 then sliceTop = sliceBottom + 1 end
+	sliceZ = sliceTop
+end
+
+local function applySliceSlider()
+	local slider = toolbar and toolbar.balSlice
+	if not slider or (IsValid and not IsValid(slider)) then return end
+	muteSlice = true
+	if slider.SetMin then slider:SetMin(sliceBottom) end
+	if slider.SetMax then slider:SetMax(sliceTop) end
+	if slider.SetValue then slider:SetValue(sliceZ or sliceTop) end
+	muteSlice = false
+end
+
+-- Top of the range is no cut. A rounded slider tick on the max counts as the top.
+local function sliceActive()
+	if editing ~= true or not cam then return false end
+	if not finiteNum(sliceZ) or not finiteNum(sliceTop) then return false end
+	return sliceZ < sliceTop - 1e-3
+end
+
+local function popClip()
+	if not clipOn then return end
+	clipOn = false
+	if render and render.PopCustomClipPlane then render.PopCustomClipPlane() end
+	if render and render.EnableClipping then render.EnableClipping(clipPrev == true) end
+	clipPrev = nil
+end
+
+local function pushClip(z)
+	if clipOn then popClip() end
+	if not render or not render.EnableClipping or not render.PushCustomClipPlane or not Vector then
+		return false
+	end
+	clipPrev = render.EnableClipping(true)
+	render.PushCustomClipPlane(Vector(0, 0, -1), -(tonumber(z) or 0))
+	clipOn = true
+	return true
+end
+
+-- Outside the scene render, a stuck plane must not leak into normal play.
+local function guardClip()
+	if inScene then return end
+	if clipOn then popClip() end
+end
+
+local function along(startPos, endPos, z)
+	local dz = endPos.z - startPos.z
+	if math.abs(dz) < 1e-6 then
+		return Vector(startPos.x, startPos.y, z)
+	end
+	local t = (z - startPos.z) / dz
+	if t < 0 then t = 0 end
+	if t > 1 then t = 1 end
+	return Vector(
+		startPos.x + (endPos.x - startPos.x) * t,
+		startPos.y + (endPos.y - startPos.y) * t,
+		z
+	)
+end
+
+-- Start the placement ray on the slice, still heading down the same line.
+local function clipTrace(startPos, endPos)
+	if not sliceActive() then return startPos, endPos end
+	local z0 = D.SliceStart(startPos.z, sliceZ)
+	local z1 = D.SliceStart(endPos.z, sliceZ)
+	if not z0 or not z1 then return startPos, endPos end
+	local a = along(startPos, endPos, z0)
+	local b = along(startPos, endPos, z1)
+	if math.abs(a.x - b.x) < 0.01 and math.abs(a.y - b.y) < 0.01 and math.abs(a.z - b.z) < 0.01 then
+		return nil, nil
+	end
+	return a, b
+end
+
+local function drawSliceRect()
+	if not sliceActive() or not mapXY then return end
+	if not render or not render.DrawLine or not Vector then return end
+	local z = sliceZ - 2
+	local x0, y0 = mapXY.minx, mapXY.miny
+	local x1, y1 = mapXY.maxx, mapXY.maxy
+	if render.SetColorMaterial then render.SetColorMaterial() end
+	local col = Color(140, 170, 190, 60)
+	local pts = {
+		Vector(x0, y0, z), Vector(x1, y0, z),
+		Vector(x1, y1, z), Vector(x0, y1, z),
+	}
+	for i = 1, 4 do
+		render.DrawLine(pts[i], pts[i % 4 + 1], col, true)
+	end
+end
+
 local function shiftDown()
 	if not input or not input.IsKeyDown then return false end
 	local left = KEY_LSHIFT and input.IsKeyDown(KEY_LSHIFT)
@@ -336,10 +477,10 @@ hook.Add("PostDrawTranslucentRenderables", "Ballistics_FlagRings", function(_, s
 	drawRing(view.good, GOOD)
 	drawRing(view.bad, BAD)
 	if showBox() then drawBox(view.box) end
+	drawSliceRect()
 end)
 
-hook.Add("CalcView", "Ballistics_SpawnEditor", function()
-	if not editing or not cam then return end
+local function cameraView()
 	local ratio = aspect()
 	if cam.ortho then
 		cam.halfW = cam.halfH * ratio
@@ -361,7 +502,44 @@ hook.Add("CalcView", "Ballistics_SpawnEditor", function()
 		}
 	end
 	return viewTable
+end
+
+hook.Add("CalcView", "Ballistics_SpawnEditor", function()
+	if not editing or not cam then return end
+	return cameraView()
 end)
+
+-- World brushes are drawn before PreDrawOpaqueRenderables, so a clip pushed
+-- there never cuts the map. This editor has no RenderView of its own: CalcView
+-- only supplies the camera and the engine paints the BSP. Take over RenderScene
+-- and draw that same camera with the plane already pushed. The inner RenderView
+-- re-enters this hook; inScene lets the engine draw that pass.
+hook.Add("RenderScene", "Ballistics_SpawnEditorSlice", function()
+	if inScene then return end
+	if not sliceActive() then return end
+	if not render or not render.RenderView then return end
+	local viewTable = cameraView()
+	viewTable.x = 0
+	viewTable.y = 0
+	viewTable.w = (ScrW and ScrW()) or 1280
+	viewTable.h = (ScrH and ScrH()) or 720
+	viewTable.drawviewmodel = false
+	viewTable.drawhud = false
+	viewTable.dopostprocess = true
+	inScene = true
+	local pushed = pushClip(sliceZ)
+	if pushed then
+		pcall(render.RenderView, viewTable)
+		popClip()
+	end
+	inScene = false
+	if not pushed then return end
+	return true
+end)
+
+hook.Add("PreRender", "Ballistics_SpawnEditorSlice", guardClip)
+hook.Add("PostRender", "Ballistics_SpawnEditorSlice", guardClip)
+hook.Add("Think", "Ballistics_SpawnEditorSlice", guardClip)
 
 hook.Add("CreateMove", "Ballistics_SpawnEditor", function(cmd)
 	if not editing or not cmd then return end
@@ -460,18 +638,25 @@ local function placeAtCursor()
 	if cam.ortho ~= false then
 		local hit = D.groundPoint(mx, my, sw, sh, cam)
 		if not hit then return end
+		local startPos, endPos = clipTrace(
+			Vector(hit.x, hit.y, cam.z),
+			Vector(hit.x, hit.y, cam.z - 200000)
+		)
+		if not startPos or not endPos then return end
 		tr = util.TraceLine({
-			start = Vector(hit.x, hit.y, cam.z),
-			endpos = Vector(hit.x, hit.y, cam.z - 200000),
+			start = startPos,
+			endpos = endPos,
 			mask = mask,
 		})
 	elseif gui and gui.ScreenToVector then
 		local dir = gui.ScreenToVector(mx, my)
 		local origin = Vector(cam.x, cam.y, cam.z)
 		if not dir then return end
+		local startPos, endPos = clipTrace(origin, origin + dir * 200000)
+		if not startPos or not endPos then return end
 		tr = util.TraceLine({
-			start = origin,
-			endpos = origin + dir * 200000,
+			start = startPos,
+			endpos = endPos,
 			mask = mask,
 		})
 	end
@@ -530,7 +715,7 @@ local function ensureToolbar()
 	if not vgui or not vgui.Create then return nil end
 	toolbar = vgui.Create("DFrame")
 	toolbar:SetTitle("Edit spawns")
-	toolbar:SetSize(480, 196)
+	toolbar:SetSize(480, 232)
 	toolbar:SetPos(12, 12)
 	toolbar:SetDeleteOnClose(false)
 	toolbar:SetSizable(false)
@@ -612,6 +797,45 @@ local function ensureToolbar()
 	hint:SetText("WASD pan, wheel zooms, click the ground. Squad: arrows or shift+wheel rotate. Sliders resize.")
 	if hint.SetTextColor then hint:SetTextColor(Color(170, 170, 170)) end
 
+	local sliceLine = vgui.Create("DPanel", toolbar)
+	sliceLine:Dock(TOP)
+	sliceLine:SetTall(32)
+	sliceLine:DockMargin(0, 4, 0, 0)
+	sliceLine.Paint = function(_, w, h)
+		surface.SetDrawColor(32, 34, 40, 255)
+		surface.DrawRect(0, 0, w, h)
+	end
+	if sliceLine.SetTooltip then
+		sliceLine:SetTooltip("Hide everything above this height. The top of the range is no cut.")
+	end
+	local slice = vgui.Create("DNumSlider", sliceLine)
+	slice:Dock(FILL)
+	slice:DockMargin(8, 0, 8, 0)
+	slice:SetText("Slice height")
+	if slice.SetDark then slice:SetDark(false) end
+	if slice.SetDecimals then slice:SetDecimals(0) end
+	if slice.SetTooltip then
+		slice:SetTooltip("Hide everything above this height. The top of the range is no cut.")
+	end
+	if slice.Label and slice.Label.SetTextColor then
+		slice.Label:SetTextColor(Color(230, 230, 230))
+	end
+	muteSlice = true
+	if slice.SetMin then slice:SetMin(sliceBottom) end
+	if slice.SetMax then slice:SetMax(sliceTop) end
+	if slice.SetValue then slice:SetValue(sliceZ or sliceTop) end
+	muteSlice = false
+	slice.OnValueChanged = function(_, val)
+		if muteSlice or editing ~= true then return end
+		local z = D.ClampSlice(val, sliceBottom, sliceTop)
+		if not z or math.abs(z - sliceTop) < 0.5 then
+			sliceZ = sliceTop
+			return
+		end
+		sliceZ = z
+	end
+	toolbar.balSlice = slice
+
 	local bar = vgui.Create("DPanel", toolbar)
 	bar:Dock(BOTTOM)
 	bar:SetTall(28)
@@ -637,6 +861,9 @@ end
 function BALLISTICS.Spawns.EndEdit(reopen)
 	if toolbar and toolbar.balClosing then return end
 	editing = false
+	sliceZ = sliceTop
+	applySliceSlider()
+	popClip()
 	if IsValid(toolbar) then
 		toolbar.balClosing = true
 		toolbar:SetVisible(false)
@@ -660,9 +887,12 @@ function BALLISTICS.Spawns.BeginEdit()
 	if not allowed then return end
 	if BALLISTICS.Lobby and BALLISTICS.Lobby.Close then BALLISTICS.Lobby.Close() end
 	if BALLISTICS.Admin and BALLISTICS.Admin.Close then BALLISTICS.Admin.Close() end
+	local fresh = not editing
 	cam = frameMap()
+	if fresh then measureSlice() end
 	editing = true
 	local pnl = ensureToolbar()
+	applySliceSlider()
 	if IsValid(pnl) then
 		pnl:SetVisible(true)
 		pnl:MakePopup()
