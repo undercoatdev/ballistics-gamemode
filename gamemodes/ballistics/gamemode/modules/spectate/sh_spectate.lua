@@ -10,6 +10,11 @@ function S.PhaseFollows(phase)
 	return phase == "buy" or phase == "live" or phase == "post" or phase == "squad"
 end
 
+-- Unslotted players stay in free cam. Death-cam is only for a slotted seat.
+function S.ShouldFollow(phase, slotted)
+	return S.PhaseFollows(phase) and slotted == true
+end
+
 -- mates: ordered list of living teammates. dir 1 = next, -1 = previous.
 -- Keeps current when it is still in the list and dir is 0.
 function S.Pick(mates, current, dir)

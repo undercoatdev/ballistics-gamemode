@@ -165,9 +165,21 @@ function SlotTable:Queue(id, teamId, slot)
 	return true, "queued"
 end
 
--- LIVE/POST: a living slotted player cannot hop. A dead one is queued for the
--- next BUY. LOBBY/BUY take effect immediately (the caller respawns on BUY).
+-- LIVE/POST/SQUAD: a living slotted player cannot hop or leave. A dead one
+-- queues a switch, or unslots immediately when they click their own seat.
+-- LOBBY/BUY take effect immediately (the caller respawns on BUY).
 function SlotTable:Request(id, teamId, slot, phase, alive)
+	if id ~= nil then id = tostring(id) end
+	if id == nil or id == "" then return false, "player" end
+	self:_trim()
+	local where = self.where[id]
+	if where and tonumber(teamId) == where.team and tonumber(slot) == where.slot then
+		if phase == "live" or phase == "post" or phase == "squad" then
+			if alive then return false, "alive" end
+		end
+		self:Leave(id)
+		return true, "leave"
+	end
 	if phase == "live" or phase == "post" or phase == "squad" then
 		if alive then return false, "alive" end
 		return self:Queue(id, teamId, slot)
@@ -482,6 +494,14 @@ function BALLISTICS.Slots.Request(ply, teamId, slot)
 	if err == "queued" then
 		changed()
 		return true, "queued"
+	end
+	if err == "leave" then
+		setTeam(ply, SPEC)
+		if BALLISTICS.Player and BALLISTICS.Player.MakeSpectator then
+			BALLISTICS.Player.MakeSpectator(ply)
+		end
+		changed()
+		return true, "leave"
 	end
 	setTeam(ply, teamId)
 	changed()

@@ -71,10 +71,10 @@ check("gain rows", #gains == 4 and gains[1].path == "Gains.kill" and gains[1].di
 
 local generalMap, general = rowMap("general")
 local generalPaths = {
-	"RoundTime", "BuyTime", "PostRoundTime", "StartMoney", "MaxMoney", "HealthMode",
+	"RoundTime", "BuyTime", "PostRoundTime", "StartMoney", "MaxMoney",
 	"HealedUpOrgans",
 	"CaptureTimeOne", "CaptureTimeTwo", "CaptureDecay", "CaptureContestedFreeze",
-	"ObjectiveRadius", "CustomizeRadius", "BuyAmmoMags", "RoundsToWin",
+	"ObjectiveRadius", "CustomizeRadius", "BuyAmmoMags",
 }
 local generalOk = #general == #generalPaths
 for i = 1, #generalPaths do
@@ -82,22 +82,28 @@ for i = 1, #generalPaths do
 end
 check("general fields are the rules list, in order", generalOk)
 check("general hides models, tick rate, and admin flag", generalMap.ModelGood == nil and generalMap.TickRate == nil and generalMap.AdminSuperOnly == nil and generalMap.TimeoutWinner == nil)
+check("general no longer holds rounds-to-win or health mode", generalMap.RoundsToWin == nil and generalMap.HealthMode == nil)
 check("round length is shown in minutes", generalMap.RoundTime.kind == "minutes" and generalMap.RoundTime.display == 10 and generalMap.RoundTime.unit == "min" and generalMap.RoundTime.max == 60)
 check("buy time stays in seconds", generalMap.BuyTime.display == 20 and generalMap.BuyTime.unit == "s" and generalMap.BuyTime.kind == "number")
 check("radii are shown in metres", generalMap.ObjectiveRadius.kind == "metres" and generalMap.ObjectiveRadius.unit == "m" and math.abs(generalMap.ObjectiveRadius.display - 2) < 1e-6 and math.abs(generalMap.CustomizeRadius.display - 2) < 1e-6)
-check("health mode is a realistic/arcade switch", generalMap.HealthMode.kind == "enum" and generalMap.HealthMode.display == "realistic" and generalMap.HealthMode.values[1].id == "realistic" and generalMap.HealthMode.values[2].label == "Arcade")
 check("capture flags are booleans", generalMap.CaptureDecay.kind == "bool" and generalMap.CaptureDecay.display == true and generalMap.CaptureContestedFreeze.display == true)
 check("magazines per gun", generalMap.BuyAmmoMags.label == "Magazines per gun" and generalMap.BuyAmmoMags.display == 0 and generalMap.BuyAmmoMags.blurb == "0 = infinite ammo.")
 local organBlurb = "At each new round every organ heals this many units (capped at max). Destroyed organs always come back working, just weak."
 check("healed organs row", generalMap.HealedUpOrgans.label == "Healed up organs" and generalMap.HealedUpOrgans.kind == "int" and generalMap.HealedUpOrgans.display == 10 and generalMap.HealedUpOrgans.min == 0 and generalMap.HealedUpOrgans.max == 100 and generalMap.HealedUpOrgans.blurb == organBlurb)
 
+local settingsMap, settings = rowMap("settings")
+check("Admin Settings holds rounds to win then health mode", #settings == 2 and settings[1].path == "RoundsToWin" and settings[2].path == "HealthMode")
+check("rounds to win row", settingsMap.RoundsToWin.label == "Rounds to win (0 = endless)" and settingsMap.RoundsToWin.kind == "int" and settingsMap.RoundsToWin.display == 3 and settingsMap.RoundsToWin.min == 0 and settingsMap.RoundsToWin.max == 1000)
+check("health mode is a realistic/arcade switch", settingsMap.HealthMode.kind == "enum" and settingsMap.HealthMode.display == "realistic" and settingsMap.HealthMode.values[1].id == "realistic" and settingsMap.HealthMode.values[2].label == "Arcade")
+check("Admin Settings reset is its own section", V.ResetPayload("settings") and V.ResetPayload("settings").section == "settings")
+
 local committed = V.Commit(generalMap.RoundTime, 12)
 check("committing minutes stores seconds", committed and committed.key == "RoundTime" and committed.value == 720)
 committed = V.Commit(generalMap.ObjectiveRadius, 3)
 check("committing metres stores hammer units", committed and committed.key == "ObjectiveRadius" and math.abs(committed.value - V.FromMetres(3)) < 1e-9)
-committed = V.Commit(generalMap.HealthMode, "Arcade")
+committed = V.Commit(settingsMap.HealthMode, "Arcade")
 check("health mode commit normalises case", committed and committed.value == "arcade")
-check("an unknown health mode is refused", V.Commit(generalMap.HealthMode, "hardcore") == nil)
+check("an unknown health mode is refused", V.Commit(settingsMap.HealthMode, "hardcore") == nil)
 committed = V.Commit(generalMap.CaptureDecay, false)
 check("bool commit", committed and committed.key == "CaptureDecay" and committed.value == false)
 committed = V.Commit(gains[1], 10.9)
@@ -158,7 +164,13 @@ check("gains reset restores gains only", C.Gains.kill == 500 and C.Gains.round_w
 
 dirty()
 C.ResetSection(V.ResetPayload("general").section)
-check("general reset restores general only", C.StartMoney == 1000 and C.RoundTime == 600 and C.BuyTime == 20 and C.HealthMode == "realistic" and C.CaptureDecay == true and nearRadius() and C.Gains.kill == 15 and C.Costs.tacrp_mp5 == 11 and C.AttCosts.perk == 14 and C.SlotsPerTeam == 8 and C.BuyLimits.weapon_per_round == 2 and C.HealedUpOrgans == 10 and C.BuyAmmoMags == 0)
+check("general reset restores general only", C.StartMoney == 1000 and C.RoundTime == 600 and C.BuyTime == 20 and C.CaptureDecay == true and nearRadius() and C.Gains.kill == 15 and C.Costs.tacrp_mp5 == 11 and C.AttCosts.perk == 14 and C.SlotsPerTeam == 8 and C.BuyLimits.weapon_per_round == 2 and C.HealedUpOrgans == 10 and C.BuyAmmoMags == 0)
+check("general reset leaves Admin Settings keys", C.HealthMode == "arcade" and C.RoundsToWin == 3)
+
+dirty()
+C.Set("RoundsToWin", 7)
+C.ResetSection(V.ResetPayload("settings").section)
+check("settings reset restores rounds and health only", C.RoundsToWin == 3 and C.HealthMode == "realistic" and C.StartMoney == 17 and C.RoundTime == 120)
 
 dirty()
 C.ResetSection(V.ResetPayload("costs").section)
@@ -166,7 +178,7 @@ check("costs reset restores every item price and not attachments", C.Costs.tacrp
 
 dirty()
 C.ResetSection(V.ResetPayload("rules").section)
-check("rules reset restores rules and leaves teams and buy limits", C.Costs.tacrp_mp5 == 600 and C.Costs.nade_frag == 500 and C.Costs.med_pills == 50 and C.AttCosts.perk == 700 and C.AttRefundOnDetach == false and C.Gains.kill == 500 and C.Gains.round_win == 1000 and C.StartMoney == 1000 and C.RoundTime == 600 and C.HealthMode == "realistic" and C.CaptureDecay == true and nearRadius() and C.SlotsPerTeam == 8 and C.BuyLimits.weapon_per_round == 2 and C.HealedUpOrgans == 10 and C.BuyAmmoMags == 0)
+check("rules reset restores rules and leaves teams and buy limits", C.Costs.tacrp_mp5 == 600 and C.Costs.nade_frag == 500 and C.Costs.med_pills == 50 and C.AttCosts.perk == 700 and C.AttRefundOnDetach == false and C.Gains.kill == 500 and C.Gains.round_win == 1000 and C.StartMoney == 1000 and C.RoundTime == 600 and C.HealthMode == "arcade" and C.CaptureDecay == true and nearRadius() and C.SlotsPerTeam == 8 and C.BuyLimits.weapon_per_round == 2 and C.HealedUpOrgans == 10 and C.BuyAmmoMags == 0)
 
 dirty()
 local unknownOk = C.ResetSection("nope")

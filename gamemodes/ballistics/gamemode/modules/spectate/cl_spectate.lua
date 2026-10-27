@@ -21,7 +21,9 @@ end
 function S.Target()
 	local ply = LocalPlayer and LocalPlayer()
 	if not IsValid(ply) or ply:Alive() then return nil end
-	if not S.PhaseFollows(phase()) then return nil end
+	local teamId = ply.Team and ply:Team() or nil
+	local slotted = teamId == (TEAM_GOOD or 1) or teamId == (TEAM_BAD or 2)
+	if not S.ShouldFollow(phase(), slotted) then return nil end
 	local t = ply.GetNW2Entity and ply:GetNW2Entity("bal_spec") or nil
 	if not IsValid(t) or not t:IsPlayer() or not t:Alive() then return nil end
 	return t

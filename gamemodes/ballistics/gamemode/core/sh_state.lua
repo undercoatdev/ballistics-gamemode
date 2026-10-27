@@ -1,5 +1,6 @@
 -- Pure round state machine. No GMod calls.
 -- Phases: lobby → buy → live → post → buy … until RoundsToWin (0 = endless).
+-- EndMatch() skips the squad and returns to a fresh lobby. No-op in lobby.
 -- A decided match (one team reaches RoundsToWin) always leaves post for the
 -- firing squad, then the lobby. A deciding tie (equal score on the line, or a
 -- draw when one more win would clinch) leaves post for an untimed showdown in
@@ -406,6 +407,29 @@ function State:AbandonShowdown(now)
 	self.enteredAt = now
 	self.endsAt = nil
 	return { phaseEvent(prev, PHASE_LOBBY, self.round, false) }
+end
+
+-- Admin End Game: skip the firing squad and showdown, reset the series, and
+-- land in the lobby. Already in lobby is a no-op. Money stays until the next
+-- StartMatch, same as a normal game end.
+function State:EndMatch(now)
+	if self.phase == PHASE_LOBBY then return {} end
+	now = tonumber(now) or 0
+	local prev = self.phase
+	self.phase = PHASE_LOBBY
+	self.round = 0
+	self.score.good = 0
+	self.score.bad = 0
+	self.squadMode = nil
+	self.matchWinner = nil
+	self.winner = nil
+	self.reason = nil
+	self.enteredAt = now
+	self.endsAt = nil
+	return {
+		phaseEvent(prev, PHASE_LOBBY, 0, false),
+		{ type = "match_end", winner = "", round = 0 },
+	}
 end
 
 function State:ConsiderShowdown(now, goodAlive, badAlive, goodSlots, badSlots)

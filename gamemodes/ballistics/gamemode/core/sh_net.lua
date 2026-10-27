@@ -19,6 +19,7 @@ local MESSAGES = {
 	"bal_config_set",
 	"bal_config_sync",
 	"bal_round_sync",
+	"bal_match_end",
 	"bal_capture_sync",
 	"bal_cleanup",
 	"bal_buy_ok",

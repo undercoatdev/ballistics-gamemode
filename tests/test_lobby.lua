@@ -150,7 +150,12 @@ for i = 1, 5 do
 end
 check("a full side refuses every click", allTaken and full.counts.good == 5 and full.counts.bad == 1)
 check("the other side still accepts a click", V.Click(full, BAD, 2, { phase = "lobby" }).action == "take")
-check("clicking your own slot does nothing", V.Click(mine, GOOD, 2, { phase = "lobby" }).action == "noop")
+local own = V.Click(mine, GOOD, 2, { phase = "lobby" })
+check("clicking your own slot unslots you", own.action == "leave" and own.team == GOOD and own.slot == 2)
+check("an alive player cannot unslot during live", V.Click(mine, GOOD, 2, { phase = "live", alive = true }).reason == "alive")
+check("a dead player unslots during live", V.Click(mine, GOOD, 2, { phase = "live", alive = false }).action == "leave")
+check("an alive player cannot unslot during the firing squad", V.Click(mine, GOOD, 2, { phase = "squad", alive = true }).reason == "alive")
+check("a dead player unslots during the firing squad", V.Click(mine, GOOD, 2, { phase = "squad", alive = false }).action == "leave")
 
 local switch = V.Click(mine, BAD, 4, { phase = "lobby", alive = false })
 check("clicking a free slot switches", switch.action == "take" and switch.team == BAD and switch.slot == 4)
@@ -163,6 +168,7 @@ local postDead = V.Click(mine, BAD, 1, { phase = "post", alive = false })
 check("post round also queues", postDead.action == "queue")
 local duringBuy = V.Click(mine, BAD, 4, { phase = "buy", alive = true })
 check("buy takes the slot immediately", duringBuy.action == "take")
+check("buy unslots immediately", V.Click(mine, GOOD, 2, { phase = "buy", alive = true }).action == "leave")
 
 local queued = build({
 	localId = "a",
@@ -264,8 +270,13 @@ BALLISTICS.AdminTabs.Walk(nil, function(node)
 	if node.reset and node.reset.enabled then enabled = enabled + 1 end
 	if node.implemented then implemented = implemented + 1 end
 end)
-check("every admin tab and sub-tab has a reset spec", nodes == 10 and everyReset)
-check("every admin tab and sub-tab is implemented and can reset", implemented == 10 and enabled == 10)
+check("every admin tab and sub-tab has a reset spec", nodes == 11 and everyReset)
+check("every admin tab and sub-tab is implemented and can reset", implemented == 11 and enabled == 11)
+
+local settings = BALLISTICS.AdminTabs.Find("settings")
+check("Admin Settings is the first tab", BALLISTICS.AdminTabs.Tree()[1].id == "settings" and settings and settings.title == "Admin Settings")
+local settingsReq = BALLISTICS.AdminTabs.ResetRequest(settings)
+check("Admin Settings reset sends the settings section", settingsReq and settingsReq.reset == true and settingsReq.section == "settings")
 
 local teams = BALLISTICS.AdminTabs.Find("teams")
 local spawns = BALLISTICS.AdminTabs.Find("spawns")

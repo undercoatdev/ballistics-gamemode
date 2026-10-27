@@ -39,15 +39,6 @@ local GENERAL = {
 	{ path = "StartMoney", label = "Start money", kind = "int", min = 0, max = MONEY_MAX, decimals = 0 },
 	{ path = "MaxMoney", label = "Max money (0 = no cap)", kind = "int", min = 0, max = MONEY_MAX, decimals = 0 },
 	{
-		path = "HealthMode",
-		label = "Health mode",
-		kind = "enum",
-		values = {
-			{ id = "realistic", label = "Realistic" },
-			{ id = "arcade", label = "Arcade" },
-		},
-	},
-	{
 		path = "HealedUpOrgans",
 		label = "Healed up organs",
 		kind = "int",
@@ -71,7 +62,19 @@ local GENERAL = {
 		decimals = 0,
 		blurb = "0 = infinite ammo.",
 	},
+}
+
+local SETTINGS = {
 	{ path = "RoundsToWin", label = "Rounds to win (0 = endless)", kind = "int", min = 0, max = 1000, decimals = 0 },
+	{
+		path = "HealthMode",
+		label = "Health mode",
+		kind = "enum",
+		values = {
+			{ id = "realistic", label = "Realistic" },
+			{ id = "arcade", label = "Arcade" },
+		},
+	},
 }
 
 function V.ToMinutes(seconds)
@@ -162,10 +165,10 @@ local function mapRows(list, prefix)
 	return rows
 end
 
-local function generalRows()
+local function specRows(list)
 	local rows = {}
-	for i = 1, #GENERAL do
-		local spec = GENERAL[i]
+	for i = 1, #list do
+		local spec = list[i]
 		local value = read(spec.path)
 		local row = {
 			path = spec.path,
@@ -197,7 +200,8 @@ function V.Rows(section)
 	end
 	if section == "attachments" then return mapRows(ATT, "AttCosts") end
 	if section == "gains" then return mapRows(GAINS, "Gains") end
-	if section == "general" then return generalRows() end
+	if section == "general" then return specRows(GENERAL) end
+	if section == "settings" then return specRows(SETTINGS) end
 	return {}
 end
 

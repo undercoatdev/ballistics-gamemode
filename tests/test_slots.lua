@@ -60,6 +60,8 @@ check("occupied slot is refused and the taker stays", ok == false and err == "ta
 
 ok = s:Take("a", BAD, 3)
 check("taking your own slot is a no-op", ok == true and s:Occupant(BAD, 3) == "a")
+ok, err = s:Request("a", BAD, 3, "lobby", false)
+check("requesting your own slot unslots you", ok == true and err == "leave" and s:TeamOf("a") == nil and s:Occupant(BAD, 3) == nil)
 
 s:Clear()
 for i = 1, 5 do
@@ -123,6 +125,19 @@ ok, err = s:Request("b", GOOD, 1, "squad", true)
 check("alive player cannot switch during the firing squad", ok == false and err == "alive" and s:Occupant(BAD, 2) == "b")
 ok, err = s:Request("b", GOOD, 1, "squad", false)
 check("a dead player queues a switch during the firing squad", ok == true and err == "queued" and s:Occupant(BAD, 2) == "b" and s:Queued("b") == GOOD)
+
+s:Clear()
+s:Take("a", GOOD, 1)
+ok, err = s:Request("a", GOOD, 1, "live", true)
+check("an alive player cannot unslot during live", ok == false and err == "alive" and s:Occupant(GOOD, 1) == "a")
+ok, err = s:Request("a", GOOD, 1, "live", false)
+check("a dead player unslots immediately during live", ok == true and err == "leave" and s:TeamOf("a") == nil)
+
+s:Clear()
+s:Take("a", GOOD, 1)
+s:Queue("a", BAD, 2)
+ok, err = s:Request("a", GOOD, 1, "lobby", false)
+check("unslot drops a queued move", ok == true and err == "leave" and s:TeamOf("a") == nil and s:Queued("a") == nil)
 
 s:Clear()
 s:Take("a", GOOD, 1)
@@ -207,6 +222,17 @@ check("singleton blocks a living hopper in live", ok == false and err == "alive"
 hopper.alive = false
 ok, err = BALLISTICS.Slots.Request(hopper, BAD, 2)
 check("singleton queues a dead hopper in live", ok == true and err == "queued" and BALLISTICS.Slots.TeamOf(hopper) == GOOD)
+
+BALLISTICS.Round = { Phase = function() return "lobby" end }
+local specced = nil
+BALLISTICS.Player = {
+	MakeSpectator = function(ply) specced = ply end,
+}
+local seater = fake("S")
+BALLISTICS.Slots.Take(seater, GOOD, 3)
+ok, err = BALLISTICS.Slots.Request(seater, GOOD, 3)
+check("singleton unslot frees the seat and spectates", ok == true and err == "leave" and BALLISTICS.Slots.TeamOf(seater) == nil and seater.teamId == SPEC and specced == seater)
+BALLISTICS.Player = nil
 local results = BALLISTICS.Slots.ApplyQueued()
 local moved = false
 for i = 1, #results do

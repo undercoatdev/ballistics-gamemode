@@ -187,7 +187,7 @@ BALLISTICS.AdminTabs.Walk(nil, function(node)
 end)
 local spawns = BALLISTICS.AdminTabs.Find("spawns")
 local req = BALLISTICS.AdminTabs.ResetRequest(spawns)
-check("the Spawns tab is live and its reset is not a config section", spawns.implemented == true and req and req.kind == "spawns" and req.section == nil and enabled == 10)
+check("the Spawns tab is live and its reset is not a config section", spawns.implemented == true and req and req.kind == "spawns" and req.section == nil and enabled == 11)
 
 -- Server: admin-only place/save/reset, file then defaults then none.
 local disk = {}

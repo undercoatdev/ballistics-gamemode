@@ -6,6 +6,12 @@ BALLISTICS.AdminTabs = BALLISTICS.AdminTabs or {}
 
 local TREE = {
 	{
+		id = "settings",
+		title = "Admin Settings",
+		implemented = true,
+		reset = { enabled = true, section = "settings" },
+	},
+	{
 		id = "spawns",
 		title = "Spawns",
 		implemented = true,

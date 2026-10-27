@@ -16,6 +16,7 @@ check("right click previous wraps", S.Pick({ a, b, c }, a, -1) == c)
 check("dead current moves on", S.Pick({ a, c }, b, nil) == a)
 check("nobody left", S.Pick({}, a, 1) == nil)
 check("lobby keeps free cam", not S.PhaseFollows("lobby") and S.PhaseFollows("live") and S.PhaseFollows("squad"))
+check("death-cam follows only slotted players", S.ShouldFollow("live", true) == true and S.ShouldFollow("live", false) == false and S.ShouldFollow("lobby", true) == false)
 check("label", S.Label("Bot01") == "Spectating: Bot01" and S.Label("") == nil)
 check("smoothing in range", S.Blend(0) == 0 and S.Blend(1 / 60) > 0 and S.Blend(1 / 60) < 1)
 

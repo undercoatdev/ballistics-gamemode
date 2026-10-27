@@ -173,7 +173,7 @@ function BALLISTICS.Lobby.RequestSlot(teamId, slot)
 		phase = state.phase,
 		alive = localAlive(),
 	})
-	if (decision.action == "take" or decision.action == "queue") and net and net.Start then
+	if (decision.action == "take" or decision.action == "queue" or decision.action == "leave") and net and net.Start then
 		net.Start(msg("take", "bal_slot_take"))
 		net.WriteUInt(decision.team, 8)
 		net.WriteUInt(decision.slot, 8)
@@ -299,7 +299,7 @@ end
 
 local function noteDecision(decision)
 	if not decision then return end
-	if decision.action == "take" then
+	if decision.action == "take" or decision.action == "leave" then
 		setStatus("", false)
 		return
 	end
@@ -460,7 +460,7 @@ local function ensureFrame()
 	local wide, tall = BALLISTICS.LobbyView.PreferredSize(per)
 	frame = vgui.Create("DFrame")
 	frame:SetVisible(false)
-	frame:SetTitle("Lobby")
+	frame:SetTitle("Lobby (F2)")
 	frame:SetSize(wide, tall + TITLE)
 	frame:Center()
 	frame:SetDeleteOnClose(false)
@@ -642,6 +642,7 @@ local function refreshTeamsButton()
 			surface.SetDrawColor(90, 150, 255, 255)
 			surface.DrawOutlinedRect(0, 0, w, h)
 			draw.SimpleText("TEAMS", "DermaDefaultBold", w / 2, h / 2, Color(190, 215, 255), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+			draw.SimpleText("F2", "DermaDefault", w - 4, 2, Color(190, 215, 255), TEXT_ALIGN_RIGHT, TEXT_ALIGN_TOP)
 		end
 	end
 	local V = BALLISTICS.LobbyView

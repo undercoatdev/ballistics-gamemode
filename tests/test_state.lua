@@ -249,6 +249,40 @@ local badCall = enterShowdown()
 local badEv, badErr = badCall:FinishShowdown(5, "draw")
 check("showdown refuses a draw as the game winner", badEv == nil and badErr == "bad winner" and badCall:Phase() == "squad")
 
+local idle = State.new(cfg())
+check("EndMatch in lobby is a no-op", #idle:EndMatch(0) == 0 and idle:Phase() == "lobby" and idle:Round() == 0)
+
+local cut = State.new(cfg({ RoundsToWin = 2 }))
+start(cut, 0)
+local cutEv = cut:EndMatch(3)
+local cutSquad = false
+for i = 1, #cutEv do
+	if cutEv[i].new == "squad" then cutSquad = true end
+end
+check("EndMatch from buy returns to lobby without a squad", cutEv[1].new == "lobby" and cutEv[1].old == "buy" and cut:Phase() == "lobby" and cutSquad == false)
+check("EndMatch resets the series", cut:Round() == 0 and cut:Score().good == 0 and cut:Score().bad == 0 and cut:MatchWinner() == nil and cut:EndsAt() == nil)
+
+start(cut, 10)
+cut:Tick(20)
+cut:Transition({ type = "end", winner = "good", reason = "elimination" }, 30)
+check("a live win still scores before EndMatch", cut:Phase() == "post" and cut:Score().good == 1)
+cutEv = cut:EndMatch(31)
+check("EndMatch from post skips the firing squad", cut:Phase() == "lobby" and cut:Round() == 0 and cut:Score().good == 0 and cut:SquadMode() == nil)
+local namedEnd = false
+for i = 1, #cutEv do
+	if cutEv[i].type == "match_end" and cutEv[i].winner == "good" then namedEnd = true end
+end
+check("EndMatch does not name a match winner", namedEnd == false)
+
+local fromSquad = State.new(cfg({ RoundsToWin = 1 }))
+start(fromSquad, 0)
+fromSquad:Tick(10)
+fromSquad:Transition({ type = "end", winner = "bad", reason = "elimination" }, 20)
+fromSquad:Tick(25)
+check("setup is in the firing squad", fromSquad:Phase() == "squad")
+fromSquad:EndMatch(26)
+check("EndMatch from squad returns to a fresh lobby", fromSquad:Phase() == "lobby" and fromSquad:Round() == 0 and fromSquad:Score().bad == 0 and fromSquad:SquadMode() == nil)
+
 -- Server driver. concommand must exist before sv_round loads.
 local cmds = {}
 concommand = {
@@ -405,6 +439,11 @@ BALLISTICS.Spawns = { HasBoth = function() return true end, HasBox = function() 
 ok, why = cmds.bal_debug_start(user)
 check("non-admin cannot start", ok == false and why == "admin" and BALLISTICS.Round.Phase() == "lobby")
 
+local watcher = fake("watcher", { alive = false })
+GM:PlayerInitialSpawn(watcher)
+GM:PlayerSpawn(watcher)
+flush()
+
 local phases = {}
 hook.Add("Ballistics_PhaseChanged", "state", function(old, new)
 	phases[#phases + 1] = old .. ">" .. new
@@ -441,6 +480,7 @@ check("a slotted spawn selects the flag ring, not a map start", spot and spot:Ge
 good.balNextSpawn = false
 ents = nil
 check("spawned players are on their teams and alive", good.alive == true and good.teamId == TEAM_GOOD and bad.teamId == TEAM_BAD)
+check("an unslotted player stays a free-cam spectator", watcher.alive == false and watcher.teamId == TEAM_SPEC and watcher.spec == (OBS_MODE_ROAMING or 6))
 
 local gbal, gpend = BALLISTICS.Money.Get(good)
 local bbal = BALLISTICS.Money.Get(bad)
@@ -523,5 +563,19 @@ do
 	BALLISTICS.Player.SetFrozen(spec, false)
 	check("unfreeze still walks a living player", spec.movetype == 2)
 end
+
+local gearReset, organReset, squadEnded = false, false, false
+BALLISTICS.Gear = { Reset = function() gearReset = true end }
+BALLISTICS.Organs = { Reset = function() organReset = true end }
+BALLISTICS.Squad = { End = function() squadEnded = true end }
+local moneyBefore = BALLISTICS.Money.Get(good)
+local ended = BALLISTICS.Round.EndMatch()
+check("EndMatch from post returns to the lobby", ended == true and BALLISTICS.Round.Phase() == "lobby")
+check("EndMatch resets round and score", BALLISTICS.Round.Number() == 0 and BALLISTICS.Round.Score().good == 0 and BALLISTICS.Round.Score().bad == 0)
+check("EndMatch wipes gear, organs, and an active squad", gearReset and organReset and squadEnded)
+check("EndMatch leaves money until the next start", BALLISTICS.Money.Get(good) == moneyBefore)
+check("EndMatch spectates everyone", good.spec == (OBS_MODE_ROAMING or 6) and bad.spec == (OBS_MODE_ROAMING or 6))
+flush()
+check("EndMatch in lobby is a no-op", BALLISTICS.Round.EndMatch() == true and BALLISTICS.Round.Phase() == "lobby")
 
 if failed then os.exit(1) end

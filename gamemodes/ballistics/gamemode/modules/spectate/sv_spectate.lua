@@ -12,7 +12,8 @@ end
 
 if hook and hook.Add then
 	hook.Add("KeyPress", "Ballistics_Spectate", function(ply, key)
-		if not S.PhaseFollows(phase()) then return end
+		local slotted = BALLISTICS.Slots and BALLISTICS.Slots.TeamOf and BALLISTICS.Slots.TeamOf(ply)
+		if not S.ShouldFollow(phase(), slotted ~= nil) then return end
 		if not ply or type(ply.Alive) ~= "function" or ply:Alive() then return end
 		local dir = nil
 		if key == (IN_ATTACK or 1) then dir = 1 elseif key == (IN_ATTACK2 or 2048) then dir = -1 end

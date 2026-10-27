@@ -127,9 +127,10 @@ local COST_GROUPS = {
 
 local SECTIONS = {
 	teams = { "SlotsPerTeam", "MinPerTeam" },
+	settings = { "RoundsToWin", "HealthMode" },
 	general = {
-		"BuyTime", "RoundTime", "PostRoundTime", "RoundsToWin", "TimeoutWinner",
-		"FreezeInBuy", "HealthMode", "ModelGood", "ModelBad",
+		"BuyTime", "RoundTime", "PostRoundTime", "TimeoutWinner",
+		"FreezeInBuy", "ModelGood", "ModelBad",
 		"ObjectiveRadius", "CustomizeRadius",
 		"CaptureTimeOne", "CaptureTimeTwo", "CaptureMaxCounted",
 		"CaptureDecay", "CaptureDecayRate", "CaptureContestedFreeze",
@@ -166,6 +167,8 @@ local SECTION_ALIAS = {
 	buylimits = "buylimits",
 	rules = "rules",
 	Rules = "rules",
+	settings = "settings",
+	Settings = "settings",
 	firing_squad = "firing_squad",
 	FiringSquad = "firing_squad",
 	all = "all",

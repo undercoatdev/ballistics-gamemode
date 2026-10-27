@@ -304,19 +304,25 @@ function BALLISTICS.LobbyView.Click(view, teamId, slot, input)
 	local column = findColumn(view, teamId)
 	local found = column and slot and column.slots[slot] or nil
 	if not found then return { action = "refuse", reason = "slot" } end
-	if found.mine then return { action = "noop", reason = "mine" } end
+	local phase = input.phase or view.phase or PHASE_LOBBY
+	local alive = input.alive
+	if alive == nil then alive = view.alive == true end
+	local locked = phase == PHASE_LIVE or phase == PHASE_POST or phase == "squad"
+	if found.mine then
+		if locked and alive then
+			return { action = "refuse", reason = "alive" }
+		end
+		return { action = "leave", team = teamId, slot = slot }
+	end
 	if not found.empty then return { action = "refuse", reason = "taken" } end
 	local queued = view.localQueue
 	if queued and queued.team == teamId and queued.slot == slot then
 		return { action = "noop", reason = "queued" }
 	end
-	local phase = input.phase or view.phase or PHASE_LOBBY
-	local alive = input.alive
-	if alive == nil then alive = view.alive == true end
-	if (phase == PHASE_LIVE or phase == PHASE_POST or phase == "squad") and alive then
+	if locked and alive then
 		return { action = "refuse", reason = "alive" }
 	end
-	if phase == PHASE_LIVE or phase == PHASE_POST or phase == "squad" then
+	if locked then
 		return { action = "queue", team = teamId, slot = slot }
 	end
 	return { action = "take", team = teamId, slot = slot }

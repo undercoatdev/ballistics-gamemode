@@ -112,7 +112,11 @@ check("healed organs clamp to 0", ok == true and val == 0 and C.HealedUpOrgans =
 C.Set("HealedUpOrgans", 40)
 C.Set("BuyAmmoMags", 9)
 C.ResetSection("General")
-check("ResetSection General restores StartMoney and radii", C.StartMoney == 1000 and math.abs(C.ObjectiveRadius - r) < 1e-9 and C.BuyTime == 20 and C.HealthMode == "realistic" and C.HealedUpOrgans == 10 and C.BuyAmmoMags == 0 and C.RoundsToWin == 3)
+check("ResetSection General restores StartMoney and radii", C.StartMoney == 1000 and math.abs(C.ObjectiveRadius - r) < 1e-9 and C.BuyTime == 20 and C.HealedUpOrgans == 10 and C.BuyAmmoMags == 0)
+check("ResetSection General leaves Admin Settings keys", C.HealthMode == "arcade" and C.RoundsToWin == 3)
+C.Set("RoundsToWin", 9)
+C.ResetSection("settings")
+check("ResetSection settings restores RoundsToWin and HealthMode", C.RoundsToWin == 3 and C.HealthMode == "realistic")
 
 C.Set("SlotsPerTeam", 8)
 C.ResetSection("teams")

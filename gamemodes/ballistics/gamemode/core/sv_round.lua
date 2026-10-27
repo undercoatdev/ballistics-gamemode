@@ -289,6 +289,25 @@ function BALLISTICS.StartMatch(ply)
 	return true
 end
 
+-- Admin End Game. No firing squad. Gear, organs, and an active squad are
+-- wiped here; money waits for the next match start, as a normal end does.
+function BALLISTICS.Round.EndMatch()
+	local now = (CurTime and CurTime()) or 0
+	local events = state:EndMatch(now)
+	if type(events) ~= "table" or #events == 0 then return true end
+	if BALLISTICS.Gear and type(BALLISTICS.Gear.Reset) == "function" then
+		BALLISTICS.Gear.Reset()
+	end
+	if BALLISTICS.Organs and type(BALLISTICS.Organs.Reset) == "function" then
+		BALLISTICS.Organs.Reset()
+	end
+	if BALLISTICS.Squad and type(BALLISTICS.Squad.End) == "function" then
+		BALLISTICS.Squad.End()
+	end
+	handle(events)
+	return true
+end
+
 local function tell(ply, msg)
 	print(msg)
 	if BALLISTICS.IsPlayer and BALLISTICS.IsPlayer(ply) and ply.ChatPrint then ply:ChatPrint(msg) end
@@ -340,6 +359,11 @@ end
 startTimer()
 
 if BALLISTICS.Net and BALLISTICS.Net.Register then
+	BALLISTICS.Net.Register("bal_match_end", function(ply)
+		if not (BALLISTICS.IsAdmin and BALLISTICS.IsAdmin(ply)) then return end
+		BALLISTICS.Round.EndMatch()
+	end, { admin = true, rate = 2 })
+
 	-- bal_round_sync: string phase, uint16 round, float endsAt, float enteredAt,
 	-- uint16 scoreGood, uint16 scoreBad, string winner, string reason,
 	-- string matchWinner.

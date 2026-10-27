@@ -192,6 +192,8 @@ end
 
 function BALLISTICS.Player.MakeSpectator(ply)
 	if not isPlayer(ply) then return end
+	-- Unslot during buy, and End Game from buy, land here while Freeze is on.
+	BALLISTICS.Player.SetFrozen(ply, false)
 	ply.balNextSpawn = false
 	ply.balSpawnPos = nil
 	ply.balSpawnAng = nil
@@ -405,6 +407,18 @@ function GM:PlayerDeath(ply)
 	local function follow()
 		if not isPlayer(ply) then return end
 		if type(ply.IsValid) == "function" and ply:IsValid() ~= true then return end
+		local slotted = BALLISTICS.Slots and BALLISTICS.Slots.TeamOf and BALLISTICS.Slots.TeamOf(ply)
+		local follow = slotted ~= nil
+		if BALLISTICS.Spectate and type(BALLISTICS.Spectate.ShouldFollow) == "function" then
+			local phase = BALLISTICS.Round and BALLISTICS.Round.Phase and BALLISTICS.Round.Phase()
+			follow = BALLISTICS.Spectate.ShouldFollow(phase, slotted ~= nil)
+		elseif not slotted then
+			follow = false
+		end
+		if not follow then
+			BALLISTICS.Player.MakeSpectator(ply)
+			return
+		end
 		BALLISTICS.Player.SpectateTeammates(ply)
 		BALLISTICS.Player.RetargetSpectators(ply)
 	end

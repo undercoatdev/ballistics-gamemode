@@ -1,5 +1,5 @@
--- Admin button, top-right, admins only. Frame with Spawns / Teams / Rules.
--- Every tab and sub-tab has Reset to defaults. Placeholders leave it disabled.
+-- Admin button, top-right, admins only. Frame with Admin Settings first,
+-- then Spawns / Teams / Rules. Every tab has Reset to defaults.
 -- Teams is filled in by cl_tab_teams.lua via BALLISTICS.Admin.Register.
 
 BALLISTICS = BALLISTICS or {}
@@ -139,12 +139,12 @@ local function addNodes(sheet, nodes)
 	end
 end
 
-local function selectTeams(sheet)
-	local items = sheet.Items
+local function selectTab(sheet, id)
+	local items = sheet and sheet.Items
 	if not items then return end
 	for i = 1, #items do
 		local item = items[i]
-		if item.Panel and item.Panel.balTabId == "teams" and item.Tab and sheet.SetActiveTab then
+		if item.Panel and item.Panel.balTabId == id and item.Tab and sheet.SetActiveTab then
 			sheet:SetActiveTab(item.Tab)
 			return
 		end
@@ -156,7 +156,7 @@ local function ensureFrame()
 	if not vgui or not vgui.Create then return nil end
 	frame = vgui.Create("DFrame")
 	frame:SetVisible(false)
-	frame:SetTitle("Admin")
+	frame:SetTitle("Admin (F3)")
 	frame:SetSize(760, 580)
 	frame:Center()
 	frame:SetDeleteOnClose(false)
@@ -195,7 +195,8 @@ local function ensureFrame()
 		tree = BALLISTICS.AdminTabs.Tree()
 	end
 	addNodes(sheet, tree)
-	selectTeams(sheet)
+	frame.balSheet = sheet
+	selectTab(sheet, "settings")
 	BALLISTICS.UI.Mark("admin", frame)
 	return frame
 end
@@ -216,6 +217,7 @@ function BALLISTICS.Admin.Open()
 	local pnl = ensureFrame()
 	if not IsValid(pnl) then return end
 	if pnl.InvalidateLayout then pnl:InvalidateLayout(true) end
+	selectTab(pnl.balSheet, "settings")
 	pnl:SetVisible(true)
 	pnl:MakePopup()
 	BALLISTICS.UI.Mark("admin", pnl)
@@ -257,6 +259,7 @@ local function refreshButton()
 			surface.SetDrawColor(220, 170, 60, 255)
 			surface.DrawOutlinedRect(0, 0, w, h)
 			draw.SimpleText("ADMIN", "DermaDefaultBold", w / 2, h / 2, Color(240, 220, 140), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+			draw.SimpleText("F3", "DermaDefault", w - 4, 2, Color(240, 220, 140), TEXT_ALIGN_RIGHT, TEXT_ALIGN_TOP)
 		end
 		button:SetText("")
 	end
@@ -284,4 +287,45 @@ end)
 
 if LocalPlayer and IsValid(LocalPlayer()) then
 	timer.Simple(0, refreshButton)
+end
+
+if BALLISTICS.Admin.Register then
+	BALLISTICS.Admin.Register("settings", function(parent)
+		if parent == nil then return end
+		if IsValid and not IsValid(parent) then return end
+
+		local endBtn = vgui.Create("DButton", parent)
+		endBtn:Dock(BOTTOM)
+		endBtn:DockMargin(0, 8, 0, 0)
+		endBtn:SetTall(32)
+		endBtn:SetText("End Game")
+		endBtn.DoClick = function()
+			if not Derma_Query then return end
+			Derma_Query(
+				"End the current match and return everyone to the lobby?",
+				"End Game",
+				"End Game",
+				function()
+					if net and net.Start then
+						net.Start("bal_match_end")
+						net.SendToServer()
+					end
+				end,
+				"Cancel",
+				function() end
+			)
+		end
+		endBtn.Think = function(self)
+			local phase = BALLISTICS.Lobby and BALLISTICS.Lobby.Phase and BALLISTICS.Lobby.Phase()
+			local on = phase ~= nil and phase ~= "lobby"
+			if self:IsEnabled() ~= on then self:SetEnabled(on) end
+		end
+
+		local body = vgui.Create("DPanel", parent)
+		body:Dock(FILL)
+		body.Paint = function() end
+		if BALLISTICS.Admin.BuildRules then
+			BALLISTICS.Admin.BuildRules(body, "settings")
+		end
+	end)
 end
