@@ -55,6 +55,33 @@ BALLISTICS.Catalog.WeaponCategoryOrder = {
 }
 
 -- Ordered non-empty groups. A category outside the list falls under "Other".
+-- Buy panel columns: light on the left, heavy on the right.
+BALLISTICS.Catalog.LIGHT = { Pistol = true, Magnum = true, ["Machine Pistol"] = true, SMG = true, Shotgun = true }
+
+function BALLISTICS.Catalog.IsHeavy(item)
+	local cat = type(item) == "table" and item.category or nil
+	return not BALLISTICS.Catalog.LIGHT[cat or ""]
+end
+
+-- { light = groups, heavy = groups }, each in WeaponGroups order.
+function BALLISTICS.Catalog.WeaponColumns(list)
+	if list == nil then list = weapons end
+	local light, heavy = {}, {}
+	for i = 1, #(list or {}) do
+		local item = list[i]
+		if BALLISTICS.Catalog.IsHeavy(item) then heavy[#heavy + 1] = item else light[#light + 1] = item end
+	end
+	return { light = BALLISTICS.Catalog.WeaponGroups(light), heavy = BALLISTICS.Catalog.WeaponGroups(heavy) }
+end
+
+-- Spawn-menu icon path (the Q menu uses materials/entities/<class>.png).
+function BALLISTICS.Catalog.IconPath(item)
+	if type(item) ~= "table" then return nil end
+	local class = item.class or item.entity
+	if type(class) ~= "string" or class == "" then return nil end
+	return "entities/" .. class .. ".png"
+end
+
 function BALLISTICS.Catalog.WeaponGroups(list)
 	if list == nil then list = weapons end
 	if type(list) ~= "table" then return {} end

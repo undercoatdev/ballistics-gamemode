@@ -211,6 +211,41 @@ local function tryBuy(item)
 	sendBuy(item.key)
 end
 
+local iconCache = {}
+local function iconFor(item)
+	local path = BALLISTICS.Catalog and BALLISTICS.Catalog.IconPath and BALLISTICS.Catalog.IconPath(item)
+	if not path then return nil end
+	local hit = iconCache[path]
+	if hit == nil then
+		hit = false
+		if Material then
+			local ok, mat = pcall(Material, path, "smooth mips")
+			if ok and mat and not (mat.IsError and mat:IsError()) then hit = { mat = mat } end
+		end
+		if not hit and item.class and weapons and weapons.GetStored then
+			local stored = weapons.GetStored(item.class)
+			if stored and type(stored.WepSelectIcon) == "number" then hit = { tex = stored.WepSelectIcon } end
+		end
+		iconCache[path] = hit
+	end
+	return hit or nil
+end
+
+local function drawIcon(item, w, h)
+	local icon = iconFor(item)
+	if not icon then return end
+	local size = h - 8
+	local x = w - size - 4
+	surface.SetDrawColor(255, 255, 255, 255)
+	if icon.mat then
+		surface.SetMaterial(icon.mat)
+		surface.DrawTexturedRect(x, 4, size, size)
+	elseif icon.tex then
+		surface.SetTexture(icon.tex)
+		surface.DrawTexturedRect(x - size, 4, size * 2, size)
+	end
+end
+
 local function paintItem(self, w, h)
 	local item = self.balItem or {}
 	local price = BALLISTICS.Catalog and BALLISTICS.Catalog.Price and BALLISTICS.Catalog.Price(item.key) or nil
@@ -244,6 +279,7 @@ local function paintItem(self, w, h)
 		if afford then priceCol = Color(230, 210, 140) end
 	end
 	draw.SimpleText(priceText, "BallisticsBuySmall", 12, 42, priceCol, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+	drawIcon(item, w, h)
 end
 
 local function refill()
@@ -284,25 +320,44 @@ local function refill()
 		if rows < 1 then return y end
 		return y + rows * (bh + gap)
 	end
-	if tab == "weapon" and BALLISTICS.Catalog and type(BALLISTICS.Catalog.WeaponGroups) == "function" then
-		local groups = BALLISTICS.Catalog.WeaponGroups(items) or {}
-		local y = 0
+	if tab == "weapon" and BALLISTICS.Catalog and type(BALLISTICS.Catalog.WeaponColumns) == "function" then
+		-- Two columns, light left and heavy right, one entry per row each.
+		local colsT = BALLISTICS.Catalog.WeaponColumns(items) or {}
+		local colW = math.floor((wide - gap) / 2)
 		local hh = 22
-		for g = 1, #groups do
-			local group = groups[g]
-			local head = vgui.Create("DPanel", canvas)
-			head:SetPos(0, y)
-			head:SetSize(wide, hh)
-			local title = group.category or ""
-			head.Paint = function(_, w, h)
-				if not draw or not draw.SimpleText then return end
-				draw.SimpleText(title, "BallisticsBuy", 4, h / 2, Color(170, 186, 204), TEXT_ALIGN_LEFT or 0, TEXT_ALIGN_CENTER or 1)
+		local tallest = 0
+		local function column(groups, x, heading)
+			local y = 0
+			local top = vgui.Create("DPanel", canvas)
+			top:SetPos(x, y)
+			top:SetSize(colW, hh)
+			top.Paint = function(_, w, h)
+				draw.SimpleText(heading, "BallisticsBuy", 4, h / 2, Color(230, 210, 140), TEXT_ALIGN_LEFT or 0, TEXT_ALIGN_CENTER or 1)
 			end
 			y = y + hh + 4
-			y = place(group.items or {}, y)
+			for g = 1, #(groups or {}) do
+				local group = groups[g]
+				local head = vgui.Create("DPanel", canvas)
+				head:SetPos(x, y)
+				head:SetSize(colW, hh)
+				local title = group.category or ""
+				head.Paint = function(_, w, h)
+					draw.SimpleText(title, "BallisticsBuySmall", 4, h / 2, Color(170, 186, 204), TEXT_ALIGN_LEFT or 0, TEXT_ALIGN_CENTER or 1)
+				end
+				y = y + hh + 2
+				for i = 1, #(group.items or {}) do
+					local saved = bw
+					bw = colW
+					addButton(group.items[i], x, y)
+					bw = saved
+					y = y + bh + gap
+				end
+			end
+			if y > tallest then tallest = y end
 		end
-		if y < 1 then y = bh end
-		canvas:SetTall(y)
+		column(colsT.light, 0, "Light weapons")
+		column(colsT.heavy, colW + gap, "Heavy weapons")
+		canvas:SetTall(math.max(tallest, bh))
 		return
 	end
 	for i = 1, #items do
@@ -337,8 +392,9 @@ local function layout()
 	local sh = (ScrH and ScrH()) or 720
 	root:SetPos(0, 0)
 	root:SetSize(sw, sh)
-	local cw = math.min(780, sw - 40)
-	local ch = math.min(560, sh - 40)
+	local cw = math.min(860, sw - 40)
+	-- Taller so the two gun columns fit with no scrolling (1080p: 900).
+	local ch = math.min(900, sh - 40)
 	if cw < 280 then cw = sw end
 	if ch < 220 then ch = sh end
 	card:SetSize(cw, ch)

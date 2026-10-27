@@ -118,4 +118,12 @@ check("empty categories are skipped", #custom == 3 and custom[1].category == "Pi
 check("sniper stays ahead of other", custom[2].category == "Sniper" and custom[2].items[1].key == "a")
 check("unknown categories land in Other", custom[3].category == "Other" and custom[3].items[1].key == "d" and custom[3].items[2].key == "e")
 
+local cols = BALLISTICS.Catalog.WeaponColumns()
+local function keys(groups) local out = {} for _, g in ipairs(groups) do for _, it in ipairs(g.items) do out[#out + 1] = it.key end end return table.concat(out, ",") end
+check("light column", keys(cols.light) == "tacrp_ex_m1911,tacrp_mr96,tacrp_skorpion,tacrp_mp5,tacrp_tgs12")
+check("heavy column", keys(cols.heavy) == "tacrp_ex_ak47,tacrp_hk417,tacrp_spr")
+check("gun icon path", BALLISTICS.Catalog.IconPath(BALLISTICS.Catalog.Get("tacrp_mp5")) == "entities/tacrp_mp5.png")
+check("grenade icon path", BALLISTICS.Catalog.IconPath(BALLISTICS.Catalog.Get("nade_frag")) == "entities/tacrp_ammo_frag.png")
+check("med icon path", BALLISTICS.Catalog.IconPath(BALLISTICS.Catalog.Get("med_pills")) == "entities/pb_med_extrasmall.png")
+
 if failed then os.exit(1) end
