@@ -27,8 +27,22 @@ check("key logic does not touch the game", not pure:find("hook.Add", 1, true)
 
 local K = BALLISTICS.Keys
 check("the throw key names", K.KeyName(K.KEY_3) == "3" and K.KeyName(K.KEY_4) == "4" and K.KeyName(K.KEY_5) == "5" and K.KeyName(K.KEY_G) == "G" and K.KeyName(K.KEY_F1) == "F1" and K.KeyName(12) == "B")
-check("a dead backup is key none when nothing is down", K.DeadBackup(function() return false end) == 0)
-check("a dead backup skips a key that reports down", K.DeadBackup(function(code) return code == 0 end) == 101)
+check("a dead backup is F10 when nothing is down", K.DeadBackup(function() return false end) == 101)
+check("a dead backup skips a key that reports down", K.DeadBackup(function(code) return code == 101 end) == 102)
+check("a dead backup without a predicate is still a real key", K.DeadBackup(nil) == 101)
+check("a dead backup never returns key none", (function()
+	local held = K.DeadBackup(function() return true end)
+	local none = K.DeadBackup(function(code) return code == 0 end)
+	return held ~= 0 and held ~= nil and held == 71 and none ~= 0 and none == 101
+end)())
+check("a named backup is the key label", K.BackupLabel(101, function() return "f10" end, "3") == "F10")
+check("key none falls back to the throwables label", K.BackupLabel(0, function() return nil end, "3") == "3")
+check("a nameless backup falls back to the throwables label", K.BackupLabel(101, function() return nil end, "3") == "3")
+check("a missing fallback is a bang", K.BackupLabel(nil, function() error("no name") end, "") == "!")
+check("upper of a missing key name throws", (function()
+	local ok = pcall(function() return string.upper(nil) end)
+	return ok == false
+end)())
 
 local state = K.Step(nil, true, 0, false)
 check("a press does not throw yet", state.down == true and state.ticks == 0 and state.menu == false)
@@ -163,6 +177,20 @@ local cmd = {
 	SetButtons = function(_, value) buttons = value end,
 }
 TacRP = { GRENADE1_Backup = K.KEY_G }
+-- Official GetBind: unbound +grenade2 does string.upper(GetKeyName(backup)).
+function TacRP.GetBind(binding)
+	local bind = input.LookupBinding(binding)
+	if not bind then
+		if binding == "+grenade1" then
+			return string.upper(input.GetKeyName(TacRP.GRENADE1_Backup))
+		elseif binding == "+grenade2" then
+			return string.upper(input.GetKeyName(TacRP.GRENADE2_Backup))
+		end
+		return "!"
+	end
+	return string.upper(bind)
+end
+TacRP.GetBindKey = TacRP.GetBind
 convars.tacrp_hints = 1
 convars.playerballistics_key_inspect = 17
 convars.playerballistics_med_key = 12
@@ -186,7 +214,17 @@ local function move(at)
 end
 
 hook.Run("Think")
-check("G is no longer the grenade backup", TacRP.GRENADE1_Backup == 0)
+check("G is no longer the grenade backup", TacRP.GRENADE1_Backup ~= 0 and TacRP.GRENADE1_Backup ~= K.KEY_G and TacRP.GRENADE1_Backup == 101)
+check("H is no longer the grenade wheel backup", TacRP.GRENADE2_Backup ~= 0 and TacRP.GRENADE2_Backup ~= K.KEY_H and TacRP.GRENADE2_Backup == 101)
+local grenadeLabel = TacRP.GetBind("+grenade2")
+check("unbound grenade2 bind does not throw", grenadeLabel == "3")
+check("unbound grenade1 bind does not throw", TacRP.GetBind("+grenade1") == "3" and TacRP.GetBindKey("+grenade2") == "3")
+TacRP.GRENADE2_Backup = 0
+check("a zero grenade backup still labels the throwables key", TacRP.GetBind("+grenade2") == "3")
+TacRP.GRENADE2_Backup = 101
+binds["+grenade2"] = "h"
+check("a real grenade2 bind is left alone", TacRP.GetBind("+grenade2") == "H")
+binds["+grenade2"] = nil
 keys[K.KEY_G] = true
 local gButtons = move(0)
 check("holding G does not quick throw", gButtons == 0)

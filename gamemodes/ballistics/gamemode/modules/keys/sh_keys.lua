@@ -45,15 +45,33 @@ function K.KeyName(code)
 	return KEY_NAME[math.floor(code)] or tostring(math.floor(code))
 end
 
--- A backup that IsKeyDown never reports, so G stops being TacRP's quick throw.
--- 0 is KEY_NONE. Later codes are F10–F12, then scroll lock.
+-- F10, F11, F12, then scroll lock. Each has a GetKeyName string.
+-- KEY_NONE (0) does not: TacRP.GetBind does string.upper(GetKeyName(backup))
+-- and nil throws every HUD frame when +grenade1/2 is unbound.
+-- Prefer a code IsKeyDown does not report, so the fallback is not held.
+-- If every candidate is held, the last real key is still returned. Never 0.
+local DEAD_KEYS = { 101, 102, 103, 71 }
+
 function K.DeadBackup(isDown)
-	local list = { 0, 101, 102, 103, 71 }
-	if type(isDown) ~= "function" then return 0 end
-	for i = 1, #list do
-		if isDown(list[i]) ~= true then return list[i] end
+	if type(isDown) ~= "function" then return DEAD_KEYS[1] end
+	for i = 1, #DEAD_KEYS do
+		if isDown(DEAD_KEYS[i]) ~= true then return DEAD_KEYS[i] end
 	end
-	return 0
+	return DEAD_KEYS[#DEAD_KEYS]
+end
+
+-- Label for an unbound +grenade bind. A missing key name must not throw.
+-- fallback is the throwables key label when the caller has one.
+function K.BackupLabel(code, keyName, fallback)
+	code = tonumber(code)
+	if code and code > 0 and code == math.floor(code) and type(keyName) == "function" then
+		local ok, name = pcall(keyName, math.floor(code))
+		if ok and type(name) == "string" and name ~= "" then
+			return string.upper(name)
+		end
+	end
+	if type(fallback) == "string" and fallback ~= "" then return fallback end
+	return "!"
 end
 
 function K.Fresh()
