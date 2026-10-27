@@ -94,6 +94,10 @@ local function handle(events)
 					end
 					if BALLISTICS.Gear and BALLISTICS.Gear.Reset then BALLISTICS.Gear.Reset() end
 					if BALLISTICS.Organs and BALLISTICS.Organs.Reset then BALLISTICS.Organs.Reset() end
+					-- Same transition that State:_enterBuy uses to zero the series score.
+					if BALLISTICS.Scoreboard and BALLISTICS.Scoreboard.ResetFrags then
+						BALLISTICS.Scoreboard.ResetFrags()
+					end
 				else
 					if BALLISTICS.Money and BALLISTICS.Money.CommitAll then
 						BALLISTICS.Money.CommitAll()

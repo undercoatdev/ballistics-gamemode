@@ -65,6 +65,22 @@ function H.Apply(payload)
 		snap.round = math.floor(tonumber(payload.round) or 0)
 	end
 	if type(payload.winner) == "string" then snap.winner = payload.winner end
+	-- The lobby already hands the whole bal_round_sync payload here. Keep the
+	-- series score so the scoreboard can read Snapshot() without a second reader.
+	local function seriesScore(value)
+		local n = tonumber(value)
+		if not n or n ~= n or n == math.huge or n == -math.huge then return nil end
+		if n < 0 then n = 0 end
+		return math.floor(n)
+	end
+	if payload.scoreGood ~= nil then
+		local n = seriesScore(payload.scoreGood)
+		if n ~= nil then snap.scoreGood = n end
+	end
+	if payload.scoreBad ~= nil then
+		local n = seriesScore(payload.scoreBad)
+		if n ~= nil then snap.scoreBad = n end
+	end
 	return snap.seen == true
 end
 
@@ -79,6 +95,8 @@ function H.Snapshot()
 		round = snap.round,
 		winner = snap.winner,
 		seen = snap.seen == true,
+		scoreGood = snap.scoreGood,
+		scoreBad = snap.scoreBad,
 	}
 end
 
