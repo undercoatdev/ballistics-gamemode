@@ -70,16 +70,16 @@ end
 local ok, err = allow(nil)
 check("live inside the zone may open", ok == true and err == nil)
 ok, err = allow({ inZone = false })
-check("live outside the zone is refused", ok == false and err == "zone")
+check("live outside the zone opens view-only", ok == true and C.CanEdit({ phase = "live", inZone = false }) == false and C.CanEdit({ phase = "buy" }) == true)
 check("zone text is the objective line", C.ReasonText("zone") == "Only at your objective")
 ok, err = allow({ phase = "buy", inZone = false })
 check("buy may open away from the flag", ok == true)
 ok, err = allow({ phase = "buy", inZone = true, inventory = true })
 check("buy in the zone may open while inventory is open", ok == true and err == nil)
 ok, err = allow({ phase = "lobby" })
-check("lobby cannot open", ok == false and err == "phase")
+check("lobby opens view-only", ok == true and C.CanEdit({ phase = "lobby" }) == false)
 ok, err = allow({ phase = "post" })
-check("post cannot open", ok == false and err == "phase")
+check("post opens view-only", ok == true and C.CanEdit({ phase = "post" }) == false)
 ok, err = allow({ alive = false })
 check("a dead player cannot open", ok == false and err == "dead")
 ok, err = allow({ hasWeapon = false })
@@ -104,11 +104,11 @@ end
 ok, err = must(nil)
 check("an open menu in the live zone stays", ok == false)
 ok, err = must({ inZone = false })
-check("leaving the zone must close", ok == true and err == "zone")
+check("leaving the zone keeps the menu open (view-only)", ok == false and C.CanEdit({ phase = "live", inZone = false }) == false)
 ok, err = must({ phase = "buy", inZone = false })
 check("buy ignores the zone", ok == false)
 ok, err = must({ phase = "post" })
-check("post must close", ok == true and err == "phase")
+check("post keeps the menu open (view-only)", ok == false)
 ok, err = must({ alive = false })
 check("death must close", ok == true and err == "dead")
 ok, err = must({ weaponChanged = true })
@@ -212,8 +212,8 @@ now = 1
 ply.pos = { x = 150, y = 0, z = 0 }
 ply.chats = {}
 ok, err = BALLISTICS.Customize.Request(ply, true)
-check("server refuses live outside the radius", ok == false and err == "zone" and ply.wep.custom == false)
-check("server says only at your objective", ply.chats[1] == "Ballistics: Only at your objective")
+check("server opens live outside the radius view-only", ok == true and ply.wep.custom == true)
+check("no refusal message for view-only", ply.chats[1] == nil)
 
 now = 2
 ply.pos = { x = 100, y = 0, z = 0 }
@@ -225,7 +225,7 @@ BALLISTICS.Customize.Request(ply, false)
 ply.pos = { x = 0, y = 0, z = 150 }
 now = 4
 ok, err = BALLISTICS.Customize.Request(ply, true)
-check("server counts height", ok == false and err == "zone")
+check("height does not stop a view-only open", ok == true)
 
 ply.pos = { x = 0, y = 0, z = 50 }
 now = 5
@@ -237,7 +237,7 @@ BALLISTICS.Customize.Request(ply, false)
 ply.pos = { x = 1000, y = 0, z = 0 }
 now = 7
 ok, err = BALLISTICS.Customize.Request(ply, true)
-check("the other team's flag does not open customize", ok == false and err == "zone" and ply.wep.custom == false)
+check("the other team's flag opens view-only", ok == true and C.CanEdit({ phase = "live", inZone = false }) == false)
 
 phaseName = "buy"
 now = 8
@@ -260,7 +260,7 @@ now = 9
 BALLISTICS.Customize.Request(ply, true)
 ply.pos = { x = 400, y = 0, z = 0 }
 BALLISTICS.Customize.Monitor()
-check("walking out force-closes", ply.wep.custom == false)
+check("walking out keeps it open (view-only)", ply.wep.custom == true)
 
 ply.pos = { x = 0, y = 0, z = 0 }
 now = 10
@@ -296,19 +296,19 @@ ply.wep = saved
 phaseName = "post"
 now = 15
 ok, err = BALLISTICS.Customize.Request(ply, true)
-check("server refuses post", ok == false and err == "phase")
+check("server opens post view-only", ok == true)
 
 phaseName = "lobby"
 now = 16
 ok, err = BALLISTICS.Customize.Request(ply, true)
-check("server refuses lobby", ok == false and err == "phase")
+check("server opens lobby view-only", ok == true)
 
 local spec = makePly("76561198000000022", 1002)
 spec.wep = makeWep()
 phaseName = "live"
 now = 17
 ok, err = BALLISTICS.Customize.Request(spec, true)
-check("a spectator has no objective", ok == false and err == "zone")
+check("a spectator with a weapon opens view-only", ok == true)
 
 ply.wep.block = true
 ply.wep.custom = false
@@ -508,8 +508,8 @@ cp.pos = { x = 500, y = 0, z = 0 }
 before = #sent
 local logs = #log
 BALLISTICS.CKeyClient.Monitor()
-check("leaving the zone asks the server to close", #sent == before + 1 and sent[#sent].want == false)
-check("leaving the zone removes the local panel", cwep.CustomizeHUD == nil and log[logs + 1] == "hud-remove")
+check("leaving the zone does not ask the server to close", #sent == before)
+check("leaving the zone keeps the local panel", cwep.CustomizeHUD ~= nil)
 
 release()
 cp.phase = "buy"

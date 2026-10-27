@@ -62,36 +62,31 @@ function C.InventoryHandoff(selfOpen, pressed, code)
 	return pressed == code
 end
 
--- Opening needs a living player, an active TacRP weapon, and either BUY
--- (anywhere, including the buy zone) or LIVE inside the own-flag radius.
--- An open inventory is not a reason to refuse. Closing is always allowed.
+-- Opening needs a living player and an active TacRP weapon, in any phase and
+-- anywhere. Outside BUY / the own-flag radius the menu is view-only: browse
+-- and hover stats, but TacRP_CanCustomize (AttPrice.Decide / Predict) refuses
+-- every attach, swap and detach. C.CanEdit is that place rule.
 function C.Allow(ctx)
 	if type(ctx) ~= "table" then return false, "phase" end
 	if ctx.want ~= true then return true end
 	if ctx.alive ~= true then return false, "dead" end
 	if ctx.hasWeapon ~= true then return false, "weapon" end
-	if ctx.phase == "buy" then return true end
-	if ctx.phase == "live" then
-		if ctx.inZone == true then return true end
-		return false, "zone"
-	end
-	return false, "phase"
+	return true
 end
 
--- Steady-state: the menu cannot stay open. A phase change is separate
--- (PhaseCloses) so leaving BUY closes even if the player is standing on
--- their flag when LIVE starts.
+function C.CanEdit(ctx)
+	if type(ctx) ~= "table" then return false end
+	return ctx.phase == "buy" or (ctx.phase == "live" and ctx.inZone == true)
+end
+
+-- Steady-state: the menu cannot stay open. Leaving the zone or phase does not
+-- close it any more (it just turns view-only).
 function C.MustClose(ctx)
 	if type(ctx) ~= "table" or ctx.open ~= true then return false end
 	if ctx.alive ~= true then return true, "dead" end
 	if ctx.weaponChanged == true then return true, "switch" end
 	if ctx.hasWeapon ~= true then return true, "weapon" end
-	if ctx.phase == "buy" then return false end
-	if ctx.phase == "live" then
-		if ctx.inZone == true then return false end
-		return true, "zone"
-	end
-	return true, "phase"
+	return false
 end
 
 function C.PhaseCloses(oldPhase, newPhase, open)
