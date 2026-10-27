@@ -258,8 +258,9 @@ local function refreshButton()
 			surface.DrawRect(0, 0, w, h)
 			surface.SetDrawColor(220, 170, 60, 255)
 			surface.DrawOutlinedRect(0, 0, w, h)
-			draw.SimpleText("ADMIN", "DermaDefaultBold", w / 2, h / 2, Color(240, 220, 140), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-			draw.SimpleText("F3", "DermaDefault", w - 4, 2, Color(240, 220, 140), TEXT_ALIGN_RIGHT, TEXT_ALIGN_TOP)
+			-- Key tag on the LEFT inside the button, label shifted right of it.
+			draw.SimpleText("F3", "DermaDefault", 6, h / 2, Color(200, 180, 110), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+			draw.SimpleText("ADMIN", "DermaDefaultBold", w / 2 + 8, h / 2, Color(240, 220, 140), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
 		end
 		button:SetText("")
 	end

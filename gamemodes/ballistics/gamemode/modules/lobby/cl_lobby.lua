@@ -641,8 +641,9 @@ local function refreshTeamsButton()
 			surface.DrawRect(0, 0, w, h)
 			surface.SetDrawColor(90, 150, 255, 255)
 			surface.DrawOutlinedRect(0, 0, w, h)
-			draw.SimpleText("TEAMS", "DermaDefaultBold", w / 2, h / 2, Color(190, 215, 255), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-			draw.SimpleText("F2", "DermaDefault", w - 4, 2, Color(190, 215, 255), TEXT_ALIGN_RIGHT, TEXT_ALIGN_TOP)
+			-- Key tag on the LEFT inside the button, label shifted right of it.
+			draw.SimpleText("F2", "DermaDefault", 6, h / 2, Color(140, 170, 220), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+			draw.SimpleText("TEAMS", "DermaDefaultBold", w / 2 + 8, h / 2, Color(190, 215, 255), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
 		end
 	end
 	local V = BALLISTICS.LobbyView

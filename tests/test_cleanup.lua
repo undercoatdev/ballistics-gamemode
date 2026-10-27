@@ -121,6 +121,15 @@ do
 	else
 		check("client decal pass exists", false)
 	end
+	-- Body Damage blood pools: its own PostCleanupMap clear runs each pass.
+	local pools = 0
+	local oldHook = hook
+	hook = { GetTable = function() return { PostCleanupMap = { BodyDamage_Blood = function() pools = pools + 1 end } } end, Add = function() end }
+	BALLISTICS.Cleanup.ClientDecals()
+	check("Body Damage blood pools cleared", pools == 1)
+	hook = { GetTable = function() return {} end, Add = function() end }
+	check("no Body Damage is harmless", BALLISTICS.Cleanup.BodyDamagePuddles() == false)
+	hook = oldHook
 	ents.GetAll = oldAll
 end
 

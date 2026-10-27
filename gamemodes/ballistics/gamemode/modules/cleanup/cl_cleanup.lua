@@ -38,11 +38,24 @@ local function localRagdolls()
 	end
 end
 
+-- Blood pools are Body Damage mesh puddles (cl_body_blood.lua BloodState.Puddles),
+-- not decals. BD only empties them in its client PostCleanupMap hook, which a
+-- round reset never fires, so call that hook function directly (no BD edits).
+function BALLISTICS.Cleanup.BodyDamagePuddles()
+	if not (hook and hook.GetTable) then return false end
+	local t = hook.GetTable()
+	local fn = t and t.PostCleanupMap and t.PostCleanupMap.BodyDamage_Blood
+	if type(fn) ~= "function" then return false end
+	pcall(fn)
+	return true
+end
+
 BALLISTICS.Cleanup.DECAL_PASSES = { 0.3, 1, 2 }
 
 -- r_cleardecals alone is not enough: also strip decals from the world and
 -- every entity on this client (Body Damage / Sticky Blood paint on both).
 function BALLISTICS.Cleanup.ClientDecals()
+	BALLISTICS.Cleanup.BodyDamagePuddles()
 	if RunConsoleCommand then pcall(RunConsoleCommand, "r_cleardecals") end
 	if game and game.GetWorld then
 		local ok, world = pcall(game.GetWorld)
