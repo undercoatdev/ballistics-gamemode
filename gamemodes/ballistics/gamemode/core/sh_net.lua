@@ -23,6 +23,8 @@ local MESSAGES = {
 	"bal_capture_sync",
 	"bal_cleanup",
 	"bal_buy_ok",
+	"bal_sell",
+	"bal_sell_ok",
 	"bal_loot_open",
 	"bal_loot_act",
 	"bal_loot_state",

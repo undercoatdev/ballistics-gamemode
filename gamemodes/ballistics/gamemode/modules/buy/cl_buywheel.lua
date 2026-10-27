@@ -269,6 +269,10 @@ local function refill()
 		btn.DoClick = function()
 			tryBuy(item)
 		end
+		-- Right-click sells an owned item back (buy phase, server checks).
+		btn.DoRightClick = function()
+			if BALLISTICS.Sell and BALLISTICS.Sell.Send then BALLISTICS.Sell.Send(item) end
+		end
 	end
 	local function place(list, y)
 		for i = 1, #list do
