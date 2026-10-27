@@ -224,11 +224,35 @@ local function phaseOf(ply)
 	return phase
 end
 
-local function useDown(ply)
-	if type(ply.KeyDown) ~= "function" then return false end
-	local ok, down = pcall(ply.KeyDown, ply, USE)
-	return ok and down == true
+-- Singleplayer does not run client prediction, so LocalPlayer():KeyDown(IN_USE)
+-- stays false there and the hold never started. Also read the key bound to
+-- +use straight from the keyboard (not while typing or in a menu).
+local function useKeyDown()
+	if not input or type(input.LookupBinding) ~= "function" or type(input.GetKeyCode) ~= "function" then return false end
+	if gui and gui.IsGameUIVisible and gui.IsGameUIVisible() then return false end
+	if gui and gui.IsConsoleVisible and gui.IsConsoleVisible() then return false end
+	local f = vgui and vgui.GetKeyboardFocus and vgui.GetKeyboardFocus()
+	if valid(f) and f.GetClassName and f:GetClassName() == "TextEntry" then return false end
+	local name = input.LookupBinding("+use", true) or "e"
+	local code = input.GetKeyCode(name)
+	if type(code) ~= "number" or code <= 0 then return false end
+	if code >= (MOUSE_FIRST or 107) and code <= (MOUSE_LAST or 113) then
+		return type(input.IsMouseDown) == "function" and input.IsMouseDown(code) == true
+	end
+	return type(input.IsKeyDown) == "function" and input.IsKeyDown(code) == true
 end
+
+local function useDown(ply)
+	local cmd = false
+	if type(ply.KeyDown) == "function" then
+		local ok, down = pcall(ply.KeyDown, ply, USE)
+		cmd = ok and down == true
+	end
+	return L.UseDown(cmd, useKeyDown())
+end
+
+local debugCv = CreateClientConVar and CreateClientConVar("bal_loot_debug", "0", false, false, "1 = print why the loot hold cancels") or nil
+local lastWhy
 
 local function buyOpen()
 	return BALLISTICS.BuyWheel and BALLISTICS.BuyWheel.IsOpen and BALLISTICS.BuyWheel.IsOpen() == true
@@ -742,6 +766,8 @@ local function thinkHold(ply)
 		moved = moved,
 	})
 	if tick.cancel then
+		if debugCv and debugCv:GetBool() and tick.reason ~= lastWhy then print("[Ballistics loot] hold cancel: " .. tostring(tick.reason)) end
+		lastWhy = tick.reason
 		clearHold()
 		return
 	end

@@ -73,6 +73,12 @@ function L.GiveOnly(mode)
 	return mode == "awake"
 end
 
+-- Use is down when the usercmd says so OR the bound key is physically held
+-- (singleplayer has no client-side usercmd buttons).
+function L.UseDown(cmdDown, keyDown)
+	return cmdDown == true or keyDown == true
+end
+
 function L.Range(cfg)
 	cfg = type(cfg) == "table" and cfg or {}
 	return clamp(cfg.LootRange, 32, 512, 96)

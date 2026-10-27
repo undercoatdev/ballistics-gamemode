@@ -256,7 +256,7 @@ check("a drop sits in front of the looter", pos.x == 0 and pos.y == 40 and pos.z
 local clientSrc = readAll("gamemodes/ballistics/gamemode/modules/loot/cl_loot.lua")
 local serverSrc = readAll("gamemodes/ballistics/gamemode/modules/loot/sv_loot.lua")
 check("the loot client compiles", loadfile("gamemodes/ballistics/gamemode/modules/loot/cl_loot.lua") ~= nil)
-check("the client does not consume the use button", not clientSrc:find("RemoveKey", 1, true) and not clientSrc:find("PlayerButtonDown", 1, true) and not clientSrc:find("+use", 1, true))
+check("the client does not consume the use button", not clientSrc:find("RemoveKey", 1, true) and not clientSrc:find("PlayerButtonDown", 1, true) and not clientSrc:find("name == \"+use\"", 1, true))
 check("the client keeps the keyboard for movement", clientSrc:find("SetKeyboardInputEnabled", 1, true) ~= nil)
 check("the server does not hook the use button", not serverSrc:find("PlayerButtonDown", 1, true) and not serverSrc:find("RemoveKey", 1, true))
 check("loot has no init hook", not clientSrc:find('hook.Add("Initialize"', 1, true) and not clientSrc:find('hook.Add("InitPostEntity"', 1, true) and not serverSrc:find('hook.Add("Initialize"', 1, true) and not serverSrc:find('hook.Add("InitPostEntity"', 1, true))
@@ -695,4 +695,8 @@ function freshRag:NearestPoint() return self:WorldSpaceCenter() end
 ok = L.Open(looter, freshRag)
 check("a new round does not keep the old snapshot", ok == true and classes(L.Last(looter).them)[1] == nil)
 
+-- Singleplayer: KeyDown(IN_USE) is false client-side, the bound key still counts.
+check("use counts from the raw key when the usercmd has none", L.UseDown(false, true) == true)
+check("use counts from the usercmd", L.UseDown(true, false) == true)
+check("no use when neither", L.UseDown(false, false) == false)
 if failed then os.exit(1) end
