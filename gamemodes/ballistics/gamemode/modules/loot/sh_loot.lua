@@ -59,6 +59,19 @@ local function coord(v, key)
 	return ok and tonumber(n) or 0
 end
 
+-- Catalog-style item for a loot slot's icon (guns by class, meds/nades by
+-- catalog key). Ammo and empty slots have none.
+function L.IconItem(slot, catalog)
+	if type(slot) ~= "table" or slot.empty then return nil end
+	if slot.kind == "gun" then
+		if type(slot.class) == "string" and slot.class ~= "" then return { class = slot.class } end
+		return nil
+	end
+	if slot.kind == "ammo" then return nil end
+	if catalog and catalog.Get and type(slot.key) == "string" then return catalog.Get(slot.key) end
+	return nil
+end
+
 function L.Note(err)
 	if type(err) ~= "string" then return nil end
 	return NOTES[err]

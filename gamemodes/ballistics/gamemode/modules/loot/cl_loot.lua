@@ -444,6 +444,11 @@ local function paintSlot(pnl, w, h)
 	if sub ~= "" then
 		draw.SimpleText(sub, "BallisticsLootSmall", 8, h / 2 + 10, Color(170, 186, 204), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
 	end
+	-- Spawn-menu icon on the right, same as the buy panel.
+	local iconItem = L.IconItem(slot, BALLISTICS.Catalog)
+	if iconItem and BALLISTICS.BuyWheel and BALLISTICS.BuyWheel.DrawIcon then
+		BALLISTICS.BuyWheel.DrawIcon(iconItem, w, h)
+	end
 end
 
 local function onSlotPress(slot)

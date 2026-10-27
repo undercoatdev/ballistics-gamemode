@@ -711,4 +711,8 @@ type = function(v) if realType(v) == "userdata" then return "Vector" end return 
 check("distance reads userdata vectors", math.abs(L.Dist(uvec(0, 0, 0), uvec(30, 40, 0)) - 50) < 1e-6)
 check("a still body has not moved", L.Moved({ x = 10, y = 20, z = 30 }, uvec(10, 20, 30), 24) == false)
 type = realType
+local cat = { Get = function(k) return k == "nade_frag" and { key = k, entity = "tacrp_ammo_frag" } or nil end }
+check("gun slot icon by class", L.IconItem({ kind = "gun", class = "tacrp_mp5" }, cat).class == "tacrp_mp5")
+check("grenade slot icon from catalog", L.IconItem({ kind = "nade", key = "nade_frag" }, cat).entity == "tacrp_ammo_frag")
+check("empty and ammo slots have no icon", L.IconItem({ kind = "gun", empty = true }, cat) == nil and L.IconItem({ kind = "ammo", key = "pistol" }, cat) == nil)
 if failed then os.exit(1) end

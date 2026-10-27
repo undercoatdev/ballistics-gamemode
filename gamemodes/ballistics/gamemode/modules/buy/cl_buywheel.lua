@@ -246,6 +246,10 @@ local function drawIcon(item, w, h)
 	end
 end
 
+-- Shared with the loot window: same spawn-menu icon and fallback.
+BALLISTICS.BuyWheel = BALLISTICS.BuyWheel or {}
+BALLISTICS.BuyWheel.DrawIcon = drawIcon
+
 local function paintItem(self, w, h)
 	local item = self.balItem or {}
 	local price = BALLISTICS.Catalog and BALLISTICS.Catalog.Price and BALLISTICS.Catalog.Price(item.key) or nil
