@@ -806,25 +806,10 @@ local function armGrace(ply, ent)
 	local nowT = (CurTime and CurTime()) or 0
 	ent.BallisticsDropOwner = ply
 	ent.BallisticsDropUntil = nowT + grace
-	-- Instance methods shadow the scripted table. Spawn can copy the ENT
-	-- method back over a wrap done before it, so this is safe to call again.
-	local function wrap(name)
-		local old = ent[name]
-		if type(old) ~= "function" then return end
-		-- The saved function is the wrap itself. Spawn replacing the method
-		-- makes them differ, so the new method gets wrapped too.
-		if ent["balWrapFn" .. name] == old then return end
-		local function wrapped(self, toucher)
-			local t = (CurTime and CurTime()) or 0
-			if L.PickupBlocked(toucher, self, t) then return end
-			return old(self, toucher)
-		end
-		ent["balWrapFn" .. name] = wrapped
-		ent[name] = wrapped
-	end
-	wrap("StartTouch")
-	wrap("Touch")
-	wrap("Use")
+	-- No method wrapping here. Replacing Use/Touch on the entity instance put
+	-- our closure inside the engine's use and touch dispatch; TacRP's Use removes
+	-- the entity and Gives a weapon inside that call, and the game hard-crashed.
+	-- The PlayerUse hook below blocks the dropper instead.
 end
 
 local function dropSpot(ply, nudge)
@@ -1352,5 +1337,15 @@ end
 if timer and timer.Create then
 	timer.Create("Ballistics_LootWatch", L.WATCH, 0, function()
 		L.Watch()
+	end)
+end
+
+-- The dropper cannot E-use their own fresh drop during the grace. Returning
+-- false from PlayerUse stops the use before the entity sees it.
+if hook and hook.Add then
+	hook.Add("PlayerUse", "Ballistics_LootGrace", function(ply, ent)
+		if ent == nil or not valid(ent) then return end
+		local t = (CurTime and CurTime()) or 0
+		if L.PickupBlocked(ply, ent, t) then return false end
 	end)
 end

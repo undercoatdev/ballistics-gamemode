@@ -606,9 +606,9 @@ check("dropping a gun spawns it in front of the looter", ok == true and drop ~= 
 check("the dropped gun keeps its mag and attachment", drop.clip1 == 3 and drop.Attachments[1].Installed == "supp" and drop.pos.x == 40 and drop.pos.z == L.DROP_UP and drop.fell == true)
 check("the dropped gun leaves the looter", looter.weapons.tacrp_mp5 == nil)
 check("the dropper cannot take the gun back yet", drop.BallisticsDropOwner == looter and drop.BallisticsDropUntil == L.DROP_GRACE and L.PickupBlocked(looter, drop, 0) == true and L.PickupBlocked(looter, drop, L.DROP_GRACE) == false and L.PickupBlocked(victim, drop, 0) == false)
-drop:StartTouch(looter)
-drop:StartTouch(victim)
-check("touch from the dropper is ignored", drop.touches == 1 and drop.lastTouch == victim)
+local useLooter, useVictim = hook.Run("PlayerUse", looter, drop), hook.Run("PlayerUse", victim, drop)
+
+check("PlayerUse blocks only the dropper during grace", useLooter == false and useVictim == nil)
 
 settle()
 arm(looter, "tacrp_mp5", { clip = 1 })
