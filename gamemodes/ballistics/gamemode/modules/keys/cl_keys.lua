@@ -27,6 +27,20 @@ local hintsRunning = false
 if CreateClientConVar then
 	CreateClientConVar(THROW, tostring(K.KEY_3 or 4), true, false, "Throwables key (KEY_ enum). Tap quick throw, hold the menu. Default is 3.")
 	CreateClientConVar(INV, tostring(K.KEY_4 or 5), true, false, "Inventory key (KEY_ enum). Toggles your inventory. Default is 4.")
+	CreateClientConVar("bal_keys_version", "0", true, false, "Internal: keybind layout version, used to migrate old saved keys.")
+end
+
+-- Saved (FCVAR_ARCHIVE) values from the old layout (throw 4, inventory 5)
+-- beat the new defaults. Reset both once per layout version.
+do
+	local cv = type(GetConVar) == "function" and GetConVar("bal_keys_version") or nil
+	local want = K.KEYS_VERSION or 2
+	local saved = cv and type(cv.GetInt) == "function" and cv:GetInt() or nil
+	if saved ~= nil and RunConsoleCommand and K.NeedsMigration and K.NeedsMigration(saved, want) then
+		RunConsoleCommand(THROW, tostring(K.KEY_3 or 4))
+		RunConsoleCommand(INV, tostring(K.KEY_4 or 5))
+		RunConsoleCommand("bal_keys_version", tostring(want))
+	end
 end
 
 local function convar(name)

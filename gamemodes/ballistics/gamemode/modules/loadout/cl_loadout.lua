@@ -30,3 +30,32 @@ if hook and hook.Add then
 		return true
 	end)
 end
+
+-- Keys 1 and 2 still work when the player has no slot1/slot2 bind (custom
+-- or wiped config): poll the raw key, only for a slot nothing is bound to.
+if hook and hook.Add then
+	local latch = {}
+	local function unbound(cmd)
+		if not input or type(input.LookupBinding) ~= "function" then return false end
+		local ok, key = pcall(input.LookupBinding, cmd)
+		return not ok or key == nil or key == ""
+	end
+	local function blocked()
+		if gui and gui.IsConsoleVisible and gui.IsConsoleVisible() then return true end
+		if gui and gui.IsGameUIVisible and gui.IsGameUIVisible() then return true end
+		local ply = LocalPlayer and LocalPlayer()
+		if IsValid(ply) and ply:IsTyping() then return true end
+		if vgui and vgui.GetKeyboardFocus and IsValid(vgui.GetKeyboardFocus()) then return true end
+		return editingSpawns()
+	end
+	hook.Add("Think", "Ballistics_LoadoutKeys", function()
+		if not input or type(input.IsKeyDown) ~= "function" then return end
+		for slot, code in pairs({ [1] = KEY_1, [2] = KEY_2 }) do
+			local down = code and unbound("slot" .. slot) and input.IsKeyDown(code) == true or false
+			if down and not latch[slot] and not blocked() and RunConsoleCommand then
+				RunConsoleCommand("bal_slot", tostring(slot))
+			end
+			latch[slot] = down
+		end
+	end)
+end

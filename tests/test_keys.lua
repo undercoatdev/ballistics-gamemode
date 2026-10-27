@@ -284,4 +284,8 @@ do
 	check("F3 hidden for players", not has(K.Rows({}), "F3", "Admin"))
 end
 
+check("old saved keys (version 0 or 1) migrate once", K.NeedsMigration(0, 2) and K.NeedsMigration(1, 2) and K.NeedsMigration(nil, 2))
+check("migrated keys are not reset again", not K.NeedsMigration(2, 2) and not K.NeedsMigration(3, 2))
+check("default codes are 3 for throwables and 4 for inventory", K.KEY_3 == 4 and K.KEY_4 == 5)
+
 if failed then os.exit(1) end

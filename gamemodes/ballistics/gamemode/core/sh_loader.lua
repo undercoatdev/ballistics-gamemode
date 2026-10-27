@@ -31,21 +31,34 @@ local function findLua(rel)
 	return files or {}, dirs or {}
 end
 
+local failed = {}
+BALLISTICS.LoadErrors = failed
+
+-- One broken file must not stop every file after it from loading.
+local function safeInclude(path)
+	local ok, err = pcall(include, path)
+	if not ok then
+		failed[#failed + 1] = path
+		local msg = "[Ballistics] failed to load " .. tostring(path) .. ": " .. tostring(err) .. "\n"
+		if ErrorNoHalt then ErrorNoHalt(msg) else print(msg) end
+	end
+end
+
 local function includeFile(rel, name)
 	-- GMod resolves include paths from the lua/gamemodes root, not the gamemode folder.
 	rel = ((GM and GM.FolderName) or "ballistics") .. "/gamemode/" .. rel
 	local realm = realmPrefix(name)
 	if realm == "sv_" then
-		if SERVER then include(rel) end
+		if SERVER then safeInclude(rel) end
 	elseif realm == "cl_" then
 		if SERVER then
 			AddCSLuaFile(rel)
 		else
-			include(rel)
+			safeInclude(rel)
 		end
 	elseif realm == "sh_" then
 		if SERVER then AddCSLuaFile(rel) end
-		include(rel)
+		safeInclude(rel)
 	end
 end
 
@@ -64,8 +77,13 @@ local CORE_ORDER = {
 	"sv_round.lua",
 }
 
+-- Static file list, used when file.Find sees nothing (remote clients).
+includeFile("core/sh_manifest.lua", "sh_manifest.lua")
+local manifest = BALLISTICS.Manifest or {}
+
 local coreFiles = findLua("core/*.lua")
-local loaded = { ["sh_loader.lua"] = true }
+if #coreFiles == 0 and type(manifest.core) == "table" then coreFiles = manifest.core end
+local loaded = { ["sh_loader.lua"] = true, ["sh_manifest.lua"] = true }
 
 -- Always include the known core list so a bad file.Find path still boots.
 for i = 1, #CORE_ORDER do
@@ -103,4 +121,24 @@ local function loadDir(relDir)
 	end
 end
 
-loadDir("modules")
+local modFiles = findLua("modules/*")
+local _, modDirs = findLua("modules/*")
+if (#modFiles > 0 or #modDirs > 0) then
+	loadDir("modules")
+elseif type(manifest.modules) == "table" then
+	-- Group by folder, keep the sh_/sv_/cl_ order inside each folder.
+	local byDir, order = {}, {}
+	for i = 1, #manifest.modules do
+		local path = manifest.modules[i]
+		local dir, name = path:match("^(.*)/([^/]+)$")
+		if dir and name then
+			if not byDir[dir] then byDir[dir] = {}; order[#order + 1] = dir end
+			table.insert(byDir[dir], name)
+		end
+	end
+	table.sort(order)
+	for _, dir in ipairs(order) do
+		table.sort(byDir[dir], sortRealm)
+		for _, name in ipairs(byDir[dir]) do includeFile(dir .. "/" .. name, name) end
+	end
+end

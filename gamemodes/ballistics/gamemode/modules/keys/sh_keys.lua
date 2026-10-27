@@ -21,6 +21,12 @@ K.TAP = 0.25
 K.PULSE = 3
 K.REVEAL = 4
 K.TAG = "F1 Keybinds"
+-- Bump when default key codes change so saved client values are reset once.
+K.KEYS_VERSION = 2
+
+function K.NeedsMigration(saved, want)
+	return (tonumber(saved) or 0) < (tonumber(want) or K.KEYS_VERSION)
+end
 
 local KEY_NAME = { [0] = "NONE" }
 for i = 0, 9 do
