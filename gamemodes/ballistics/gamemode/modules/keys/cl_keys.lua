@@ -282,7 +282,7 @@ end
 function BALLISTICS.Keys.HintRows()
 	local throw = BALLISTICS.Keys.ThrowKey()
 	local inspect = convarInt("playerballistics_key_inspect", K.KEY_G or 17)
-	local med = "Z (hold)"
+	local med = "Z"
 	if type(K.Rows) ~= "function" then return {} end
 	return K.Rows({
 		customize = bindLabel("+menu_context", "C"),
@@ -308,54 +308,73 @@ local function fontName()
 	return "BallisticsKeys"
 end
 
+local smallMade = false
+local function smallFont()
+	if not smallMade and surface and type(surface.CreateFont) == "function" then
+		surface.CreateFont("BallisticsKeysSmall", { font = "Roboto", size = 13, weight = 500 })
+		surface.CreateFont("BallisticsKeysMain", { font = "Roboto", size = 15, weight = 600 })
+		smallMade = true
+	end
+	return "BallisticsKeysMain", "BallisticsKeysSmall"
+end
+
+-- Compact list: fixed narrow keycap column, action left-aligned beside it,
+-- sub-actions indented and smaller, a small gap between number and letter keys.
 local function paint()
 	if not surface or not draw or type(ScrW) ~= "function" or type(ScrH) ~= "function" then return end
-	if type(K.PanelBox) ~= "function" then return end
+	if type(surface.SetFont) ~= "function" or type(surface.GetTextSize) ~= "function" or type(surface.DrawRect) ~= "function" or type(draw.SimpleText) ~= "function" then return end
 	local open = listOpen()
-	local rows = open and BALLISTICS.Keys.HintRows() or {}
-	local face = fontName()
-	local widest, keyW = 0, 0
-	local gap = 0
 	local tag = K.TAG or "F1 Keybinds"
-	if surface.SetFont and surface.GetTextSize then
-		surface.SetFont(face)
-		gap = surface.GetTextSize("  ") or 0
-		if open then
-			local actW = 0
-			for i = 1, #rows do
-				local kw = surface.GetTextSize(tostring(rows[i].key)) or 0
-				local aw = surface.GetTextSize(tostring(rows[i].action)) or 0
-				if kw > keyW then keyW = kw end
-				if aw > actW then actW = aw end
-			end
-			widest = keyW + gap + actW
-		else
-			widest = surface.GetTextSize(tag) or 0
-		end
-	end
-	local box = K.PanelBox(open and #rows or 1, ScrW(), ScrH(), open, widest)
-	local white = Color and Color(255, 255, 255) or { r = 255, g = 255, b = 255, a = 255 }
-	surface.SetDrawColor(0, 0, 0, 150)
-	if type(TacRP) == "table" and type(TacRP.DrawCorneredBox) == "function" then
-		TacRP.DrawCorneredBox(box.x, box.y, box.w, box.h, white)
-	elseif type(surface.DrawRect) == "function" then
-		surface.DrawRect(box.x, box.y, box.w, box.h)
-	end
-	local function text(str, x, y, align)
-		if type(draw.SimpleText) ~= "function" then return end
-		draw.SimpleText(str, face, x, y, white, align or TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
-	end
+	local main, small = smallFont()
+	local white = Color(235, 235, 235)
+	local dim = Color(180, 186, 196)
+	local PAD, CAP, MAINH, SUBH, GAP = 6, 34, 20, 15, 6
 	if not open then
-		text(tag, box.x + K.PAD, box.y + box.h / 2)
+		surface.SetFont(main)
+		local tw = surface.GetTextSize(tag) or 60
+		local h = MAINH + 4
+		local y = math.floor(ScrH() / 2 - h / 2)
+		surface.SetDrawColor(0, 0, 0, 150)
+		surface.DrawRect(8, y, tw + PAD * 2, h)
+		draw.SimpleText(tag, main, 8 + PAD, y + h / 2, white, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
 		return
 	end
-	-- Key column measured with GetTextSize and right-aligned, so wide keys
-	-- (F2, 1 2, MOUSE3) never start left of the panel.
-	local keyRight = box.x + K.PAD + keyW
+	local rows = BALLISTICS.Keys.HintRows()
+	local h, w = PAD * 2, 0
 	for i = 1, #rows do
-		local y = box.y + (i - 0.5) * box.row
-		text(tostring(rows[i].key), keyRight, y, TEXT_ALIGN_RIGHT)
-		text(tostring(rows[i].action), keyRight + gap, y)
+		local r = rows[i]
+		surface.SetFont(r.sub and small or main)
+		local aw = surface.GetTextSize(tostring(r.action)) or 0
+		local lw = CAP + 8 + (r.sub and 8 or 0) + aw
+		if lw > w then w = lw end
+		h = h + (r.sub and SUBH or MAINH) + (r.gap and GAP or 0)
+	end
+	w = w + PAD * 2
+	local x = 8
+	local y = math.floor(ScrH() / 2 - h / 2)
+	surface.SetDrawColor(0, 0, 0, 160)
+	surface.DrawRect(x, y, w, h)
+	local cy = y + PAD
+	for i = 1, #rows do
+		local r = rows[i]
+		if r.gap then
+			cy = cy + GAP
+			surface.SetDrawColor(255, 255, 255, 30)
+			surface.DrawRect(x + PAD, cy - GAP / 2 - 1, w - PAD * 2, 1)
+		end
+		if r.sub then
+			draw.SimpleText(tostring(r.action), small, x + PAD + CAP + 16, cy + SUBH / 2, dim, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+			cy = cy + SUBH
+		else
+			local capH = MAINH - 4
+			surface.SetDrawColor(255, 255, 255, 40)
+			surface.DrawRect(x + PAD, cy + 2, CAP, capH)
+			surface.SetDrawColor(255, 255, 255, 90)
+			surface.DrawOutlinedRect(x + PAD, cy + 2, CAP, capH)
+			draw.SimpleText(tostring(r.key), small, x + PAD + CAP / 2, cy + MAINH / 2, white, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+			draw.SimpleText(tostring(r.action), main, x + PAD + CAP + 8, cy + MAINH / 2, white, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+			cy = cy + MAINH
+		end
 	end
 end
 

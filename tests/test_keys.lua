@@ -99,11 +99,11 @@ local rows = K.Rows({
 	teams = "F2",
 	med = "B",
 })
-check("the list has the real binds", #rows == 11 and rows[1].action == "Customize / buy wheel" and rows[2].key == "3" and rows[2].action == "Tap quick throw / hold menu" and rows[3].action == "Medical / self-inspect" and rows[4].key == "MOUSE3" and rows[4].action == "Blindfire menu" and rows[6].key == "E (double-tap)" and rows[6].action == "Drag / drop body" and rows[7].key == "E (hold 1s)" and rows[7].action == "Loot inventory / E close" and rows[8].key == "F2" and rows[9].key == "4" and rows[9].action == "Inventory" and rows[10].key == "1 2" and rows[10].action == "Weapons" and rows[11].key == "B" and rows[11].action == "Medical wheel")
+check("numbers first, then letters", #rows == 13 and rows[1].key == "1 / 2" and rows[2].key == "3" and rows[3].sub and rows[4].sub and rows[5].key == "4" and rows[5].action == "Inventory" and rows[6].key == "C" and rows[6].gap == true and rows[7].key == "E" and rows[8].action == "Tap: safety / melee" and rows[9].action == "Double-tap: drag / drop body" and rows[10].action == "Hold: loot body" and rows[11].key == "G" and rows[12].key == "MOUSE3" and rows[12].action == "Blindfire" and rows[13].key == "B" and rows[13].action == "Hold: medical wheel")
 local noMed = K.Rows({ med = "" })
-check("a missing medical wheel is left off the list", #noMed == 10)
-check("slot keys share one line", noMed[10].key == "1 2" and noMed[10].action == "Weapons")
-check("inventory defaults to 4", noMed[9].key == "4" and noMed[9].action == "Inventory")
+check("a missing medical wheel is left off the list", #noMed == 12)
+check("gun keys share one line", noMed[1].key == "1 / 2" and noMed[1].action == "Guns (press again for knife)")
+check("inventory defaults to 4", noMed[5].key == "4" and noMed[5].action == "Inventory")
 
 local box = K.PanelBox(8, 640, 480, true)
 check("the open list sits on the DrawHints anchor", box.x == 8 and box.y == math.floor(240 - box.h / 2) and box.h == 8 * 12 and box.w == 140)
@@ -216,7 +216,7 @@ hook.Run("Think")
 check("the list stays closed after spawn", BALLISTICS.Keys.ListOpen() == false)
 local hinted = BALLISTICS.Keys.HintRows()
 local medRow = hinted[#hinted]
-check("hints read the live binds", hinted[1].key == "C" and hinted[2].key == "3" and hinted[3].key == "G" and hinted[4].key == "H" and hinted[5].key == "E" and hinted[6].key == "E (double-tap)" and hinted[6].action == "Drag / drop body" and hinted[7].key == "E (hold 1s)" and hinted[7].action == "Loot inventory / E close" and hinted[8].key == "F2" and hinted[9].key == "4" and hinted[9].action == "Inventory" and hinted[10].key == "1 2" and hinted[10].action == "Weapons" and medRow.action == "Medical wheel" and medRow.key == "Z (hold)")
+check("hints read the live binds", hinted[1].key == "1 / 2" and hinted[2].key == "3" and hinted[5].key == "4" and hinted[5].action == "Inventory" and hinted[6].key == "C" and hinted[7].key == "E" and hinted[11].key == "G" and hinted[11].action == "Check injuries (yours, or who you aim at)" and hinted[12].key == "H" and medRow.action == "Hold: medical wheel" and medRow.key == "Z")
 clock = 10
 hook.Run("Think")
 check("the list collapses when the reveal ends", BALLISTICS.Keys.ListOpen() == false)
@@ -256,6 +256,9 @@ surface = {
 	SetDrawColor = function() end,
 	DrawRect = function() drawn = true end,
 	CreateFont = function() end,
+	SetFont = function() end,
+	GetTextSize = function(t) return #tostring(t) * 7, 14 end,
+	DrawOutlinedRect = function() end,
 }
 draw = { SimpleText = function() texts = texts + 1 end }
 function ScrW() return 640 end
@@ -284,9 +287,11 @@ do
 		for _, r in ipairs(rows) do if r.key == key and r.action == action then return true end end
 		return false
 	end
-	check("F2 teams listed", has(K.Rows({}), "F2", "Teams (lobby)"))
-	check("F3 admin listed for admins", has(K.Rows({ isAdmin = true }), "F3", "Admin"))
-	check("F3 hidden for players", not has(K.Rows({}), "F3", "Admin"))
+	check("F2 teams not listed", not has(K.Rows({}), "F2", "Teams (lobby)"))
+	check("F3 admin not listed", not has(K.Rows({ isAdmin = true }), "F3", "Admin"))
+	local subs = 0
+	for _, r in ipairs(K.Rows({})) do if r.sub then subs = subs + 1; if r.key ~= "" then subs = -99 end end end
+	check("sub-lines carry no keycap", subs == 5)
 end
 
 check("old saved keys (version 0 or 1) migrate once", K.NeedsMigration(0, 2) and K.NeedsMigration(1, 2) and K.NeedsMigration(nil, 2))

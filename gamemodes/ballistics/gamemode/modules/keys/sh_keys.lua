@@ -189,29 +189,31 @@ function K.MedRelease(orig, heldFor, hold, wheelOpen, hoverId, holding)
 	return orig(heldFor, hold, wheelOpen, hoverId, holding)
 end
 
+-- F1 list. Each row: key (keycap text, "" for a sub-line), action, sub
+-- (indented smaller line under the key above), gap (section break before it).
+-- Number keys first, then letters. Teams/Admin live in the top bar instead.
 function K.Rows(binds)
 	binds = type(binds) == "table" and binds or {}
-	local function line(key, action)
-		return { key = key, action = action }
+	local rows = {}
+	local function key(k, action, gap)
+		rows[#rows + 1] = { key = k, action = action, gap = gap == true }
 	end
-	local rows = {
-		line(binds.customize or "C", "Customize / buy wheel"),
-		line(binds.throw or "3", "Tap quick throw / hold menu"),
-		line(binds.inspect or "G", "Medical / self-inspect"),
-		line(binds.blindfire or "H", "Blindfire menu"),
-		line(binds.safety or "E", "Safety / melee"),
-		line("E (double-tap)", "Drag / drop body"),
-		line("E (hold 1s)", "Loot inventory / E close"),
-		line(binds.teams or "F2", "Teams (lobby)"),
-		line(binds.inventory or "4", "Inventory"),
-		line("1 2", "Weapons"),
-	}
-	if binds.isAdmin == true then
-		rows[#rows + 1] = line(binds.admin or "F3", "Admin")
+	local function sub(action)
+		rows[#rows + 1] = { key = "", action = action, sub = true }
 	end
-	if type(binds.med) == "string" and binds.med ~= "" then
-		rows[#rows + 1] = line(binds.med, "Medical wheel")
-	end
+	key("1 / 2", "Guns (press again for knife)")
+	key(binds.throw or "3", "Throwables")
+	sub("Tap: quick throw")
+	sub("Hold: grenade wheel")
+	key(binds.inventory or "4", "Inventory")
+	key(binds.customize or "C", "Customize weapon", true)
+	key(binds.safety or "E", "Use")
+	sub("Tap: safety / melee")
+	sub("Double-tap: drag / drop body")
+	sub("Hold: loot body")
+	key(binds.inspect or "G", "Check injuries (yours, or who you aim at)")
+	key(binds.blindfire or "H", "Blindfire")
+	if binds.med ~= "" then key(binds.med or "Z", "Hold: medical wheel") end
 	return rows
 end
 
