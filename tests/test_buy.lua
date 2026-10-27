@@ -47,7 +47,7 @@ check("buy files do not bind the C key", not buySrc:find("menu_context", 1, true
 check("wheel exposes Open Hide IsOpen", buySrc:find("BuyWheel.Open", 1, true)
 	and buySrc:find("BuyWheel.Hide", 1, true)
 	and buySrc:find("BuyWheel.IsOpen", 1, true))
-check("weapon tab groups by category", buySrc:find("WeaponGroups", 1, true) ~= nil)
+check("weapon tab splits light and heavy columns by category", buySrc:find("WeaponColumns", 1, true) ~= nil)
 check("buy wheel does not switch weapons on the scroll wheel", buySrc:find("bal_slot", 1, true) ~= nil and not buySrc:find("OnMouseWheeled", 1, true))
 
 local compiled = loadfile("gamemodes/ballistics/gamemode/modules/buy/cl_buywheel.lua")
