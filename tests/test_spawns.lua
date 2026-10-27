@@ -193,6 +193,13 @@ check("a trace starts at the slice when the camera is above it", D.SliceStart(50
 check("a trace keeps a start that is already below the slice", D.SliceStart(40, 120) == 40 and D.SliceStart(120, 120) == 120)
 check("a trace with no slice keeps its start", D.SliceStart(40, nil) == 40 and D.SliceStart(40, 0 / 0) == 40)
 check("a non-finite start is not a slice start", D.SliceStart(nil, 10) == nil and D.SliceStart(1 / 0, 10) == nil)
+local rlo, rhi = D.SliceRange(100)
+check("slice range runs from a storey below ground to about five above", rlo == -412 and rhi == 1636)
+local zlo, zhi = D.SliceRange(nil)
+check("slice range with no ground centres on zero", zlo == -512 and zhi == 1536)
+check("slice snaps to 8 units inside the range", D.SliceSnap(13, -412, 1636) == 12 and D.SliceSnap(-9999, -412, 1636) == -412 and D.SliceSnap(9999, -412, 1636) == 1636)
+check("a bad slice value snaps to the top (no cut)", D.SliceSnap(nil, 0, 64) == 64 and D.SliceSnap(1, nil, 64) == nil)
+check("slice label is relative to ground", D.SliceLabel(228, 100) == "+128" and D.SliceLabel(36, 100) == "-64" and D.SliceLabel(100, 100) == "0" and D.SliceLabel(nil, 0) == "No cut")
 
 local nodes = 0
 local enabled = 0

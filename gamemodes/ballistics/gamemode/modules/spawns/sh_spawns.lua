@@ -744,6 +744,35 @@ function D.SliceStart(z, slice)
 	return z
 end
 
+-- Slider range around a ground height: a storey below to about five above.
+D.SLICE_BELOW, D.SLICE_ABOVE, D.SLICE_STEP = 512, 1536, 8
+
+function D.SliceRange(ground)
+	ground = tonumber(ground)
+	if not finite(ground) then ground = 0 end
+	return ground - D.SLICE_BELOW, ground + D.SLICE_ABOVE
+end
+
+function D.SliceSnap(v, lo, hi)
+	v = tonumber(v)
+	lo, hi = tonumber(lo), tonumber(hi)
+	if not finite(lo) or not finite(hi) then return nil end
+	if hi < lo then lo, hi = hi, lo end
+	if not finite(v) then return hi end
+	v = lo + math.floor((v - lo) / D.SLICE_STEP + 0.5) * D.SLICE_STEP
+	if v < lo then v = lo end
+	if v > hi then v = hi end
+	return v
+end
+
+function D.SliceLabel(v, ground)
+	v, ground = tonumber(v), tonumber(ground) or 0
+	if not finite(v) then return "No cut" end
+	local d = math.floor(v - ground + 0.5)
+	if d > 0 then return "+" .. d end
+	return tostring(d)
+end
+
 local function clampCount(n, fallback)
 	n = math.floor(tonumber(n) or fallback)
 	if n < 1 then n = 1 end

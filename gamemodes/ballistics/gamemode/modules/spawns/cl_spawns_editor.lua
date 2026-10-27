@@ -275,25 +275,42 @@ local function worldBounds()
 	return vec3(a), vec3(b)
 end
 
--- Map Z when it is usable, otherwise the overhead view's own vertical span.
+local sliceGround = 0
+
+-- Ground zero: the floor under the local player, else the spawn flags, else info_player_start.
+local function findGround()
+	local ply = LocalPlayer and LocalPlayer()
+	if IsValid(ply) and util and util.TraceLine then
+		local eye = ply:EyePos()
+		local tr = util.TraceLine({ start = eye, endpos = eye - Vector(0, 0, 16384), mask = MASK_SOLID_BRUSHONLY })
+		if tr and tr.Hit and finiteNum(tr.HitPos.z) then return tr.HitPos.z end
+		if finiteNum(ply:GetPos().z) then return ply:GetPos().z end
+	end
+	local snap = BALLISTICS.Spawns.Snapshot and BALLISTICS.Spawns.Snapshot()
+	if type(snap) == "table" then
+		local lo
+		for _, k in ipairs({ "good", "bad" }) do
+			local f = snap[k]
+			local z = type(f) == "table" and type(f.pos) == "table" and tonumber(f.pos.z)
+			if finiteNum(z) and (not lo or z < lo) then lo = z end
+		end
+		if lo then return lo end
+	end
+	if ents and ents.FindByClass then
+		local e = ents.FindByClass("info_player_start")[1]
+		if IsValid(e) then return e:GetPos().z end
+	end
+	return 0
+end
+
+-- Range comes from ground zero, not the world bounds (skybox roofs are far up).
 local function measureSlice()
 	local mins, maxs = worldBounds()
-	local bottom, top = D.SliceBounds(mins, maxs)
 	mapXY = nil
-	if bottom and top and (top - bottom) >= 1 then
-		mapXY = xyBounds(mins, maxs)
-	else
-		local hi = (cam and tonumber(cam.z)) or 4096
-		local lo = cam and tonumber(cam.groundZ) or nil
-		bottom, top = D.SliceBounds({ z = lo }, { z = hi })
-		if not bottom or (top - bottom) < 1 then
-			bottom, top = D.SliceBounds({ z = hi - 8192 }, { z = hi })
-		end
-	end
-	sliceBottom = bottom or 0
-	sliceTop = top or (sliceBottom + 1)
-	if sliceTop < sliceBottom then sliceBottom, sliceTop = sliceTop, sliceBottom end
-	if sliceTop - sliceBottom < 1 then sliceTop = sliceBottom + 1 end
+	local bottom, top = D.SliceBounds(mins, maxs)
+	if bottom and top and (top - bottom) >= 1 then mapXY = xyBounds(mins, maxs) end
+	sliceGround = findGround()
+	sliceBottom, sliceTop = D.SliceRange(sliceGround)
 	sliceZ = sliceTop
 end
 
@@ -301,9 +318,11 @@ local function applySliceSlider()
 	local slider = toolbar and toolbar.balSlice
 	if not slider or (IsValid and not IsValid(slider)) then return end
 	muteSlice = true
-	if slider.SetMin then slider:SetMin(sliceBottom) end
-	if slider.SetMax then slider:SetMax(sliceTop) end
-	if slider.SetValue then slider:SetValue(sliceZ or sliceTop) end
+	if slider.SetMin then slider:SetMin(sliceBottom - sliceGround) end
+	if slider.SetMax then slider:SetMax(sliceTop - sliceGround) end
+	if slider.SetValue then slider:SetValue((sliceZ or sliceTop) - sliceGround) end
+	local box = toolbar.balSliceBox
+	if IsValid(box) then box:SetText(sliceZ and sliceZ < sliceTop and D.SliceLabel(sliceZ, sliceGround) or "No cut") end
 	muteSlice = false
 end
 
@@ -797,44 +816,89 @@ local function ensureToolbar()
 	hint:SetText("WASD pan, wheel zooms, click the ground. Squad: arrows or shift+wheel rotate. Sliders resize.")
 	if hint.SetTextColor then hint:SetTextColor(Color(170, 170, 170)) end
 
+	local sliceTip = "Hide everything above this height (relative to the floor under you). The far right end is no cut."
 	local sliceLine = vgui.Create("DPanel", toolbar)
 	sliceLine:Dock(TOP)
-	sliceLine:SetTall(32)
+	sliceLine:SetTall(60)
 	sliceLine:DockMargin(0, 4, 0, 0)
+	sliceLine:DockPadding(8, 2, 8, 2)
 	sliceLine.Paint = function(_, w, h)
 		surface.SetDrawColor(32, 34, 40, 255)
 		surface.DrawRect(0, 0, w, h)
 	end
-	if sliceLine.SetTooltip then
-		sliceLine:SetTooltip("Hide everything above this height. The top of the range is no cut.")
+	if sliceLine.SetTooltip then sliceLine:SetTooltip(sliceTip) end
+
+	-- Set the cut (absolute Z), snapped to 8 units; the top end means no cut.
+	local function setSlice(z)
+		z = D.SliceSnap(z, sliceBottom, sliceTop)
+		if not z then return end
+		sliceZ = z
+		applySliceSlider()
 	end
+
+	local tools = vgui.Create("DPanel", sliceLine)
+	tools:Dock(BOTTOM)
+	tools:SetTall(24)
+	tools.Paint = function() end
+	local function toolButton(text, wide, fn)
+		local b = vgui.Create("DButton", tools)
+		b:Dock(LEFT)
+		b:SetWide(wide)
+		b:DockMargin(0, 0, 6, 0)
+		b:SetText(text)
+		b.DoClick = fn
+		return b
+	end
+	toolButton("Set from me", 90, function()
+		local ply = LocalPlayer and LocalPlayer()
+		if IsValid(ply) then setSlice(ply:EyePos().z + 32) end
+	end)
+	toolButton("No cut", 70, function() setSlice(sliceTop) end)
+	local box = vgui.Create("DTextEntry", tools)
+	box:Dock(LEFT)
+	box:SetWide(70)
+	box:SetNumeric(false)
+	if box.SetTooltip then box:SetTooltip("Exact height relative to the floor, e.g. +128 or -64. Enter to apply.") end
+	box.OnEnter = function(pnl)
+		local txt = tostring(pnl:GetValue() or ""):gsub("%s", ""):gsub("^%+", "")
+		local rel = tonumber(txt)
+		if rel then setSlice(sliceGround + rel) else applySliceSlider() end
+	end
+	box.OnLoseFocus = function(pnl) pnl:OnEnter() end
+	toolbar.balSliceBox = box
+
 	local slice = vgui.Create("DNumSlider", sliceLine)
 	slice:Dock(FILL)
-	slice:DockMargin(8, 0, 8, 0)
 	slice:SetText("Slice height")
 	if slice.SetDark then slice:SetDark(false) end
 	if slice.SetDecimals then slice:SetDecimals(0) end
-	if slice.SetTooltip then
-		slice:SetTooltip("Hide everything above this height. The top of the range is no cut.")
-	end
+	if slice.SetTooltip then slice:SetTooltip(sliceTip) end
 	if slice.Label and slice.Label.SetTextColor then
 		slice.Label:SetTextColor(Color(230, 230, 230))
 	end
-	muteSlice = true
-	if slice.SetMin then slice:SetMin(sliceBottom) end
-	if slice.SetMax then slice:SetMax(sliceTop) end
-	if slice.SetValue then slice:SetValue(sliceZ or sliceTop) end
-	muteSlice = false
+	toolbar.balSlice = slice
+	applySliceSlider()
 	slice.OnValueChanged = function(_, val)
 		if muteSlice or editing ~= true then return end
-		local z = D.ClampSlice(val, sliceBottom, sliceTop)
-		if not z or math.abs(z - sliceTop) < 0.5 then
-			sliceZ = sliceTop
-			return
-		end
+		local z = D.SliceSnap(sliceGround + (tonumber(val) or 0), sliceBottom, sliceTop)
+		if not z then return end
 		sliceZ = z
+		muteSlice = true
+		if IsValid(box) then box:SetText(z < sliceTop and D.SliceLabel(z, sliceGround) or "No cut") end
+		muteSlice = false
 	end
-	toolbar.balSlice = slice
+	-- Wheel over any part of the slider nudges by 16 and does not zoom the map.
+	local function wheel(_, delta)
+		if editing ~= true then return true end
+		setSlice((sliceZ or sliceTop) + (delta > 0 and 16 or -16))
+		return true
+	end
+	local function hookWheel(pnl)
+		if not IsValid(pnl) then return end
+		pnl.OnMouseWheeled = wheel
+		for _, c in ipairs(pnl:GetChildren() or {}) do hookWheel(c) end
+	end
+	hookWheel(slice)
 
 	local bar = vgui.Create("DPanel", toolbar)
 	bar:Dock(BOTTOM)
