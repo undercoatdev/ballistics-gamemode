@@ -705,6 +705,10 @@ local function uvec(x, y, z)
 	getmetatable(u).__index = function(_, k) return ({ x = x, y = y, z = z })[k] end
 	return u
 end
+-- Mirror GMod: type() of a Vector is "Vector", not "userdata".
+local realType = type
+type = function(v) if realType(v) == "userdata" then return "Vector" end return realType(v) end
 check("distance reads userdata vectors", math.abs(L.Dist(uvec(0, 0, 0), uvec(30, 40, 0)) - 50) < 1e-6)
 check("a still body has not moved", L.Moved({ x = 10, y = 20, z = 30 }, uvec(10, 20, 30), 24) == false)
+type = realType
 if failed then os.exit(1) end

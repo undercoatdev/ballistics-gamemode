@@ -16,3 +16,10 @@ function E.OnRelease(press, now, dragging)
 	if held < 0 or held > E.TAP_MAX then return nil end
 	return dragging and "drop" or "grab"
 end
+
+function E.HintText(keyName, dragging, aimingBody)
+	if type(keyName) ~= "string" or keyName == "" then return nil end
+	if dragging then return "Tap " .. keyName .. " to drop" end
+	if aimingBody then return "Tap " .. keyName .. " to drag, hold " .. keyName .. " to loot" end
+	return nil
+end

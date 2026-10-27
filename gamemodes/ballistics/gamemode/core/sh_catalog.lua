@@ -74,6 +74,16 @@ function BALLISTICS.Catalog.WeaponColumns(list)
 	return { light = BALLISTICS.Catalog.WeaponGroups(light), heavy = BALLISTICS.Catalog.WeaponGroups(heavy) }
 end
 
+-- Height of one buy-panel gun column: title, then per group a header and
+-- one row per gun. Must match cl_buywheel refill().
+function BALLISTICS.Catalog.ColumnHeight(groups, title, head, row)
+	local h = title or 0
+	for i = 1, #(groups or {}) do
+		h = h + (head or 0) + row * #(groups[i].items or {})
+	end
+	return h
+end
+
 -- Spawn-menu icon path (the Q menu uses materials/entities/<class>.png).
 function BALLISTICS.Catalog.IconPath(item)
 	if type(item) ~= "table" then return nil end

@@ -393,8 +393,16 @@ local function layout()
 	root:SetPos(0, 0)
 	root:SetSize(sw, sh)
 	local cw = math.min(860, sw - 40)
-	-- Taller so the two gun columns fit with no scrolling (1080p: 900).
-	local ch = math.min(900, sh - 40)
+	-- Tall enough for the taller gun column with no scrolling, no more.
+	-- Chrome: header 64 + tabs 44 + status 32 + list margins 16, plus padding.
+	local need = 560
+	if BALLISTICS.Catalog and BALLISTICS.Catalog.WeaponColumns and BALLISTICS.Catalog.ColumnHeight then
+		local list = BALLISTICS.Buy and BALLISTICS.Buy.List and BALLISTICS.Buy.List("weapon") or nil
+		local cols = BALLISTICS.Catalog.WeaponColumns(list)
+		local tall = math.max(BALLISTICS.Catalog.ColumnHeight(cols.light, 26, 24, 72), BALLISTICS.Catalog.ColumnHeight(cols.heavy, 26, 24, 72))
+		need = 156 + tall + 12
+	end
+	local ch = math.min(need, sh - 40)
 	if cw < 280 then cw = sw end
 	if ch < 220 then ch = sh end
 	card:SetSize(cw, ch)

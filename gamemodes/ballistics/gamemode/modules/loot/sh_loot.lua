@@ -48,12 +48,13 @@ local function clamp(n, lo, hi, fallback)
 	return n
 end
 
--- GMod Vectors are userdata, not tables. The old table-only check read every
--- Vector as 0,0,0: distances were 0 and the hold always saw the body "moved".
+-- GMod Vectors are userdata AND GMod's type() returns "Vector" for them, so
+-- a type check on "table"/"userdata" still read every Vector as 0,0,0
+-- (dist=0, and the hold always saw the body "moved"). Index anything that is
+-- not a plain scalar.
+local SCALAR = { number = true, string = true, boolean = true, ["function"] = true }
 local function coord(v, key)
-	if v == nil then return 0 end
-	local t = type(v)
-	if t ~= "table" and t ~= "userdata" then return 0 end
+	if v == nil or SCALAR[type(v)] then return 0 end
 	local ok, n = pcall(function() return v[key] end)
 	return ok and tonumber(n) or 0
 end

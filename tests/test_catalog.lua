@@ -126,4 +126,5 @@ check("gun icon path", BALLISTICS.Catalog.IconPath(BALLISTICS.Catalog.Get("tacrp
 check("grenade icon path", BALLISTICS.Catalog.IconPath(BALLISTICS.Catalog.Get("nade_frag")) == "entities/tacrp_ammo_frag.png")
 check("med icon path", BALLISTICS.Catalog.IconPath(BALLISTICS.Catalog.Get("med_pills")) == "entities/pb_med_extrasmall.png")
 
+check("column height counts title, headers and rows", BALLISTICS.Catalog.ColumnHeight(cols.heavy, 26, 24, 72) == 26 + 4 * 24 + 4 * 72)
 if failed then os.exit(1) end
