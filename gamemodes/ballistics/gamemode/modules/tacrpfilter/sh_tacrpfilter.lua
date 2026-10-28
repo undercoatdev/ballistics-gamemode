@@ -1,7 +1,8 @@
 -- TacRP trims for this gamemode (no TacRP file edits):
 -- 1) The quick-grenade wheel only lists throwables sold in our buy menu.
 -- 2) Novelty / reserve-ammo atts are hidden, refused and stripped:
---    shotgun+revolver roulette, dragon's breath, surplus rounds, and the
+--    shotgun+revolver roulette, dragon's breath, surplus rounds (any id or
+--    display name containing "surplus", including bolt_surplus), and the
 --    Gun Bag (acc_duffelbag / category acc_duffle).
 BALLISTICS = BALLISTICS or {}
 BALLISTICS.TacFilter = BALLISTICS.TacFilter or {}
@@ -13,8 +14,24 @@ F.BLOCKED_ATTS = {
 	ammo_roulette = true,
 	ammo_surplus = true,
 	ammo_surplus2 = true,
+	bolt_surplus = true,
 	acc_duffelbag = true,
 }
+
+local SURPLUS_FIELDS = { "PrintName", "FullName", "Name", "ShortName", "DisplayName" }
+
+local function textHasSurplus(text)
+	if type(text) ~= "string" then return false end
+	return string.find(string.lower(text), "surplus", 1, true) ~= nil
+end
+
+local function attHasSurplus(att)
+	if type(att) ~= "table" then return false end
+	for i = 1, #SURPLUS_FIELDS do
+		if textHasSurplus(att[SURPLUS_FIELDS[i]]) then return true end
+	end
+	return false
+end
 
 -- Ammo types of the buy-menu throwables (frag, flashbang, smoke, thermite).
 function F.AllowedNadeAmmo()
@@ -33,16 +50,19 @@ function F.NadeAllowed(nade, allowed)
 end
 
 function F.AttBlocked(name)
-	return type(name) == "string" and F.BLOCKED_ATTS[name] == true
+	if type(name) ~= "string" then return false end
+	if F.BLOCKED_ATTS[name] == true or textHasSurplus(name) then return true end
+	local atts = TacRP and TacRP.Attachments
+	if type(atts) ~= "table" then return false end
+	return attHasSurplus(atts[name])
 end
 
 -- Hide blocked attachments from every list: GetAttsForCats skips an
 -- attachment whose Compatibility returns false.
 function F.HideAtts()
 	if type(TacRP) ~= "table" or type(TacRP.Attachments) ~= "table" then return end
-	for name in pairs(F.BLOCKED_ATTS) do
-		local att = TacRP.Attachments[name]
-		if type(att) == "table" then
+	for name, att in pairs(TacRP.Attachments) do
+		if type(att) == "table" and F.AttBlocked(name) then
 			att.Compatibility = function() return false end
 			att.Free = false
 		end

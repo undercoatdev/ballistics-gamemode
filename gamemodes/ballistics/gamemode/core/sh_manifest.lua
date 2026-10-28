@@ -29,6 +29,7 @@ BALLISTICS.Manifest = {
 		"modules/bots/sh_bots.lua",
 		"modules/bots/sv_bots.lua",
 		"modules/buy/cl_buywheel.lua",
+		"modules/buy/cl_inspect_close.lua",
 		"modules/buy/sh_buy.lua",
 		"modules/buy/sv_buy.lua",
 		"modules/cleanup/cl_cleanup.lua",

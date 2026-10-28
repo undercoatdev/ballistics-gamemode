@@ -9,6 +9,7 @@ BALLISTICS = BALLISTICS or {}
 BALLISTICS.Keys = BALLISTICS.Keys or {}
 
 local K = BALLISTICS.Keys
+if type(IN_ZOOM) == "number" and IN_ZOOM > 0 then K.IN_ZOOM = IN_ZOOM end
 local HINTS = "tacrp_hints"
 local THROW = "bal_throw_key"
 local INV = "bal_inventory_key"
@@ -228,6 +229,11 @@ end
 
 local function applyCmd(cmd)
 	if cmd == nil or type(cmd.GetButtons) ~= "function" or type(cmd.SetButtons) ~= "function" then return end
+	-- H is blindfire. TacRP turns that key into the grenade wheel when
+	-- +grenade2 is unbound, so the flag is set here, after TacRP's CreateMove.
+	local hDown = keyDown(K.KEY_H or 18) and not typing()
+	local ply = localPly()
+	if ply ~= nil then ply.TacRPBlindFireDown = hDown == true end
 	if type(K.Step) ~= "function" or type(K.Intent) ~= "function" or type(K.ApplyButtons) ~= "function" then return end
 	local key = BALLISTICS.Keys.ThrowKey()
 	local down = key > 0 and keyDown(key)
@@ -253,6 +259,10 @@ local function applyCmd(cmd)
 	buttons = K.ApplyButtons(buttons, intent)
 	if type(K.BashButtons) == "function" then
 		buttons = K.BashButtons(buttons, keyDown(K.KEY_V or 32))
+	end
+	if type(K.BlindFireButtons) == "function" then
+		local g2OnH = type(K.SameBind) == "function" and K.SameBind("+grenade2", K.KEY_H or 18, lookup, codeOf) == true
+		buttons = K.BlindFireButtons(buttons, hDown, g2OnH, throwState.menu == true)
 	end
 	cmd:SetButtons(buttons)
 end
@@ -349,7 +359,10 @@ function BALLISTICS.Keys.HintRows()
 		throw = keyLabel(throw, "3"),
 		inventory = keyLabel(BALLISTICS.Keys.InventoryKey(), "4"),
 		inspect = keyLabel(inspect, "G"),
-		blindfire = bindLabel("+zoom", "H"),
+		-- H, not +zoom. The other rows already match a handler: 1/2 loadout,
+		-- throw and inventory convars, C +menu_context, E +use, V+LMB bash,
+		-- G the inspect convar, Z the forced med key.
+		blindfire = "H",
 		safety = bindLabel("+use", "E"),
 		teams = bindLabel("gm_showteam", "F2"),
 		admin = bindLabel("gm_showspare1", "F3"),

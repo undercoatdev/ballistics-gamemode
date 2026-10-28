@@ -163,14 +163,15 @@ input = {
 	GetKeyCode = function(name) return codes[string.lower(tostring(name))] end,
 	GetKeyName = function(code) return names[code] end,
 }
+local ply = {
+	Alive = function() return alive end,
+	IsTyping = function() return typingNow end,
+	GetActiveWeapon = function()
+		return { GetClass = function() return className end }
+	end,
+}
 function LocalPlayer()
-	return {
-		Alive = function() return alive end,
-		IsTyping = function() return typingNow end,
-		GetActiveWeapon = function()
-			return { GetClass = function() return className end }
-		end,
-	}
+	return ply
 end
 local cmd = {
 	GetButtons = function() return buttons end,
@@ -195,8 +196,12 @@ convars.tacrp_hints = 1
 convars.playerballistics_key_inspect = 17
 convars.playerballistics_med_key = 12
 hook.Add("CreateMove", "TacRP_CreateMove", function(c)
-	if input.IsKeyDown(K.KEY_G) and not binds["+grenade1"] then
+	if input.IsKeyDown(K.KEY_G) and not binds["+grenade1"] and not typingNow then
 		c:SetButtons(c:GetButtons() + K.IN_GRENADE1)
+	end
+	-- Unbound +grenade2: TacRP hardcodes KEY_H onto the grenade wheel.
+	if input.IsKeyDown(K.KEY_H) and not binds["+grenade2"] and not typingNow then
+		c:SetButtons(c:GetButtons() + K.IN_GRENADE2)
 	end
 end)
 
@@ -243,6 +248,29 @@ check("a hold opens the throwable menu", move(2.3) == K.IN_GRENADE2)
 keys[K.KEY_3] = false
 check("releasing the menu does not also throw", move(2.5) == 0)
 
+keys[K.KEY_H] = true
+check("holding H blindfires and does not open the wheel", move(4) == K.IN_ZOOM and ply.TacRPBlindFireDown == true)
+keys[K.KEY_H] = false
+check("releasing H clears blindfire", move(4.1) == 0 and ply.TacRPBlindFireDown == false)
+keys[K.KEY_H] = true
+typingNow = true
+check("typing blocks blindfire", move(4.2) == 0 and ply.TacRPBlindFireDown == false)
+typingNow = false
+keys[K.KEY_H] = false
+binds["+grenade2"] = "h"
+keys[K.KEY_H] = true
+buttons = K.IN_GRENADE2
+clock = 4.3
+hook.Run("CreateMove", cmd)
+check("H bound as +grenade2 is still blindfire", buttons == K.IN_ZOOM and ply.TacRPBlindFireDown == true)
+keys[K.KEY_H] = false
+binds["+grenade2"] = "mouse3"
+buttons = K.IN_GRENADE2
+clock = 4.4
+hook.Run("CreateMove", cmd)
+check("a real grenade2 button survives while H is up", buttons == K.IN_GRENADE2 and ply.TacRPBlindFireDown == false)
+binds["+grenade2"] = nil
+
 binds["+grenade1"] = "3"
 keys[K.KEY_3] = true
 move(3)
@@ -254,7 +282,11 @@ hook.Run("Think")
 check("the list stays closed after spawn", BALLISTICS.Keys.ListOpen() == false)
 local hinted = BALLISTICS.Keys.HintRows()
 local medRow = hinted[#hinted]
-check("hints read the live binds", hinted[1].key == "1 / 2" and hinted[2].key == "3" and hinted[5].key == "4" and hinted[5].action == "Inventory" and hinted[6].key == "C" and hinted[7].key == "E" and hinted[11].key == "V+LMB" and hinted[12].key == "G" and hinted[12].action == "Check injuries (yours, or who you aim at)" and hinted[13].key == "H" and medRow.action == "Hold: medical wheel" and medRow.key == "Z")
+check("hints read the live binds", hinted[1].key == "1 / 2" and hinted[2].key == "3" and hinted[5].key == "4" and hinted[5].action == "Inventory" and hinted[6].key == "C" and hinted[7].key == "E" and hinted[11].key == "V+LMB" and hinted[12].key == "G" and hinted[12].action == "Check injuries (yours, or who you aim at)" and hinted[13].key == "H" and hinted[13].action == "Blindfire" and medRow.action == "Hold: medical wheel" and medRow.key == "Z")
+binds["+zoom"] = "mouse3"
+local forcedBlind = BALLISTICS.Keys.HintRows()
+check("blindfire stays H when zoom is bound elsewhere", forcedBlind[13].key == "H" and forcedBlind[13].action == "Blindfire")
+binds["+zoom"] = nil
 clock = 10
 hook.Run("Think")
 check("the list collapses when the reveal ends", BALLISTICS.Keys.ListOpen() == false)
@@ -334,10 +366,18 @@ end
 
 check("old saved keys (version 0 or 1) migrate once", K.NeedsMigration(0, 2) and K.NeedsMigration(1, 2) and K.NeedsMigration(nil, 2))
 check("migrated keys are not reset again", not K.NeedsMigration(2, 2) and not K.NeedsMigration(3, 2))
+check("key layout version is 4", K.KEYS_VERSION == 4 and K.IN_ZOOM == 524288)
+check("version 3 still migrates once", K.NeedsMigration(3, 4) and K.NeedsMigration(0, 4) and not K.NeedsMigration(4, 4))
 check("default codes are 3 for throwables and 4 for inventory", K.KEY_3 == 4 and K.KEY_4 == 5)
 
 do
 	local IN2 = K.IN_GRENADE2
+	local zoom = K.IN_ZOOM
+	check("H is blindfire, not TacRP's grenade fallback", K.BlindFireButtons(K.ApplyButtons(IN2, K.Intent({ menu = false })), true, false, false) == zoom)
+	check("H bound as grenade2 is still blindfire", K.BlindFireButtons(IN2, true, true, false) == zoom)
+	check("a throw hold keeps the wheel while H blindfires", K.BlindFireButtons(IN2, true, true, true) == IN2 + zoom)
+	check("releasing H leaves a real grenade button", K.BlindFireButtons(IN2, false, true, false) == IN2)
+	check("H does not stack the zoom bit", K.BlindFireButtons(zoom, true, false, false) == zoom)
 	local i1 = K.Intent({ menu = false })
 	check("unbound TacRP H fallback cannot open the wheel", K.ApplyButtons(IN2, i1) == 0)
 	local iBound = K.Intent({ menu = false, grenade2Bound = true })
@@ -358,6 +398,8 @@ do
 	check("non-TacRP weapons are left alone", K.UnlockNade({ CanQuickNade = false, SubCatType = "9Throwable" }) == false)
 	local src = io.open("gamemodes/ballistics/gamemode/modules/keys/cl_keys.lua"):read("*a")
 	check("the wheel fallback key is the throwables key", src:find("TacRP.GRENADE2_Backup = BALLISTICS.Keys.ThrowKey()", 1, true) ~= nil)
+	check("blindfire is forced onto H", src:find('blindfire = "H"', 1, true) ~= nil and src:find("TacRPBlindFireDown", 1, true) ~= nil and src:find('bindLabel("+zoom"', 1, true) == nil)
+	check("version migration still resets throw and inventory", src:find("RunConsoleCommand(THROW", 1, true) ~= nil and src:find("RunConsoleCommand(INV", 1, true) ~= nil)
 end
 
 

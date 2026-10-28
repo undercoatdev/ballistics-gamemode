@@ -1072,7 +1072,11 @@ if BALLISTICS.Net and BALLISTICS.Net.Register then
 		local left = tonumber(payload.timeLeft) or 0
 		if left < 0 then left = 0 end
 		deadline = now() + left
-		applyShow(payload.open == true)
+		local open = payload.open == true
+		applyShow(open)
+		if open and type(BALLISTICS.CloseInspect) == "function" then
+			BALLISTICS.CloseInspect()
+		end
 	end, {
 		read = function()
 			return { open = net.ReadBool(), timeLeft = net.ReadFloat() }

@@ -19,6 +19,7 @@ K.KEY_V = 32
 K.KEY_F1 = 92
 K.IN_ATTACK = 1
 K.IN_USE = 32
+K.IN_ZOOM = 524288 -- blindfire (Source IN_ZOOM)
 K.IN_WEAPON1 = 1048576 -- TacRP.IN_MELEE
 K.IN_GRENADE1 = 8388608
 K.IN_GRENADE2 = 16777216
@@ -27,7 +28,8 @@ K.PULSE = 3
 K.REVEAL = 4
 K.TAG = "F1 Keybinds"
 -- Bump when default key codes change so saved client values are reset once.
-K.KEYS_VERSION = 3
+-- 4: H is blindfire. The migration still resets throw to 3 and inventory to 4.
+K.KEYS_VERSION = 4
 
 function K.NeedsMigration(saved, want)
 	return (tonumber(saved) or 0) < (tonumber(want) or K.KEYS_VERSION)
@@ -181,6 +183,24 @@ function K.ApplyButtons(buttons, intent)
 	if intent.add1 then buttons = setBit(buttons, K.IN_GRENADE1, true) end
 	if intent.strip2 then buttons = setBit(buttons, K.IN_GRENADE2, false) end
 	if intent.add2 then buttons = setBit(buttons, K.IN_GRENADE2, true) end
+	return buttons
+end
+
+-- H is blindfire. TacRP's CreateMove adds IN_GRENADE2 from KEY_H when
+-- +grenade2 is unbound; ApplyButtons already strips that fallback.
+-- grenade2OnH: the engine set IN_GRENADE2 because +grenade2 is H itself.
+-- keepWheel: the throwables hold wants that bit. Leave any other +grenade2.
+function K.BlindFireButtons(buttons, hDown, grenade2OnH, keepWheel)
+	buttons = tonumber(buttons) or 0
+	if buttons ~= buttons or buttons < 0 then buttons = 0 end
+	buttons = math.floor(buttons)
+	if hDown ~= true then return buttons end
+	if keepWheel ~= true and grenade2OnH == true and hasBit(buttons, K.IN_GRENADE2) then
+		buttons = setBit(buttons, K.IN_GRENADE2, false)
+	end
+	if not hasBit(buttons, K.IN_ZOOM) then
+		buttons = setBit(buttons, K.IN_ZOOM, true)
+	end
 	return buttons
 end
 
