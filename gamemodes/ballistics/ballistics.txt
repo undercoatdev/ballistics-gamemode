@@ -1,7 +1,7 @@
 "ballistics"
 {
 	"base"		"base"
-	"title"		"Ballistics Game Mode"
+	"title"		"Critical Shot"
 	"maps"		""
 	"menusystem"	"1"
 	"workshopid"	""

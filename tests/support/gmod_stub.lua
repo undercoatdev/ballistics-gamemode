@@ -116,7 +116,7 @@ function engine.ActiveGamemode() return "ballistics" end
 GM = GM or {}
 GM.FolderName = "ballistics"
 GM.Folder = "gamemodes/ballistics"
-GM.Name = "Ballistics Game Mode"
+GM.Name = "Critical Shot"
 
 function MsgN(...) print(...) end
 function Msg(...) io.write(...) end

@@ -1,2 +1,2 @@
--- Ballistics Game Mode: client entry point.
+-- Critical Shot: client entry point.
 include("shared.lua")
