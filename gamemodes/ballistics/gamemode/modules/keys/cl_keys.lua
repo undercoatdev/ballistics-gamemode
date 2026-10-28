@@ -385,7 +385,8 @@ local function paint()
 	local main, small = smallFont()
 	local white = Color(235, 235, 235)
 	local dim = Color(180, 186, 196)
-	local PAD, CAP, MAINH, SUBH, GAP = 6, 34, 20, 15, 6
+	local PAD, MAINH, SUBH, GAP = 6, 20, 15, 6
+	local CAP_MIN, CAP_PAD = 34, 10
 	if not open then
 		surface.SetFont(main)
 		local tw = surface.GetTextSize(tag) or 60
@@ -397,6 +398,17 @@ local function paint()
 		return
 	end
 	local rows = BALLISTICS.Keys.HintRows()
+	-- Keycap column grows with the widest label (V+LMB is wider than E / C).
+	surface.SetFont(small)
+	local CAP = CAP_MIN
+	for i = 1, #rows do
+		local r = rows[i]
+		if not r.sub and r.key and r.key ~= "" then
+			local kw = surface.GetTextSize(tostring(r.key)) or 0
+			local need = math.floor(kw + CAP_PAD)
+			if need > CAP then CAP = need end
+		end
+	end
 	local h, w = PAD * 2, 0
 	for i = 1, #rows do
 		local r = rows[i]
