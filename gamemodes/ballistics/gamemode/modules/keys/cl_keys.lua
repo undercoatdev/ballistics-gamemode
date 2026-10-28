@@ -247,7 +247,11 @@ local function applyCmd(cmd)
 	})
 	local ok, buttons = pcall(cmd.GetButtons, cmd)
 	if not ok then return end
-	cmd:SetButtons(K.ApplyButtons(buttons, intent))
+	buttons = K.ApplyButtons(buttons, intent)
+	if type(K.BashButtons) == "function" then
+		buttons = K.BashButtons(buttons, keyDown(K.KEY_V or 32))
+	end
+	cmd:SetButtons(buttons)
 end
 
 local function tacWrapped()

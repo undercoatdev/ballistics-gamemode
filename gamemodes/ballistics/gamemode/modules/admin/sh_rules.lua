@@ -80,15 +80,6 @@ local GENERAL = {
 		decimals = 0,
 		blurb = "Most of one throwable a player can carry. The buy menu and looting both stop here.",
 	},
-	{
-		path = "BulletPushForce",
-		label = "Bullet push force",
-		kind = "number",
-		min = 0,
-		max = 2,
-		decimals = 2,
-		blurb = "How hard bullets push bodies and props. 1 = TacRP normal, 0.5 = half.",
-	},
 }
 
 local SETTINGS = {
@@ -101,6 +92,15 @@ local SETTINGS = {
 			{ id = "realistic", label = "Realistic" },
 			{ id = "arcade", label = "Arcade" },
 		},
+	},
+	{
+		path = "BulletPushForce",
+		label = "Bullet push force",
+		kind = "number",
+		min = 0,
+		max = 2,
+		decimals = 2,
+		blurb = "How hard bullets push bodies and props. 1 = TacRP normal, 0.5 = half (soft), 0.2 = light.",
 	},
 }
 

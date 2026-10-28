@@ -16,16 +16,16 @@ dofile("gamemodes/ballistics/gamemode/core/sh_config.lua")
 local C = BALLISTICS.Config
 local r = 2 / 0.01905
 
-check("StartMoney is 1000", C.StartMoney == 1000)
+check("StartMoney is 100", C.StartMoney == 100)
 check("SlotsPerTeam is 5", C.SlotsPerTeam == 5)
 check("MinPerTeam is 1", C.MinPerTeam == 1)
 check("BuyTime is 20", C.BuyTime == 20)
 check("RoundTime is 600", C.RoundTime == 600)
 check("PostRoundTime is 5", C.PostRoundTime == 5)
-check("RoundsToWin is 3", C.RoundsToWin == 3)
+check("RoundsToWin is 5", C.RoundsToWin == 5)
 check("TimeoutWinner is draw", C.TimeoutWinner == "draw")
 check("FreezeInBuy is true", C.FreezeInBuy == true)
-check("HealthMode is realistic", C.HealthMode == "realistic")
+check("HealthMode is arcade", C.HealthMode == "arcade")
 check("Good model is combine soldier", C.ModelGood == "models/player/combine_soldier.mdl")
 check("Bad model is combine super soldier", C.ModelBad == "models/player/combine_super_soldier.mdl")
 check("ObjectiveRadius is 2 m in Hammer units", math.abs(C.ObjectiveRadius - r) < 1e-9)
@@ -47,10 +47,10 @@ check("weapon costs", C.Costs.tacrp_ex_m1911 == 100 and C.Costs.tacrp_mr96 == 50
 check("nade costs", C.Costs.nade_frag == 500 and C.Costs.nade_smoke == 200 and C.Costs.nade_thermite == 700 and C.Costs.nade_flashbang == 250)
 check("med costs", C.Costs.med_pills == 50 and C.Costs.med_small == 80 and C.Costs.med_trauma == 100 and C.Costs.med_resus == 500)
 check("att costs", C.AttCosts.optic == 250 and C.AttCosts.bolt == 100 and C.AttCosts.muzzle == 100 and C.AttCosts.trigger == 200 and C.AttCosts.tactical == 300 and C.AttCosts.ammo == 400 and C.AttCosts.accessory == 200 and C.AttCosts.perk == 700)
-check("gains", C.Gains.kill == 500 and C.Gains.round_win == 1000 and C.Gains.round_loss == 500 and C.Gains.draw == 500)
+check("gains", C.Gains.kill == 500 and C.Gains.round_win == 900 and C.Gains.round_loss == 500 and C.Gains.draw == 500)
 check("buy limits unlimited", C.BuyLimits.weapon_per_round == 0 and C.BuyLimits.nade_each == 0)
 
-check("Get StartMoney", C.Get("StartMoney") == 1000)
+check("Get StartMoney", C.Get("StartMoney") == 100)
 check("Get nested cost", C.Get("Costs.tacrp_mp5") == 600)
 
 local ok, val = C.Set("StartMoney", 1200)
@@ -99,7 +99,7 @@ check("Apply ignores unknown cost keys", C.Costs.nade_gas == nil and C.Costs.tac
 check("Apply clamps nested negative gain", C.Gains.kill == 0)
 
 C.ResetSection("gains")
-check("ResetSection gains restores kill", C.Gains.kill == 500 and C.Gains.round_win == 1000)
+check("ResetSection gains restores kill", C.Gains.kill == 500 and C.Gains.round_win == 900)
 check("ResetSection gains leaves StartMoney", C.StartMoney == 400)
 
 C.ResetSection("weapons")
@@ -115,12 +115,12 @@ C.Set("MedsMax", 9)
 C.Set("GrenadesMax", 8)
 C.Set("LootRange", 200)
 C.ResetSection("General")
-check("ResetSection General restores StartMoney and radii", C.StartMoney == 1000 and math.abs(C.ObjectiveRadius - r) < 1e-9 and C.BuyTime == 20 and C.HealedUpOrgans == 10 and C.BuyAmmoMags == 0)
+check("ResetSection General restores StartMoney and radii", C.StartMoney == 100 and math.abs(C.ObjectiveRadius - r) < 1e-9 and C.BuyTime == 20 and C.HealedUpOrgans == 10 and C.BuyAmmoMags == 0)
 check("ResetSection General restores loot caps", C.MedsMax == 3 and C.GrenadesMax == 3 and C.LootRange == 96)
-check("ResetSection General leaves Admin Settings keys", C.HealthMode == "arcade" and C.RoundsToWin == 3)
+check("ResetSection General leaves Admin Settings keys", C.HealthMode == "arcade" and C.RoundsToWin == 5)
 C.Set("RoundsToWin", 9)
 C.ResetSection("settings")
-check("ResetSection settings restores RoundsToWin and HealthMode", C.RoundsToWin == 3 and C.HealthMode == "realistic")
+check("ResetSection settings restores RoundsToWin and HealthMode", C.RoundsToWin == 5 and C.HealthMode == "arcade")
 
 C.Set("SlotsPerTeam", 8)
 C.ResetSection("teams")
@@ -131,12 +131,12 @@ C.ResetSection("attachments")
 check("ResetSection attachments", C.AttCosts.perk == 700 and C.AttRefundOnDetach == false)
 
 local exported = C.Export()
-check("Export has StartMoney and no Get function", exported.StartMoney == 1000 and exported.Get == nil and exported.Set == nil)
+check("Export has StartMoney and no Get function", exported.StartMoney == 100 and exported.Get == nil and exported.Set == nil)
 check("Export copies nested tables", exported.Costs ~= C.Costs and exported.Costs.tacrp_spr == 700)
 
 C.Set("StartMoney", 1)
 C.Reset()
-check("Reset restores every default", C.StartMoney == 1000 and C.Costs.tacrp_mp5 == 600 and C.HealthMode == "realistic")
+check("Reset restores every default", C.StartMoney == 100 and C.Costs.tacrp_mp5 == 600 and C.HealthMode == "arcade")
 
 local admin = { IsAdmin = function() return true end, IsSuperAdmin = function() return false end }
 local super = { IsAdmin = function() return true end, IsSuperAdmin = function() return true end }

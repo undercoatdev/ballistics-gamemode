@@ -12,6 +12,8 @@ end
 
 dofile("tests/support/gmod_stub.lua")
 dofile("gamemodes/ballistics/gamemode/core/sh_config.lua")
+-- Money-flow cases use round numbers; pin StartMoney (shipped default is 100).
+BALLISTICS.Config.Set("StartMoney", 1000)
 dofile("gamemodes/ballistics/gamemode/core/sh_teams.lua")
 dofile("gamemodes/ballistics/gamemode/core/sh_net.lua")
 dofile("gamemodes/ballistics/gamemode/core/sh_ledger.lua")

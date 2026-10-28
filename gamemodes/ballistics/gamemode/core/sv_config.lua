@@ -52,6 +52,12 @@ applyHealthMode()
 -- exist yet at file load. Apply again once everything is up.
 if hook and hook.Add then
 	hook.Add("InitPostEntity", "Ballistics_HealthMode", function() applyHealthMode() end) -- never return a value: it would stop later hooks (TacRP indexes quick nades here)
+	-- Knife / gun-bash void: half the Body Damage default (8 → 4) for precision in this mode.
+	hook.Add("InitPostEntity", "Ballistics_MeleeOrb", function()
+		if BODY_DAMAGE then
+			BODY_DAMAGE.MeleeOrb = 4
+		end
+	end)
 end
 
 if BALLISTICS.Net and BALLISTICS.Net.Register then

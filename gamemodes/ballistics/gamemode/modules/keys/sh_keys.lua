@@ -15,7 +15,11 @@ K.KEY_5 = 6
 K.KEY_G = 17
 K.KEY_Z = 36
 K.KEY_H = 18
+K.KEY_V = 32
 K.KEY_F1 = 92
+K.IN_ATTACK = 1
+K.IN_USE = 32
+K.IN_WEAPON1 = 1048576 -- TacRP.IN_MELEE
 K.IN_GRENADE1 = 8388608
 K.IN_GRENADE2 = 16777216
 K.TAP = 0.25
@@ -23,7 +27,7 @@ K.PULSE = 3
 K.REVEAL = 4
 K.TAG = "F1 Keybinds"
 -- Bump when default key codes change so saved client values are reset once.
-K.KEYS_VERSION = 2
+K.KEYS_VERSION = 3
 
 function K.NeedsMigration(saved, want)
 	return (tonumber(saved) or 0) < (tonumber(want) or K.KEYS_VERSION)
@@ -207,6 +211,26 @@ function K.MedRelease(orig, heldFor, hold, wheelOpen, hoverId, holding)
 	return orig(heldFor, hold, wheelOpen, hoverId, holding)
 end
 
+
+-- Gun melee bash: V + attack. Strip USE while attacking so E+LMB no longer
+-- bashes (TacRP PrimaryAttack melees on USE+attack). V holds adds IN_WEAPON1
+-- (TacRP.IN_MELEE) so Think/Melee still fires.
+function K.BashButtons(buttons, vDown)
+	buttons = tonumber(buttons) or 0
+	if buttons ~= buttons or buttons < 0 then buttons = 0 end
+	buttons = math.floor(buttons)
+	local attack = math.floor(buttons / K.IN_ATTACK) % 2 == 1
+	if not attack then return buttons end
+	-- clear IN_USE
+	if math.floor(buttons / K.IN_USE) % 2 == 1 then
+		buttons = buttons - K.IN_USE
+	end
+	if vDown == true and math.floor(buttons / K.IN_WEAPON1) % 2 == 0 then
+		buttons = buttons + K.IN_WEAPON1
+	end
+	return buttons
+end
+
 -- F1 list. Each row: key (keycap text, "" for a sub-line), action, sub
 -- (indented smaller line under the key above), gap (section break before it).
 -- Number keys first, then letters. Teams/Admin live in the top bar instead.
@@ -229,7 +253,7 @@ function K.Rows(binds)
 	sub("Tap: safety / melee")
 	sub("Double-tap: drag / drop body")
 	sub("Hold: loot body")
-	key("E+R", "Hit with your weapon (melee bash)")
+	key("V+LMB", "Hit with your weapon (melee bash)")
 	key(binds.inspect or "G", "Check injuries (yours, or who you aim at)")
 	key(binds.blindfire or "H", "Blindfire")
 	if binds.med ~= "" then key(binds.med or "Z", "Hold: medical wheel") end

@@ -67,14 +67,14 @@ check("weapon rows use catalog names", #weapons == 8 and weapons[1].label == "Co
 check("throwable rows use catalog names", #throwables == 4 and throwables[1].label == "Frag grenade" and throwables[1].path == "Costs.nade_frag")
 check("med rows use catalog names", #meds == 4 and meds[1].label == "Pills" and meds[4].label == "Resuscitation kit" and meds[4].path == "Costs.med_resus")
 check("attachment rows use price keys", #atts == 11 and atts[9].label == "Technique" and atts[9].display == 300 and atts[10].display == 500 and atts[11].label == "Boost" and atts[11].display == 500 and atts[1].label == "Optic" and atts[1].path == "AttCosts.optic" and atts[8].label == "Perk" and atts[8].display == 700)
-check("gain rows", #gains == 4 and gains[1].path == "Gains.kill" and gains[1].display == 500 and gains[2].label == "Round win" and gains[2].display == 1000 and gains[3].path == "Gains.round_loss" and gains[4].path == "Gains.draw")
+check("gain rows", #gains == 4 and gains[1].path == "Gains.kill" and gains[1].display == 500 and gains[2].label == "Round win" and gains[2].display == 900 and gains[3].path == "Gains.round_loss" and gains[4].path == "Gains.draw")
 
 local generalMap, general = rowMap("general")
 local generalPaths = {
 	"RoundTime", "BuyTime", "PostRoundTime", "StartMoney", "MaxMoney",
 	"HealedUpOrgans",
 	"CaptureTimeOne", "CaptureTimeTwo", "CaptureDecay", "CaptureContestedFreeze",
-	"ObjectiveRadius", "CustomizeRadius", "BuyAmmoMags", "MedsMax", "GrenadesMax", "BulletPushForce",
+	"ObjectiveRadius", "CustomizeRadius", "BuyAmmoMags", "MedsMax", "GrenadesMax",
 }
 local generalOk = #general == #generalPaths
 for i = 1, #generalPaths do
@@ -94,10 +94,10 @@ local organBlurb = "At each new round every organ heals this many units (capped 
 check("healed organs row", generalMap.HealedUpOrgans.label == "Healed up organs" and generalMap.HealedUpOrgans.kind == "int" and generalMap.HealedUpOrgans.display == 10 and generalMap.HealedUpOrgans.min == 0 and generalMap.HealedUpOrgans.max == 100 and generalMap.HealedUpOrgans.blurb == organBlurb)
 
 local settingsMap, settings = rowMap("settings")
-check("Admin Settings holds rounds to win then health mode", #settings == 2 and settings[1].path == "RoundsToWin" and settings[2].path == "HealthMode" and settingsMap.BulletPushForce == nil)
-check("bullet push force sits in General", generalMap.BulletPushForce ~= nil and generalMap.BulletPushForce.display == 0.5)
-check("rounds to win row", settingsMap.RoundsToWin.label == "Rounds to win (0 = endless)" and settingsMap.RoundsToWin.kind == "int" and settingsMap.RoundsToWin.display == 3 and settingsMap.RoundsToWin.min == 0 and settingsMap.RoundsToWin.max == 1000)
-check("health mode is a realistic/arcade switch", settingsMap.HealthMode.kind == "enum" and settingsMap.HealthMode.display == "realistic" and settingsMap.HealthMode.values[1].id == "realistic" and settingsMap.HealthMode.values[2].label == "Arcade")
+check("Admin Settings holds rounds, health, bullet push", #settings == 3 and settings[1].path == "RoundsToWin" and settings[2].path == "HealthMode" and settings[3].path == "BulletPushForce")
+check("bullet push force sits in Admin Settings", settingsMap.BulletPushForce ~= nil and settingsMap.BulletPushForce.display == 0.2 and generalMap.BulletPushForce == nil)
+check("rounds to win row", settingsMap.RoundsToWin.label == "Rounds to win (0 = endless)" and settingsMap.RoundsToWin.kind == "int" and settingsMap.RoundsToWin.display == 5 and settingsMap.RoundsToWin.min == 0 and settingsMap.RoundsToWin.max == 1000)
+check("health mode is a realistic/arcade switch", settingsMap.HealthMode.kind == "enum" and settingsMap.HealthMode.display == "arcade" and settingsMap.HealthMode.values[1].id == "realistic" and settingsMap.HealthMode.values[2].label == "Arcade")
 check("Admin Settings reset is its own section", V.ResetPayload("settings") and V.ResetPayload("settings").section == "settings")
 
 local committed = V.Commit(generalMap.RoundTime, 12)
@@ -166,17 +166,17 @@ check("attachments reset restores att prices only", C.AttCosts.perk == 700 and C
 
 dirty()
 C.ResetSection(V.ResetPayload("gains").section)
-check("gains reset restores gains only", C.Gains.kill == 500 and C.Gains.round_win == 1000 and C.StartMoney == 17 and C.Costs.tacrp_mp5 == 11)
+check("gains reset restores gains only", C.Gains.kill == 500 and C.Gains.round_win == 900 and C.StartMoney == 17 and C.Costs.tacrp_mp5 == 11)
 
 dirty()
 C.ResetSection(V.ResetPayload("general").section)
-check("general reset restores general only", C.StartMoney == 1000 and C.RoundTime == 600 and C.BuyTime == 20 and C.CaptureDecay == true and nearRadius() and C.Gains.kill == 15 and C.Costs.tacrp_mp5 == 11 and C.AttCosts.perk == 14 and C.SlotsPerTeam == 8 and C.BuyLimits.weapon_per_round == 2 and C.HealedUpOrgans == 10 and C.BuyAmmoMags == 0 and C.MedsMax == 3 and C.GrenadesMax == 3 and C.LootRange == 96)
-check("general reset leaves Admin Settings keys", C.HealthMode == "arcade" and C.RoundsToWin == 3)
+check("general reset restores general only", C.StartMoney == 100 and C.RoundTime == 600 and C.BuyTime == 20 and C.CaptureDecay == true and nearRadius() and C.Gains.kill == 15 and C.Costs.tacrp_mp5 == 11 and C.AttCosts.perk == 14 and C.SlotsPerTeam == 8 and C.BuyLimits.weapon_per_round == 2 and C.HealedUpOrgans == 10 and C.BuyAmmoMags == 0 and C.MedsMax == 3 and C.GrenadesMax == 3 and C.LootRange == 96)
+check("general reset leaves Admin Settings keys", C.HealthMode == "arcade" and C.RoundsToWin == 5)
 
 dirty()
 C.Set("RoundsToWin", 7)
 C.ResetSection(V.ResetPayload("settings").section)
-check("settings reset restores rounds and health only", C.RoundsToWin == 3 and C.HealthMode == "realistic" and C.StartMoney == 17 and C.RoundTime == 120)
+check("settings reset restores rounds and health only", C.RoundsToWin == 5 and C.HealthMode == "arcade" and C.StartMoney == 17 and C.RoundTime == 120)
 
 dirty()
 C.ResetSection(V.ResetPayload("costs").section)
@@ -184,7 +184,7 @@ check("costs reset restores every item price and not attachments", C.Costs.tacrp
 
 dirty()
 C.ResetSection(V.ResetPayload("rules").section)
-check("rules reset restores rules and leaves teams and buy limits", C.Costs.tacrp_mp5 == 600 and C.Costs.nade_frag == 500 and C.Costs.med_pills == 50 and C.AttCosts.perk == 700 and C.AttRefundOnDetach == false and C.Gains.kill == 500 and C.Gains.round_win == 1000 and C.StartMoney == 1000 and C.RoundTime == 600 and C.HealthMode == "arcade" and C.CaptureDecay == true and nearRadius() and C.SlotsPerTeam == 8 and C.BuyLimits.weapon_per_round == 2 and C.HealedUpOrgans == 10 and C.BuyAmmoMags == 0 and C.MedsMax == 3 and C.GrenadesMax == 3 and C.LootRange == 96)
+check("rules reset restores rules and leaves teams and buy limits", C.Costs.tacrp_mp5 == 600 and C.Costs.nade_frag == 500 and C.Costs.med_pills == 50 and C.AttCosts.perk == 700 and C.AttRefundOnDetach == false and C.Gains.kill == 500 and C.Gains.round_win == 900 and C.StartMoney == 100 and C.RoundTime == 600 and C.HealthMode == "arcade" and C.CaptureDecay == true and nearRadius() and C.SlotsPerTeam == 8 and C.BuyLimits.weapon_per_round == 2 and C.HealedUpOrgans == 10 and C.BuyAmmoMags == 0 and C.MedsMax == 3 and C.GrenadesMax == 3 and C.LootRange == 96)
 
 dirty()
 local unknownOk = C.ResetSection("nope")
@@ -268,7 +268,7 @@ check("the admin path stores metres as units", math.abs(C.ObjectiveRadius - V.Fr
 C.Set("SlotsPerTeam", 8)
 C.Set("StartMoney", 17)
 drive(admin, { reset = true, section = "rules" })
-check("an admin rules reset leaves team size", C.StartMoney == 1000 and C.SlotsPerTeam == 8 and C.RoundTime == 600)
+check("an admin rules reset leaves team size", C.StartMoney == 100 and C.SlotsPerTeam == 8 and C.RoundTime == 600)
 
 C.Set("AdminSuperOnly", true)
 C.Set("BuyTime", 30)
