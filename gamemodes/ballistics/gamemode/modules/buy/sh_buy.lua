@@ -58,12 +58,11 @@ function BALLISTICS.Buy.LeftAction(kind, have, max, fresh, owned, slotsFull)
 	return "buy"
 end
 
--- Price-slot sell label: meds/nades show "Sell +$" after any buy this
--- phase (fresh > 0), and still at a full stack. Cleared when buy starts
--- again (next round). Guns keep the old at-cap-only rule (unused).
+-- Price-slot sell label: after any buy this phase (fresh > 0), or at a
+-- full med/nade stack. Cleared when buy starts again (next round).
 function BALLISTICS.Buy.ShowSellLabel(kind, atCap, fresh)
 	if atCap == true then return true end
-	if kind ~= "nade" and kind ~= "med" then return false end
+	if kind ~= "nade" and kind ~= "med" and kind ~= "weapon" then return false end
 	fresh = tonumber(fresh) or 0
 	if fresh ~= fresh or fresh < 1 then return false end
 	return true

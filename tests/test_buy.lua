@@ -251,7 +251,8 @@ check("ShowSellLabel at cap", BALLISTICS.Buy.ShowSellLabel("med", true, 0) == tr
 check("ShowSellLabel med with fresh", BALLISTICS.Buy.ShowSellLabel("med", false, 1) == true)
 check("ShowSellLabel nade with fresh", BALLISTICS.Buy.ShowSellLabel("nade", false, 2) == true)
 check("ShowSellLabel med without fresh", BALLISTICS.Buy.ShowSellLabel("med", false, 0) == false)
-check("ShowSellLabel weapon ignores fresh", BALLISTICS.Buy.ShowSellLabel("weapon", false, 1) == false)
+check("ShowSellLabel weapon with fresh", BALLISTICS.Buy.ShowSellLabel("weapon", false, 1) == true)
+check("ShowSellLabel weapon without fresh", BALLISTICS.Buy.ShowSellLabel("weapon", false, 0) == false)
 check("buywheel uses ShowSellLabel", (function()
 	local src = io.open("gamemodes/ballistics/gamemode/modules/buy/cl_buywheel.lua"):read("*a")
 	return src:find("ShowSellLabel", 1, true) ~= nil
