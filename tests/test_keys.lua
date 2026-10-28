@@ -113,9 +113,9 @@ local rows = K.Rows({
 	teams = "F2",
 	med = "B",
 })
-check("numbers first, then letters", #rows == 13 and rows[1].key == "1 / 2" and rows[2].key == "3" and rows[3].sub and rows[4].sub and rows[5].key == "4" and rows[5].action == "Inventory" and rows[6].key == "C" and rows[6].gap == true and rows[7].key == "E" and rows[8].action == "Tap: safety / melee" and rows[9].action == "Double-tap: drag / drop body" and rows[10].action == "Hold: loot body" and rows[11].key == "G" and rows[12].key == "MOUSE3" and rows[12].action == "Blindfire" and rows[13].key == "B" and rows[13].action == "Hold: medical wheel")
+check("numbers first, then letters", #rows == 14 and rows[1].key == "1 / 2" and rows[2].key == "3" and rows[3].sub and rows[4].sub and rows[5].key == "4" and rows[5].action == "Inventory" and rows[6].key == "C" and rows[6].gap == true and rows[7].key == "E" and rows[8].action == "Tap: safety / melee" and rows[9].action == "Double-tap: drag / drop body" and rows[10].action == "Hold: loot body" and rows[11].key == "E+R" and rows[11].action == "Hit with your weapon (melee bash)" and rows[12].key == "G" and rows[13].key == "MOUSE3" and rows[13].action == "Blindfire" and rows[14].key == "B" and rows[14].action == "Hold: medical wheel")
 local noMed = K.Rows({ med = "" })
-check("a missing medical wheel is left off the list", #noMed == 12)
+check("a missing medical wheel is left off the list", #noMed == 13)
 check("gun keys share one line", noMed[1].key == "1 / 2" and noMed[1].action == "Guns (press again for knife)")
 check("inventory defaults to 4", noMed[5].key == "4" and noMed[5].action == "Inventory")
 
@@ -254,7 +254,7 @@ hook.Run("Think")
 check("the list stays closed after spawn", BALLISTICS.Keys.ListOpen() == false)
 local hinted = BALLISTICS.Keys.HintRows()
 local medRow = hinted[#hinted]
-check("hints read the live binds", hinted[1].key == "1 / 2" and hinted[2].key == "3" and hinted[5].key == "4" and hinted[5].action == "Inventory" and hinted[6].key == "C" and hinted[7].key == "E" and hinted[11].key == "G" and hinted[11].action == "Check injuries (yours, or who you aim at)" and hinted[12].key == "H" and medRow.action == "Hold: medical wheel" and medRow.key == "Z")
+check("hints read the live binds", hinted[1].key == "1 / 2" and hinted[2].key == "3" and hinted[5].key == "4" and hinted[5].action == "Inventory" and hinted[6].key == "C" and hinted[7].key == "E" and hinted[11].key == "E+R" and hinted[12].key == "G" and hinted[12].action == "Check injuries (yours, or who you aim at)" and hinted[13].key == "H" and medRow.action == "Hold: medical wheel" and medRow.key == "Z")
 clock = 10
 hook.Run("Think")
 check("the list collapses when the reveal ends", BALLISTICS.Keys.ListOpen() == false)

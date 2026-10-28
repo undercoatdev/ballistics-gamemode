@@ -98,6 +98,27 @@ function L.IsDragSource(slot, drag)
 end
 
 -- True while this player must not auto-collect a drop they just let go of.
+-- World gun touch/use: never let Source turn a same-class gun into ammo, and
+-- never take a gun when both slots are full. "allow" = engine Give, "twin" =
+-- store as the loadout twin and remove the world ent, "deny" = leave it.
+function L.WorldGunDecision(info)
+	info = type(info) == "table" and info or {}
+	if info.alive ~= true then return "deny" end
+	if info.grace == true then return "deny" end
+	local class = info.class
+	if type(class) ~= "string" or class == "" then return "allow" end
+	if info.knife ~= nil and class == info.knife then return "allow" end
+	-- Non-gun SWEPs (misc) keep default behaviour.
+	if info.isGun == false then return "allow" end
+	local max = math.floor(tonumber(info.maxGuns) or 2)
+	if max < 1 then max = 1 end
+	local count = math.floor(tonumber(info.gunCount) or 0)
+	if count < 0 then count = 0 end
+	if count >= max then return "deny" end
+	if info.hasClass == true then return "twin" end
+	return "allow"
+end
+
 function L.PickupBlocked(ply, wep, now)
 	if ply == nil or wep == nil then return false end
 	local kind = type(wep)

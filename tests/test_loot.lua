@@ -204,6 +204,15 @@ local selfNade = L.Transfer({
 	them = L.Blank(), from = "you", kind = "nade", key = "nade_frag", amount = 5, to = "drop",
 	selfDrop = true,
 })
+
+local W = L.WorldGunDecision
+check("world pickup denies a dead player", W({ alive = false, class = "tacrp_mp5", gunCount = 0, maxGuns = 2 }) == "deny")
+check("world pickup allows a new gun into a free slot", W({ alive = true, class = "tacrp_mp5", knife = "tacrp_knife", gunCount = 1, maxGuns = 2, hasClass = false, isGun = true }) == "allow")
+check("world pickup denies a third gun", W({ alive = true, class = "tacrp_mp5", knife = "tacrp_knife", gunCount = 2, maxGuns = 2, hasClass = false, isGun = true }) == "deny")
+check("world same-class becomes twin not ammo", W({ alive = true, class = "tacrp_mp5", knife = "tacrp_knife", gunCount = 1, maxGuns = 2, hasClass = true, isGun = true }) == "twin")
+check("world same-class with full slots is denied", W({ alive = true, class = "tacrp_mp5", knife = "tacrp_knife", gunCount = 2, maxGuns = 2, hasClass = true, isGun = true }) == "deny")
+check("world knife stays allowed", W({ alive = true, class = "tacrp_knife", knife = "tacrp_knife", gunCount = 2, maxGuns = 2, hasClass = false, isGun = false }) == "allow")
+
 check("own inventory drops a grenade stack", selfNade.ok == true and selfNade.drop.entity == "tacrp_ammo_frag" and selfNade.drop.amount == 3 and selfNade.drop.ammo == "grenade" and selfNade.you.nades.nade_frag == 0)
 local selfMed = L.Transfer({
 	you = { guns = {}, nades = {}, meds = { med_small = 2 }, ammo = {} },
@@ -996,7 +1005,7 @@ local nades = liveDrops()
 check("a whole-stack flag still drops one grenade as an E-only bal_drop", ok == true and looter.ammo.grenade == 2 and #nades == 1 and nades[1].class == "bal_drop" and nades[1].BalItemKey == "nade_frag" and nades[1].BalCount == 1 and nades[1].BallisticsLootDrop == true)
 ok = L.Act(looter, { from = "you", kind = "nade", key = "nade_frag", amount = 2, to = "drop", slot = 0 })
 nades = liveDrops()
-check("a grenade stack is one bal_drop holding the count", ok == true and looter.ammo.grenade == 0 and #nades == 2 and nades[2].class == "bal_drop" and nades[2].BalCount == 2 and nades[2].pos.z == L.DROP_UP and nades[2].fell == true)
+check("a grenade stack drops one bal_drop per grenade", ok == true and looter.ammo.grenade == 0 and #nades == 3 and nades[2].class == "bal_drop" and nades[2].BalCount == 1 and nades[3].BalCount == 1 and nades[2].pos.z == L.DROP_UP and nades[2].fell == true)
 
 settle()
 seat(looter)
@@ -1005,7 +1014,7 @@ looter.ammo.grenade = 3
 L.OpenSelf(looter)
 ok = L.Act(looter, { from = "you", kind = "nade", key = "nade_frag", amount = 3, to = "drop", slot = 0 })
 nades = liveDrops()
-check("three grenades drop as one entity", ok == true and looter.ammo.grenade == 0 and #nades == 1 and nades[1].BalCount == 3)
+check("three grenades drop as three entities", ok == true and looter.ammo.grenade == 0 and #nades == 3 and nades[1].BalCount == 1 and nades[2].BalCount == 1 and nades[3].BalCount == 1)
 
 settle()
 seat(looter)
@@ -1023,7 +1032,7 @@ L.OpenSelf(looter)
 medCalls = {}
 ok = L.Act(looter, { from = "you", kind = "med", key = "med_small", amount = 2, to = "drop", slot = 0 })
 local meds = liveDrops()
-check("meds drop as one E-only bal_drop", ok == true and #meds == 1 and meds[1].class == "bal_drop" and meds[1].BalItemKey == "med_small" and meds[1].BalCount == 2 and meds[1].BalMedId == 2 and meds[1].BallisticsLootDrop == true)
+check("meds drop as one E-only bal_drop each", ok == true and #meds == 2 and meds[1].class == "bal_drop" and meds[1].BalItemKey == "med_small" and meds[1].BalCount == 1 and meds[2].BalCount == 1 and meds[1].BalMedId == 2 and meds[1].BallisticsLootDrop == true)
 check("meds leave through GiveMed", looter.pbMed.counts[2] == 0 and #medCalls == 1 and medCalls[1].id == 2 and medCalls[1].n == -2)
 
 settle()

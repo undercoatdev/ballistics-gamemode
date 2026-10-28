@@ -1,7 +1,7 @@
 -- Run: luajit tests/test_tacfilter.lua
 BALLISTICS = {}
 dofile("gamemodes/ballistics/gamemode/core/sh_catalog.lua")
-TacRP = { Attachments = { ammo_buckshotroulette = { Category = "ammo_shotgun" }, ammo_shotgun_dragon = { Category = "ammo_shotgun" }, ammo_roulette = { Category = "ammo_roulette" }, ammo_shotgun_slugs = {} } }
+TacRP = { Attachments = { ammo_buckshotroulette = { Category = "ammo_shotgun" }, ammo_shotgun_dragon = { Category = "ammo_shotgun" }, ammo_roulette = { Category = "ammo_roulette" }, ammo_surplus = { Category = "ammo_pistol" }, ammo_surplus2 = { Category = "ammo_shotgun" }, acc_duffelbag = { Category = "acc_duffle" }, ammo_shotgun_slugs = {}, acc_extmag_pistol = {} } }
 hook = nil
 dofile("gamemodes/ballistics/gamemode/modules/tacrpfilter/sh_tacrpfilter.lua")
 local F, failed = BALLISTICS.TacFilter, false
@@ -10,8 +10,9 @@ F.HideAtts()
 check("roulette hidden", TacRP.Attachments.ammo_buckshotroulette.Compatibility() == false)
 check("dragon's breath hidden", TacRP.Attachments.ammo_shotgun_dragon.Compatibility() == false)
 check("other rounds untouched", TacRP.Attachments.ammo_shotgun_slugs.Compatibility == nil)
-check("blocked ids", F.AttBlocked("ammo_shotgun_dragon") and F.AttBlocked("ammo_buckshotroulette") and F.AttBlocked("ammo_roulette") and not F.AttBlocked("ammo_shotgun_slugs"))
+check("blocked ids", F.AttBlocked("ammo_shotgun_dragon") and F.AttBlocked("ammo_buckshotroulette") and F.AttBlocked("ammo_roulette") and F.AttBlocked("ammo_surplus") and F.AttBlocked("ammo_surplus2") and F.AttBlocked("acc_duffelbag") and not F.AttBlocked("ammo_shotgun_slugs") and not F.AttBlocked("acc_extmag_pistol"))
 check("revolver roulette hidden", TacRP.Attachments.ammo_roulette.Compatibility() == false)
+check("surplus and gun bag hidden", TacRP.Attachments.ammo_surplus.Compatibility() == false and TacRP.Attachments.acc_duffelbag.Compatibility() == false)
 check("frag allowed", F.NadeAllowed({ Ammo = "grenade" }))
 check("thermite allowed", F.NadeAllowed({ Ammo = "ti_thermite" }))
 check("gas not allowed", not F.NadeAllowed({ Ammo = "ti_gas" }))

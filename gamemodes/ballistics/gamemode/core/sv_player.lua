@@ -445,21 +445,72 @@ end
 function GM:PlayerCanPickupWeapon(ply, wep)
 	if not isPlayer(ply) then return false end
 	if ply.Alive and ply:Alive() == false then return false end
-	-- The dropper's own gun, grenade-weapon, or any SWEP we just spawned must
-	-- not snap back into their hands. Other players can take it immediately.
+	-- The dropper's own gun must not snap back during grace.
 	local loot = BALLISTICS.Loot
 	local now = (CurTime and CurTime()) or 0
+	local grace = false
 	if loot and type(loot.PickupBlocked) == "function" then
-		if loot.PickupBlocked(ply, wep, now) then return false end
-		return true
-	end
-	if wep ~= nil then
+		grace = loot.PickupBlocked(ply, wep, now) == true
+	elseif wep ~= nil then
 		local kind = type(wep)
 		if kind ~= "number" and kind ~= "string" and kind ~= "boolean" and kind ~= "function" then
 			local owner = wep.BallisticsDropOwner
 			local untilT = tonumber(wep.BallisticsDropUntil)
-			if owner == ply and untilT ~= nil and now < untilT then return false end
+			if owner == ply and untilT ~= nil and now < untilT then grace = true end
 		end
+	end
+	if grace then return false end
+
+	-- Guns: free slot only. Same-class must become the twin, never ammo.
+	local class = nil
+	if wep ~= nil and type(wep.GetClass) == "function" then
+		local ok, got = pcall(wep.GetClass, wep)
+		if ok then class = got end
+	end
+	local Load = BALLISTICS.Loadout
+	local knife = KNIFE
+	if Load and type(Load.KnifeOf) == "function" then
+		knife = Load.KnifeOf(ply) or knife
+	elseif Load and type(Load.Knife) == "function" then
+		knife = Load.Knife(ply) or knife
+	end
+	local gunCount = 0
+	local maxGuns = 2
+	local hasClass = false
+	if Load then
+		if type(Load.GunCount) == "function" then gunCount = Load.GunCount(ply) or 0 end
+		if tonumber(Load.MAX_GUNS) then maxGuns = math.floor(tonumber(Load.MAX_GUNS) or 2) end
+	end
+	if type(class) == "string" and type(ply.HasWeapon) == "function" then
+		hasClass = ply:HasWeapon(class) == true
+	end
+	local isGun = true
+	if type(class) == "string" and class == knife then isGun = false end
+	local decision = "allow"
+	if loot and type(loot.WorldGunDecision) == "function" then
+		decision = loot.WorldGunDecision({
+			alive = true,
+			grace = false,
+			class = class,
+			knife = knife,
+			gunCount = gunCount,
+			maxGuns = maxGuns,
+			hasClass = hasClass,
+			isGun = isGun,
+		})
+	elseif isGun and gunCount >= maxGuns then
+		decision = "deny"
+	elseif isGun and hasClass then
+		decision = "twin"
+	end
+	if decision == "deny" then return false end
+	if decision == "twin" then
+		if loot and type(loot.AbsorbTwin) == "function" and timer and timer.Simple then
+			timer.Simple(0, function()
+				if loot.AbsorbTwin then loot.AbsorbTwin(ply, wep) end
+			end)
+		end
+		return false
 	end
 	return true
 end

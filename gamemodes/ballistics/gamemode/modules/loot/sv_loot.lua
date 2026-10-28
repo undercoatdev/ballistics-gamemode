@@ -3,9 +3,8 @@
 -- awake targets use the weapons they are actually holding.
 -- Dropped guns are real weapon entities in front of the looter, marked
 -- BallisticsLootDrop so round cleanup can remove the ones nobody picked up.
--- Own inventory drops grenades as the catalog ammo entity (one each, unless
--- that entity accepts an ammo count) and meds as the catalog med entity,
--- one per med. Ammo rows are not dropped.
+-- Own inventory drops grenades and meds as N separate bal_drop entities
+-- (one item each), never one combined stack. Ammo rows are not dropped.
 -- +use is not hooked here. Player Ballistics drag stays on its own key.
 
 if not SERVER then return end
@@ -1139,8 +1138,8 @@ local function spawnPickup(ply, class, nudge)
 	return ent
 end
 
--- Grenades and meds drop as one bal_drop entity holding the whole stack.
--- It is picked up only with E (see entities/entities/bal_drop.lua).
+-- Grenades and meds drop as N bal_drop entities (count 1 each).
+-- Each is picked up only with E (see entities/entities/bal_drop.lua).
 local function dropModel(drop)
 	local class = drop.entity
 	if type(class) == "string" and scripted_ents and type(scripted_ents.GetStored) == "function" then
@@ -1159,23 +1158,55 @@ local function spawnStack(ply, drop)
 	local amount = math.floor(tonumber(drop.amount) or 0)
 	if amount < 1 or type(drop.key) ~= "string" then return false end
 	if not (ents and type(ents.Create) == "function") then return false end
-	local ent = ents.Create(L.DROP_CLASS)
-	if not valid(ent) then return false end
-	ent.BalModel = dropModel(drop)
-	if drop.kind == "med" then ent.BalMedId = drop.id end
-	if not placeDrop(ply, ent, 0) then
-		if valid(ent) and type(ent.Remove) == "function" then pcall(ent.Remove, ent) end
-		return false
+	local made = {}
+	local model = dropModel(drop)
+	for i = 1, amount do
+		local ent = ents.Create(L.DROP_CLASS)
+		if not valid(ent) then
+			rollback(made)
+			return false
+		end
+		ent.BalModel = model
+		if drop.kind == "med" then ent.BalMedId = drop.id end
+		-- Slight nudge so N entities are not perfectly stacked.
+		if not placeDrop(ply, ent, (i - 1) * 6) then
+			if valid(ent) and type(ent.Remove) == "function" then pcall(ent.Remove, ent) end
+			rollback(made)
+			return false
+		end
+		if type(ent.SetItemKey) == "function" then pcall(ent.SetItemKey, ent, drop.key) end
+		if type(ent.SetCount) == "function" then pcall(ent.SetCount, ent, 1) end
+		ent.BalItemKey = drop.key
+		ent.BalCount = 1
+		markDrop(ent)
+		made[#made + 1] = ent
 	end
-	if type(ent.SetItemKey) == "function" then pcall(ent.SetItemKey, ent, drop.key) end
-	if type(ent.SetCount) == "function" then pcall(ent.SetCount, ent, amount) end
-	ent.BalItemKey = drop.key
-	ent.BalCount = amount
-	markDrop(ent)
-	return true, { ent }
+	return true, made
 end
 
 -- E on a bal_drop: give as many as fit. Returns how many are left on the floor.
+
+-- Claim a world gun as the stored twin (same class already held, free slot).
+function L.AbsorbTwin(ply, wep)
+	if not valid(ply) or not valid(wep) then return false end
+	local Load = BALLISTICS.Loadout
+	if not Load or type(Load.CaptureGun) ~= "function" or type(Load.SetTwin) ~= "function" then return false end
+	local class = classOf(wep)
+	if type(class) ~= "string" or class == "" then return false end
+	if isKnife(ply, class) then return false end
+	local maxGuns = L.GUNS
+	if tonumber(Load.MAX_GUNS) then maxGuns = math.floor(tonumber(Load.MAX_GUNS) or L.GUNS) end
+	local count = type(Load.GunCount) == "function" and Load.GunCount(ply) or 0
+	if count >= maxGuns then return false end
+	if type(ply.HasWeapon) ~= "function" or ply:HasWeapon(class) ~= true then return false end
+	local gun = Load.CaptureGun(wep)
+	if type(gun) ~= "table" then return false end
+	Load.SetTwin(ply, gun)
+	if type(Load.NoteGun) == "function" then Load.NoteGun(ply, class) end
+	if type(wep.Remove) == "function" then pcall(wep.Remove, wep) end
+	return true
+end
+
 function L.TakeDrop(ply, key, count)
 	count = math.floor(tonumber(count) or 0)
 	if not valid(ply) or count < 1 then return 0 end
@@ -1583,8 +1614,15 @@ if hook and hook.Add then
 	hook.Add("Ballistics_PhaseChanged", "Ballistics_Loot", function(_, new)
 		if new ~= "live" and new ~= "post" then L.Reset() end
 	end)
-	hook.Add("WeaponEquip", "Ballistics_LootDrop", function(wep)
+	hook.Add("WeaponEquip", "Ballistics_LootDrop", function(wep, ply)
 		if wep ~= nil then wep.BallisticsLootDrop = nil end
+		if not valid(ply) or not valid(wep) then return end
+		local class = classOf(wep)
+		if type(class) ~= "string" or class == "" then return end
+		if isKnife(ply, class) then return end
+		if BALLISTICS.Loadout and type(BALLISTICS.Loadout.NoteGun) == "function" then
+			BALLISTICS.Loadout.NoteGun(ply, class)
+		end
 	end)
 end
 
