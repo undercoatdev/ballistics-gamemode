@@ -1,5 +1,5 @@
--- Ballistics Game Mode: shared entry point. Loader + includes only.
-GM.Name = "Ballistics Game Mode"
+-- Critical Shot: shared entry point. Loader + includes only.
+GM.Name = "Critical Shot"
 GM.Author = "undercoatdev"
 GM.Email = ""
 GM.Website = "https://github.com/undercoatdev/ballistics-gamemode"
