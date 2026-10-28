@@ -236,11 +236,14 @@ local function applyCmd(cmd)
 	local pulsing = false
 	if type(K.TakeTick) == "function" then pulsing = K.TakeTick(throwState) == true end
 	local g1 = lookup("+grenade1")
+	local g2 = lookup("+grenade2")
 	local grenade1Bound = type(g1) == "string" and g1 ~= ""
+	local grenade2Bound = type(g2) == "string" and g2 ~= ""
 	local intent = K.Intent({
 		pulsing = pulsing,
 		menu = throwState.menu == true,
 		grenade1Bound = grenade1Bound,
+		grenade2Bound = grenade2Bound,
 		boundToThrow1 = type(K.SameBind) == "function" and K.SameBind("+grenade1", key, lookup, codeOf) or false,
 		boundToThrow2 = type(K.SameBind) == "function" and K.SameBind("+grenade2", key, lookup, codeOf) or false,
 		gDown = keyDown(K.KEY_G or 17),

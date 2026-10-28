@@ -339,7 +339,9 @@ check("default codes are 3 for throwables and 4 for inventory", K.KEY_3 == 4 and
 do
 	local IN2 = K.IN_GRENADE2
 	local i1 = K.Intent({ menu = false })
-	check("TacRP's H / own +grenade2 cannot open the wheel", K.ApplyButtons(IN2, i1) == 0)
+	check("unbound TacRP H fallback cannot open the wheel", K.ApplyButtons(IN2, i1) == 0)
+	local iBound = K.Intent({ menu = false, grenade2Bound = true })
+	check("a real +grenade2 bind keeps the wheel button", K.ApplyButtons(IN2, iBound) == IN2)
 	local i2 = K.Intent({ menu = true })
 	check("holding the throwables key opens the wheel", K.ApplyButtons(0, i2) == IN2)
 	local i3 = K.Intent({ menu = true, boundToThrow2 = true })

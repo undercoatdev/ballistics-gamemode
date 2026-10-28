@@ -151,11 +151,13 @@ function K.Intent(opts)
 	local add1 = opts.pulsing == true and opts.boundToThrow1 ~= true
 	local add2 = opts.menu == true and opts.boundToThrow2 ~= true
 	local strip = opts.gDown == true and opts.grenade1Bound ~= true and not add1
-	-- The grenade wheel belongs to the throwables key only. TacRP adds
-	-- IN_GRENADE2 from a hardcoded H when +grenade2 is unbound (fresh clients),
-	-- or from the player's own +grenade2 bind; both are stripped unless this
-	-- tick is our hold (or the player's +grenade2 bind IS our key).
-	local strip2 = not add2 and not (opts.menu == true and opts.boundToThrow2 == true)
+	-- TacRP adds IN_GRENADE2 from a hardcoded H when +grenade2 is unbound.
+	-- Strip that fallback unless this tick is our hold (or the player's
+	-- +grenade2 bind IS our key). A real +grenade2 bind (any other key) is
+	-- left alone so MMB pull-out still works after they open the wheel.
+	local strip2 = opts.grenade2Bound ~= true
+		and not add2
+		and not (opts.menu == true and opts.boundToThrow2 == true)
 	return { add1 = add1, add2 = add2, strip = strip, strip2 = strip2 }
 end
 
