@@ -1,6 +1,5 @@
--- Overhead spawn editor and the flag circles everyone sees.
--- Scroll zooms, WASD pans, click traces the perspective ray and asks the server to place.
--- Slice height clips the world above a Z. Traces start on that plane.
+-- Free-cam spawn editor. Fly through walls, aim a crosshair, place/swivel items.
+-- Scroll cycles type. Existing save/reset/net stay. No slice cut.
 
 if not CLIENT then return end
 
@@ -17,16 +16,13 @@ local side = GOOD
 local boxDraft = { yaw = 0, sx = D.BOX_LENGTH or 768, sy = D.BOX_WIDTH or 384 }
 local editing = false
 local send
-local cam = nil
+local cam = nil -- { x, y, z, pitch, yaw }
 local toolbar = nil
 local wheelAt = 0
-local sliceBottom, sliceTop = 0, 0
-local sliceZ = 0
-local mapXY = nil
-local muteSlice = false
-local clipOn = false
-local clipPrev = nil
-local inScene = false
+local types = { GOOD, BAD, "box" }
+local swivel = nil -- { op, team, pos, sx, sy } while LMB held after place
+local aimHit = nil -- last aim hit for ghost
+local aimNormal = nil
 
 local function emit()
 	for i = 1, #listeners do
@@ -94,13 +90,44 @@ function BALLISTICS.Spawns.IsEditing()
 	return editing == true
 end
 
+local function typeLabel(t)
+	if t == "box" then return "Squad box" end
+	if t == BAD then return (BALLISTICS.TeamName and BALLISTICS.TeamName[BAD]) or "Bad spawn" end
+	return (BALLISTICS.TeamName and BALLISTICS.TeamName[GOOD]) or "Good spawn"
+end
+
+local function cycleType(dir)
+	local idx = 1
+	for i = 1, #types do
+		if types[i] == side then
+			idx = i
+			break
+		end
+	end
+	idx = idx + ((tonumber(dir) or 0) > 0 and 1 or -1)
+	if idx < 1 then idx = #types end
+	if idx > #types then idx = 1 end
+	BALLISTICS.Spawns.SetSide(types[idx])
+end
+
 local function syncCursor()
+	-- Free-cam uses mouse look; Alt holds the cursor for the toolbar.
+	local want = false
+	if editing and input and input.IsKeyDown and KEY_LALT then
+		want = input.IsKeyDown(KEY_LALT) or (KEY_RALT and input.IsKeyDown(KEY_RALT))
+	end
+	if not editing and IsValid(toolbar) and toolbar:IsVisible() then
+		want = true
+	end
 	if BALLISTICS.UI and BALLISTICS.UI.SyncCursor then
-		BALLISTICS.UI.SyncCursor()
+		-- Prefer explicit clicker so freelook works when Alt is up.
+		if gui and gui.EnableScreenClicker then
+			gui.EnableScreenClicker(want)
+		end
 		return
 	end
 	if gui and gui.EnableScreenClicker then
-		gui.EnableScreenClicker(editing or (IsValid(toolbar) and toolbar:IsVisible()))
+		gui.EnableScreenClicker(want)
 	end
 end
 
@@ -183,279 +210,57 @@ if BALLISTICS.Net and BALLISTICS.Net.Register then
 	end)
 end
 
-local function aspect()
-	local sw = (ScrW and ScrW()) or 1280
-	local sh = (ScrH and ScrH()) or 720
-	if sw < 1 then sw = 1 end
-	if sh < 1 then sh = 1 end
-	return sw / sh, sw, sh
+local function camOrigin()
+	if not cam then return Vector(0, 0, 0) end
+	return Vector(cam.x, cam.y, cam.z)
 end
 
-local function vec3(v)
-	if not v then return nil end
-	return { x = v.x, y = v.y, z = v.z }
-end
-
-local function probe(x, y)
-	if not util or not util.TraceLine then return nil, nil end
-	local mask = MASK_SOLID_BRUSHONLY or 16395
-	local down = util.TraceLine({
-		start = Vector(x, y, 16384),
-		endpos = Vector(x, y, -16384),
-		mask = mask,
-	})
-	local ground = nil
-	if down and down.Hit and not down.HitSky and down.HitPos then
-		ground = down.HitPos.z
-	end
-	local startZ = (ground or 0) + 32
-	local up = util.TraceLine({
-		start = Vector(x, y, startZ),
-		endpos = Vector(x, y, startZ + 65536),
-		mask = mask,
-	})
-	local sky = nil
-	if up and up.HitSky and up.HitPos then sky = up.HitPos.z end
-	return ground, sky
-end
-
-local function sampleCeiling(cx, cy)
-	local offsets = {
-		{ 0, 0 }, { 1500, 0 }, { -1500, 0 }, { 0, 1500 }, { 0, -1500 },
-		{ 3000, 3000 }, { -3000, -3000 },
-	}
-	local ground, sky
-	for i = 1, #offsets do
-		local g, s = probe(cx + offsets[i][1], cy + offsets[i][2])
-		if g and (not ground or g > ground) then ground = g end
-		if s and (not sky or s < sky) then sky = s end
-	end
-	return ground, sky
-end
-
-local function frameMap()
-	local mins, maxs
-	if game and game.GetWorld then
-		local world = game.GetWorld()
-		if world and (not IsValid or IsValid(world)) and world.GetModelBounds then
-			local a, b = world:GetModelBounds()
-			mins, maxs = vec3(a), vec3(b)
-		end
-	end
-	local ratio = aspect()
-	local framed = D.overview(mins, maxs, 90, ratio)
-	local ground, sky = sampleCeiling(framed.x, framed.y)
-	if sky and framed.z > sky - 96 then framed.z = sky - 96 end
-	if ground and framed.z < ground + 64 then framed.z = ground + 64 end
-	if ground then framed.groundZ = ground end
-	framed.ortho = false
-	return framed
-end
-
-local function finiteNum(n)
-	return type(n) == "number" and n == n and n ~= math.huge and n ~= -math.huge
-end
-
-local function xyBounds(mins, maxs)
-	if type(mins) ~= "table" or type(maxs) ~= "table" then return nil end
-	local x0, y0 = tonumber(mins.x), tonumber(mins.y)
-	local x1, y1 = tonumber(maxs.x), tonumber(maxs.y)
-	if not (finiteNum(x0) and finiteNum(y0) and finiteNum(x1) and finiteNum(y1)) then return nil end
-	if x1 < x0 then x0, x1 = x1, x0 end
-	if y1 < y0 then y0, y1 = y1, y0 end
-	if x1 - x0 < 1 or y1 - y0 < 1 then return nil end
-	return { minx = x0, miny = y0, maxx = x1, maxy = y1 }
-end
-
-local function worldBounds()
-	if not game or not game.GetWorld then return nil, nil end
-	local world = game.GetWorld()
-	if not world or (IsValid and not IsValid(world)) or not world.GetModelBounds then return nil, nil end
-	local a, b = world:GetModelBounds()
-	return vec3(a), vec3(b)
-end
-
-local sliceGround = 0
-
--- Ground zero: the floor under the local player, else the spawn flags, else info_player_start.
-local function findGround()
-	local ply = LocalPlayer and LocalPlayer()
-	if IsValid(ply) and util and util.TraceLine then
-		local eye = ply:EyePos()
-		local tr = util.TraceLine({ start = eye, endpos = eye - Vector(0, 0, 16384), mask = MASK_SOLID_BRUSHONLY })
-		if tr and tr.Hit and finiteNum(tr.HitPos.z) then return tr.HitPos.z end
-		if finiteNum(ply:GetPos().z) then return ply:GetPos().z end
-	end
-	local snap = BALLISTICS.Spawns.Snapshot and BALLISTICS.Spawns.Snapshot()
-	if type(snap) == "table" then
-		local lo
-		for _, k in ipairs({ "good", "bad" }) do
-			local f = snap[k]
-			local z = type(f) == "table" and type(f.pos) == "table" and tonumber(f.pos.z)
-			if finiteNum(z) and (not lo or z < lo) then lo = z end
-		end
-		if lo then return lo end
-	end
-	if ents and ents.FindByClass then
-		local e = ents.FindByClass("info_player_start")[1]
-		if IsValid(e) then return e:GetPos().z end
-	end
-	return 0
-end
-
--- World model Z, relative to the floor under you, so a cut can reach tunnels.
-local function measureSlice()
-	local mins, maxs = worldBounds()
-	mapXY = nil
-	local bottom, top = D.SliceBounds(mins, maxs)
-	if bottom and top and (top - bottom) >= 1 then mapXY = xyBounds(mins, maxs) end
-	sliceGround = findGround()
-	sliceBottom, sliceTop = D.SliceRange(sliceGround, bottom, top)
-	sliceZ = sliceTop
-end
-
--- No cut is an empty box. The number is the height relative to the floor.
-local function sliceCutText(z)
-	if not finiteNum(z) or not finiteNum(sliceTop) or z >= sliceTop then return "" end
-	return D.SliceLabel(z, sliceGround)
-end
-
-local function writeSliceBox(box, z)
-	if not box or (IsValid and not IsValid(box)) then return end
-	if box.SetPlaceholderText then box:SetPlaceholderText("No cut") end
-	local text = sliceCutText(z)
-	if box.GetValue and box:GetValue() == text then return end
-	local prev = muteSlice
-	muteSlice = true
-	box:SetText(text)
-	muteSlice = prev
-end
-
-local function applySliceSlider()
-	local slider = toolbar and toolbar.balSlice
-	if not slider or (IsValid and not IsValid(slider)) then return end
-	muteSlice = true
-	if slider.SetMin then slider:SetMin(sliceBottom - sliceGround) end
-	if slider.SetMax then slider:SetMax(sliceTop - sliceGround) end
-	if slider.SetValue then slider:SetValue((sliceZ or sliceTop) - sliceGround) end
-	muteSlice = false
-	writeSliceBox(toolbar.balSliceBox, sliceZ)
-end
-
--- Top of the range is no cut. A rounded slider tick on the max counts as the top.
-local function sliceActive()
-	if editing ~= true or not cam then return false end
-	if not finiteNum(sliceZ) or not finiteNum(sliceTop) then return false end
-	return sliceZ < sliceTop - 1e-3
-end
-
-local function popClip()
-	if not clipOn then return end
-	clipOn = false
-	if render and render.PopCustomClipPlane then render.PopCustomClipPlane() end
-	if render and render.EnableClipping then render.EnableClipping(clipPrev == true) end
-	clipPrev = nil
-end
-
-local function pushClip(z)
-	if clipOn then popClip() end
-	if not render or not render.EnableClipping or not render.PushCustomClipPlane or not Vector then
-		return false
-	end
-	clipPrev = render.EnableClipping(true)
-	render.PushCustomClipPlane(Vector(0, 0, -1), -(tonumber(z) or 0))
-	clipOn = true
-	return true
-end
-
--- Outside the scene render, a stuck plane must not leak into normal play.
-local function guardClip()
-	if inScene then return end
-	if clipOn then popClip() end
-end
-
-local function along(startPos, endPos, z)
-	local dz = endPos.z - startPos.z
-	if math.abs(dz) < 1e-6 then
-		return Vector(startPos.x, startPos.y, z)
-	end
-	local t = (z - startPos.z) / dz
-	if t < 0 then t = 0 end
-	if t > 1 then t = 1 end
-	return Vector(
-		startPos.x + (endPos.x - startPos.x) * t,
-		startPos.y + (endPos.y - startPos.y) * t,
-		z
-	)
-end
-
--- Start the placement ray on the slice, still heading down the same line.
-local function clipTrace(startPos, endPos)
-	if not sliceActive() then return startPos, endPos end
-	local z0 = D.SliceStart(startPos.z, sliceZ)
-	local z1 = D.SliceStart(endPos.z, sliceZ)
-	if not z0 or not z1 then return startPos, endPos end
-	local a = along(startPos, endPos, z0)
-	local b = along(startPos, endPos, z1)
-	if math.abs(a.x - b.x) < 0.01 and math.abs(a.y - b.y) < 0.01 and math.abs(a.z - b.z) < 0.01 then
-		return nil, nil
-	end
-	return a, b
-end
-
-local function drawSliceRect()
-	if not sliceActive() or not mapXY then return end
-	if not render or not render.DrawLine or not Vector then return end
-	local z = sliceZ - 2
-	local x0, y0 = mapXY.minx, mapXY.miny
-	local x1, y1 = mapXY.maxx, mapXY.maxy
-	if render.SetColorMaterial then render.SetColorMaterial() end
-	local col = Color(140, 170, 190, 60)
-	local pts = {
-		Vector(x0, y0, z), Vector(x1, y0, z),
-		Vector(x1, y1, z), Vector(x0, y1, z),
-	}
-	for i = 1, 4 do
-		render.DrawLine(pts[i], pts[i % 4 + 1], col, true)
-	end
+local function camAngles()
+	if not cam then return Angle(0, 0, 0) end
+	return Angle(cam.pitch or 0, cam.yaw or 0, 0)
 end
 
 local function shiftDown()
 	if not input or not input.IsKeyDown then return false end
-	local left = KEY_LSHIFT and input.IsKeyDown(KEY_LSHIFT)
-	local right = KEY_RSHIFT and input.IsKeyDown(KEY_RSHIFT)
-	return left or right
+	return (KEY_LSHIFT and input.IsKeyDown(KEY_LSHIFT)) or (KEY_RSHIFT and input.IsKeyDown(KEY_RSHIFT))
 end
 
-local function zoom(direction)
-	if not cam then return end
-	if side == "box" and shiftDown() then
-		local step = (tonumber(direction) or 0) > 0 and 15 or -15
-		BALLISTICS.Spawns.SetBoxDraft(boxDraft.yaw + step, nil, nil, true)
-		return
-	end
-	local now = (RealTime and RealTime()) or 0
-	if wheelAt > 0 and (now - wheelAt) < 0.01 then return end
-	wheelAt = now
-	local ground = cam.groundZ or 0
-	local dist = cam.z - ground
-	if dist < 200 then dist = 200 end
-	if (tonumber(direction) or 0) > 0 then
-		dist = dist * 0.85
-	else
-		dist = dist * 1.18
-	end
-	if dist < 200 then dist = 200 end
-	if dist > 80000 then dist = 80000 end
-	cam.z = ground + dist
+local function ctrlDown()
+	if not input or not input.IsKeyDown then return false end
+	return (KEY_LCONTROL and input.IsKeyDown(KEY_LCONTROL)) or (KEY_RCONTROL and input.IsKeyDown(KEY_RCONTROL))
 end
 
-local function teamOf(flagSide)
-	if flagSide == "bad" then return BAD end
-	return GOOD
+local function altDown()
+	if not input or not input.IsKeyDown then return false end
+	return (KEY_LALT and input.IsKeyDown(KEY_LALT)) or (KEY_RALT and input.IsKeyDown(KEY_RALT))
 end
 
-local function drawRing(flag, teamId)
+local function overUI()
+	if not vgui or not vgui.GetHoveredPanel then return false end
+	local hovered = vgui.GetHoveredPanel()
+	if not IsValid(hovered) then return false end
+	local world = vgui.GetWorldPanel and vgui.GetWorldPanel()
+	if world and hovered == world then return false end
+	return true
+end
+
+local function aimTrace()
+	if not cam or not util or not util.TraceLine then return nil, nil end
+	local origin = camOrigin()
+	local ang = camAngles()
+	local dir = ang:Forward()
+	local mask = MASK_SOLID_BRUSHONLY or 16395
+	local tr = util.TraceLine({
+		start = origin,
+		endpos = origin + dir * 200000,
+		mask = mask,
+	})
+	if not tr or not tr.Hit or not tr.HitPos then return nil, nil end
+	if tr.HitSky then return nil, nil end
+	return tr.HitPos, tr.HitNormal
+end
+
+local function drawRing(flag, teamId, alpha)
 	if not flag or not flag.pos or not render or not render.DrawLine then return end
 	local radius = 105
 	local cfg = BALLISTICS.Config
@@ -464,7 +269,8 @@ local function drawRing(flag, teamId)
 	local pos = Vector(flag.pos.x, flag.pos.y, flag.pos.z + 2)
 	if render.SetColorMaterial then render.SetColorMaterial() end
 	local segs = 48
-	local colour = Color(col.r or 255, col.g or 255, col.b or 255, 220)
+	local a = alpha or 220
+	local colour = Color(col.r or 255, col.g or 255, col.b or 255, a)
 	for i = 1, segs do
 		local a0 = (i - 1) / segs * math.pi * 2
 		local a1 = i / segs * math.pi * 2
@@ -476,16 +282,16 @@ local function drawRing(flag, teamId)
 		)
 	end
 	if render.DrawWireframeSphere then
-		render.DrawWireframeSphere(pos, radius, 20, 8, Color(col.r or 255, col.g or 255, col.b or 255, 70), true)
+		render.DrawWireframeSphere(pos, radius, 20, 8, Color(col.r or 255, col.g or 255, col.b or 255, math.min(70, a)), true)
 	end
 end
 
-local function drawBox(box)
+local function drawBox(box, alpha)
 	if not box or not render or not render.DrawLine or not D.boxCorners then return end
 	local corners = D.boxCorners(box)
 	local edges = D.BOX_EDGES
 	if not corners or not edges then return end
-	local col = Color(240, 200, 60, 220)
+	local col = Color(240, 200, 60, alpha or 220)
 	if render.SetColorMaterial then render.SetColorMaterial() end
 	for i = 1, #edges do
 		local edge = edges[i]
@@ -498,8 +304,22 @@ local function drawBox(box)
 end
 
 local function showBox()
-	-- Only in the overhead Spawns editor; in play the big box is distracting.
 	return editing == true
+end
+
+local function ghostPreview()
+	if not editing or not aimHit then return end
+	if side == "box" then
+		local lift = (D.BOX_HEIGHT or 128) * 0.5
+		drawBox({
+			pos = { x = aimHit.x, y = aimHit.y, z = aimHit.z + lift },
+			yaw = boxDraft.yaw,
+			sx = boxDraft.sx,
+			sy = boxDraft.sy,
+		}, 90)
+		return
+	end
+	drawRing({ pos = { x = aimHit.x, y = aimHit.y, z = aimHit.z } }, side, 90)
 end
 
 hook.Add("PostDrawTranslucentRenderables", "Ballistics_FlagRings", function(_, sky)
@@ -507,192 +327,204 @@ hook.Add("PostDrawTranslucentRenderables", "Ballistics_FlagRings", function(_, s
 	drawRing(view.good, GOOD)
 	drawRing(view.bad, BAD)
 	if showBox() then drawBox(view.box) end
-	drawSliceRect()
+	ghostPreview()
 end)
 
--- When a cut is active, draw from just UNDER the plane so Source's PVS
--- includes basement / tunnel leaves (a high sky camera never sees them).
--- The clip plane still removes everything above the cut.
-local function cameraView()
-	local z = cam.z
-	if sliceActive() and finiteNum(sliceZ) then
-		z = sliceZ - 16
-	end
+hook.Add("CalcView", "Ballistics_SpawnEditor", function()
+	if not editing or not cam then return end
 	return {
-		origin = Vector(cam.x, cam.y, z),
-		angles = Angle(90, cam.yaw or 0, 0),
+		origin = camOrigin(),
+		angles = camAngles(),
 		fov = 90,
 		znear = 0.1,
 		zfar = 200000,
 		drawviewer = false,
 	}
-end
-
-hook.Add("CalcView", "Ballistics_SpawnEditor", function()
-	if not editing or not cam then return end
-	return cameraView()
 end)
 
--- World brushes are drawn before PreDrawOpaqueRenderables, so a clip pushed
--- there never cuts the map. This editor has no RenderView of its own: CalcView
--- only supplies the camera and the engine paints the BSP. Take over RenderScene
--- and draw that same camera with the plane already pushed. The inner RenderView
--- re-enters this hook; inScene lets the engine draw that pass.
-hook.Add("RenderScene", "Ballistics_SpawnEditorSlice", function()
-	if inScene then return end
-	if not sliceActive() then return end
-	if not render or not render.RenderView then return end
-	local viewTable = cameraView()
-	viewTable.x = 0
-	viewTable.y = 0
-	viewTable.w = (ScrW and ScrW()) or 1280
-	viewTable.h = (ScrH and ScrH()) or 720
-	viewTable.drawviewmodel = false
-	viewTable.drawhud = false
-	viewTable.dopostprocess = true
-	inScene = true
-	local pushed = pushClip(sliceZ)
-	if pushed then
-		pcall(render.RenderView, viewTable)
-		popClip()
-	end
-	inScene = false
-	if not pushed then return end
-	return true
-end)
-
-hook.Add("PreRender", "Ballistics_SpawnEditorSlice", guardClip)
-hook.Add("PostRender", "Ballistics_SpawnEditorSlice", guardClip)
-hook.Add("Think", "Ballistics_SpawnEditorSlice", guardClip)
-
+-- Keep the player body still; freecam is view-only.
 hook.Add("CreateMove", "Ballistics_SpawnEditor", function(cmd)
 	if not editing or not cmd then return end
 	if cmd.ClearMovement then cmd:ClearMovement() end
 	if cmd.ClearButtons then cmd:ClearButtons() end
+	if cmd.SetViewAngles and cam then
+		cmd:SetViewAngles(camAngles())
+	end
 end)
 
-local keyZoomAt = 0
+hook.Add("InputMouseApply", "Ballistics_SpawnEditor", function(cmd, x, y, ang)
+	if not editing or not cam then return end
+	if altDown() or overUI() then return end
+	if swivel then
+		-- While swiveling, mouse X only turns the placed item.
+		local sens = 0.12
+		local dyaw = -(tonumber(x) or 0) * sens
+		if side == "box" then
+			boxDraft.yaw = wrapYaw(boxDraft.yaw + dyaw)
+			send(D.OP_BOX, 0, swivel.pos, { p = 0, y = boxDraft.yaw, r = 0 }, swivel.sx, swivel.sy)
+		else
+			swivel.yaw = wrapYaw((swivel.yaw or 0) + dyaw)
+			send(D.OP_PLACE, swivel.team, swivel.pos, { p = 0, y = swivel.yaw, r = 0 })
+		end
+		return true
+	end
+	local sens = 0.022
+	cam.pitch = math.Clamp((cam.pitch or 0) + (tonumber(y) or 0) * sens, -89, 89)
+	cam.yaw = wrapYaw((cam.yaw or 0) - (tonumber(x) or 0) * sens)
+	return true
+end)
 
-hook.Add("Think", "Ballistics_SpawnEditor", function()
-	if not editing or not cam or not input or not input.IsKeyDown or not KEY_W then return end
-	local dist = cam.z - (cam.groundZ or 0)
-	local speed = math.max(200, dist * 0.9) * ((FrameTime and FrameTime()) or 0.015)
-	local dx, dy = D.pan(cam.yaw or 0, {
-		w = input.IsKeyDown(KEY_W),
-		a = input.IsKeyDown(KEY_A),
-		s = input.IsKeyDown(KEY_S),
-		d = input.IsKeyDown(KEY_D),
-	}, speed)
+local function moveCam(dt)
+	if not cam or not input or not input.IsKeyDown or not KEY_W then return end
+	if altDown() then return end
+	local typing = vgui and vgui.GetKeyboardFocus and IsValid and IsValid(vgui.GetKeyboardFocus())
+	if typing then return end
+	local speed = 600
+	if shiftDown() then speed = 1800 end
+	if ctrlDown() then speed = 180 end
+	speed = speed * (dt or 0.015)
+	local ang = camAngles()
+	local forward = ang:Forward()
+	local right = ang:Right()
+	local up = Vector(0, 0, 1)
+	local dx, dy, dz = 0, 0, 0
+	if input.IsKeyDown(KEY_W) then
+		dx = dx + forward.x * speed
+		dy = dy + forward.y * speed
+		dz = dz + forward.z * speed
+	end
+	if input.IsKeyDown(KEY_S) then
+		dx = dx - forward.x * speed
+		dy = dy - forward.y * speed
+		dz = dz - forward.z * speed
+	end
+	if input.IsKeyDown(KEY_D) then
+		dx = dx + right.x * speed
+		dy = dy + right.y * speed
+		dz = dz + right.z * speed
+	end
+	if input.IsKeyDown(KEY_A) then
+		dx = dx - right.x * speed
+		dy = dy - right.y * speed
+		dz = dz - right.z * speed
+	end
+	if KEY_SPACE and input.IsKeyDown(KEY_SPACE) then
+		dz = dz + speed
+	end
 	cam.x = cam.x + dx
 	cam.y = cam.y + dy
-	-- Zoom: GMod has no GUIMouseWheeled hook and binds don't fire while the
-	-- screen clicker is on, so take the wheel from the world panel, plus E/Q
-	-- (and PgUp/PgDn) as keyboard zoom.
+	cam.z = cam.z + dz
+end
+
+local function placeAtAim()
+	if not editing or not cam or overUI() or altDown() then return end
+	local hit = aimHit
+	if not hit then
+		hit = select(1, aimTrace())
+	end
+	if not hit then return end
+	if side == "box" then
+		local lift = (D.BOX_HEIGHT or 128) * 0.5
+		local pos = { x = hit.x, y = hit.y, z = hit.z + lift }
+		send(D.OP_BOX, 0, pos, { p = 0, y = boxDraft.yaw, r = 0 }, boxDraft.sx, boxDraft.sy)
+		swivel = { op = D.OP_BOX, team = 0, pos = pos, sx = boxDraft.sx, sy = boxDraft.sy, yaw = boxDraft.yaw }
+		return
+	end
+	local yaw = cam.yaw or 0
+	local other = side == GOOD and view.bad or view.good
+	if other and other.pos then
+		yaw = math.deg(math.atan2(other.pos.y - hit.y, other.pos.x - hit.x))
+	end
+	local pos = { x = hit.x, y = hit.y, z = hit.z }
+	send(D.OP_PLACE, side, pos, { p = 0, y = yaw, r = 0 })
+	swivel = { op = D.OP_PLACE, team = side, pos = pos, yaw = yaw }
+end
+
+local lmbWas = false
+
+hook.Add("Think", "Ballistics_SpawnEditor", function()
+	if not editing or not cam then return end
+	local alt = altDown()
+	syncCursor()
+	if IsValid(toolbar) then
+		toolbar:SetMouseInputEnabled(alt == true)
+		toolbar:SetKeyboardInputEnabled(false)
+	end
+	moveCam((FrameTime and FrameTime()) or 0.015)
+	local hit, nrm = aimTrace()
+	aimHit, aimNormal = hit, nrm
+
 	local wp = vgui and vgui.GetWorldPanel and vgui.GetWorldPanel()
 	if IsValid(wp) and not wp.balSpawnWheel then
 		wp.balSpawnWheel = true
 		local old = wp.OnMouseWheeled
 		wp.OnMouseWheeled = function(pnl, delta)
 			if editing then
-				zoom(delta)
+				local now = (RealTime and RealTime()) or 0
+				if wheelAt > 0 and (now - wheelAt) < 0.05 then return true end
+				wheelAt = now
+				cycleType(delta)
 				return true
 			end
 			if old then return old(pnl, delta) end
 		end
 	end
-	local zin = input.IsKeyDown(KEY_E) or (KEY_PAGEUP and input.IsKeyDown(KEY_PAGEUP))
-	local zout = input.IsKeyDown(KEY_Q) or (KEY_PAGEDOWN and input.IsKeyDown(KEY_PAGEDOWN))
-	local now = (RealTime and RealTime()) or 0
-	if (zin or zout) and (now - keyZoomAt) > 0.05 then
-		keyZoomAt = now
-		zoom(zin and 1 or -1)
+
+	local lmb = input and input.IsMouseDown and MOUSE_LEFT and input.IsMouseDown(MOUSE_LEFT)
+	if lmb and not lmbWas and not alt and not overUI() and not swivel then
+		placeAtAim()
 	end
-	-- Arrows rotate the box. Q and E stay on zoom.
-	if side == "box" and (now - keyZoomAt) > 0.12 then
-		local typing = vgui and vgui.GetKeyboardFocus and IsValid and IsValid(vgui.GetKeyboardFocus())
-		local left = KEY_LEFT and input.IsKeyDown(KEY_LEFT)
-		local right = KEY_RIGHT and input.IsKeyDown(KEY_RIGHT)
-		if not typing and (left or right) and not (left and right) then
-			keyZoomAt = now
-			BALLISTICS.Spawns.SetBoxDraft(boxDraft.yaw + (right and 15 or -15), nil, nil, true)
-		end
+	if swivel and not lmb then
+		swivel = nil
 	end
+	lmbWas = lmb and true or false
 end)
 
 hook.Add("PlayerBindPress", "Ballistics_SpawnEditor", function(_, bind, pressed)
 	if not editing then return end
 	if bind == "invnext" or bind == "invprev" then
-		if pressed then zoom(bind == "invprev" and 1 or -1) end
+		if pressed then cycleType(bind == "invprev" and 1 or -1) end
 		return true
 	end
-	if bind == "+attack" or bind == "+attack2" or bind == "+jump" or bind == "+duck" then
+	if bind == "+attack" then
+		if pressed and not swivel then
+			placeAtAim()
+		elseif not pressed then
+			swivel = nil
+		end
+		return true
+	end
+	if bind == "+attack2" or bind == "+jump" or bind == "+duck" then
 		return true
 	end
 end)
 
 hook.Add("GUIMouseWheeled", "Ballistics_SpawnEditor", function(delta)
 	if not editing then return end
-	zoom(delta)
+	cycleType(delta)
 end)
-
-local function overUI()
-	if not vgui or not vgui.GetHoveredPanel then return false end
-	local hovered = vgui.GetHoveredPanel()
-	if not IsValid(hovered) then return false end
-	local world = vgui.GetWorldPanel and vgui.GetWorldPanel()
-	if world and hovered == world then return false end
-	return true
-end
-
-local function placeAtCursor()
-	if not editing or not cam or overUI() then return end
-	if not util or not util.TraceLine then return end
-	local _, sw, sh = aspect()
-	local mx = (gui and gui.MouseX and gui.MouseX()) or 0
-	local my = (gui and gui.MouseY and gui.MouseY()) or 0
-	local mask = MASK_SOLID_BRUSHONLY or 16395
-	-- Same camera CalcView / RenderScene draw with. gui.ScreenToVector follows the
-	-- engine view, which disagrees once a clip plane is pushed.
-	local ang = Angle(90, cam.yaw or 0, 0)
-	local dir = D.AimDir(ang, 90, mx, my, sw, sh)
-	if not dir then return end
-	-- Same origin the view uses, so clicks land under the cursor.
-	local viewZ = cam.z
-	if sliceActive() and finiteNum(sliceZ) then viewZ = sliceZ - 16 end
-	local origin = Vector(cam.x, cam.y, viewZ)
-	dir = Vector(dir.x, dir.y, dir.z)
-	-- Force the ray downward so a shallow screen-edge AimDir still hits a floor.
-	if dir.z > -0.05 then dir = Vector(dir.x, dir.y, -1) end
-	local startPos, endPos = clipTrace(origin, origin + dir * 200000)
-	if not startPos or not endPos then return end
-	local tr = util.TraceLine({
-		start = startPos,
-		endpos = endPos,
-		mask = mask,
-	})
-	if not tr or not tr.Hit or not tr.HitPos then return end
-	if tr.HitSky and not sliceActive() then return end
-	if side == "box" then
-		local lift = (D.BOX_HEIGHT or 128) * 0.5
-		send(D.OP_BOX, 0, {
-			x = tr.HitPos.x, y = tr.HitPos.y, z = tr.HitPos.z + lift,
-		}, { p = 0, y = boxDraft.yaw, r = 0 }, boxDraft.sx, boxDraft.sy)
-		return
-	end
-	local yaw = 0
-	local other = side == GOOD and view.bad or view.good
-	if other and other.pos then
-		yaw = math.deg(math.atan2(other.pos.y - tr.HitPos.y, other.pos.x - tr.HitPos.x))
-	end
-	send(D.OP_PLACE, side, {
-		x = tr.HitPos.x, y = tr.HitPos.y, z = tr.HitPos.z,
-	}, { p = 0, y = yaw, r = 0 })
-end
 
 hook.Add("GUIMousePressed", "Ballistics_SpawnEditor", function(code)
 	if not editing then return end
-	if MOUSE_LEFT and code ~= MOUSE_LEFT then return end
-	placeAtCursor()
+	if not altDown() then return end
+	-- With Alt (cursor on), left click on world still places.
+	if MOUSE_LEFT and code == MOUSE_LEFT and not overUI() then
+		placeAtAim()
+	end
+end)
+
+hook.Add("HUDPaint", "Ballistics_SpawnEditor", function()
+	if not editing then return end
+	local sw = (ScrW and ScrW()) or 1280
+	local sh = (ScrH and ScrH()) or 720
+	local cx, cy = sw * 0.5, sh * 0.5
+	surface.SetDrawColor(255, 255, 255, 200)
+	surface.DrawRect(cx - 8, cy - 1, 16, 2)
+	surface.DrawRect(cx - 1, cy - 8, 2, 16)
+	local label = typeLabel(side)
+	if swivel then label = label .. "  ·  swivel yaw" end
+	draw.SimpleText(label, "BallisticsSmall", cx, cy + 28, Color(240, 230, 180), TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
+	draw.SimpleText("WASD fly · mouse look · Shift fast · Ctrl slow · Space up · wheel type · LMB place/hold yaw · Alt UI", "BallisticsSmall", cx, sh - 36, Color(180, 180, 180), TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
 end)
 
 local function paintSide(self, w, h)
@@ -719,6 +551,9 @@ local function refreshToolbar()
 	if IsValid(toolbar.balReady) then
 		toolbar.balReady:SetText(D.readiness(snap))
 	end
+	if IsValid(toolbar.balType) then
+		toolbar.balType:SetText("Type: " .. typeLabel(side) .. "  (scroll)")
+	end
 end
 
 local function ensureToolbar()
@@ -726,7 +561,7 @@ local function ensureToolbar()
 	if not vgui or not vgui.Create then return nil end
 	toolbar = vgui.Create("DFrame")
 	toolbar:SetTitle("Edit spawns")
-	toolbar:SetSize(480, 232)
+	toolbar:SetSize(480, 150)
 	toolbar:SetPos(12, 12)
 	toolbar:SetDeleteOnClose(false)
 	toolbar:SetSizable(false)
@@ -773,7 +608,7 @@ local function ensureToolbar()
 		BALLISTICS.Spawns.SetSide("box")
 	end
 	if squad.SetTooltip then
-		squad:SetTooltip("Place and resize the firing squad box. Arrows or shift+wheel rotate it.")
+		squad:SetTooltip("Place and resize the firing squad box. Hold LMB after place to swivel yaw.")
 	end
 
 	toolbar.balStatus = vgui.Create("DLabel", toolbar)
@@ -788,149 +623,18 @@ local function ensureToolbar()
 	toolbar.balReady:SetText("")
 	if toolbar.balReady.SetTextColor then toolbar.balReady:SetTextColor(Color(200, 200, 200)) end
 
+	toolbar.balType = vgui.Create("DLabel", toolbar)
+	toolbar.balType:Dock(TOP)
+	toolbar.balType:SetTall(18)
+	toolbar.balType:SetText("")
+	if toolbar.balType.SetTextColor then toolbar.balType:SetTextColor(Color(200, 220, 240)) end
+
 	local hint = vgui.Create("DLabel", toolbar)
 	hint:Dock(TOP)
-	hint:SetTall(32)
+	hint:SetTall(28)
 	hint:SetWrap(true)
-	hint:SetText("WASD pan, wheel zooms, click the ground. Squad: arrows or shift+wheel rotate. Sliders resize.")
+	hint:SetText("Hold Alt to use this panel. Scroll cycles type. LMB places; hold and move mouse to set yaw.")
 	if hint.SetTextColor then hint:SetTextColor(Color(170, 170, 170)) end
-
-	local sliceTip = "Hide everything above this height (relative to the floor under you). The far right end is no cut."
-	local sliceLine = vgui.Create("DPanel", toolbar)
-	sliceLine:Dock(TOP)
-	sliceLine:SetTall(60)
-	sliceLine:DockMargin(0, 4, 0, 0)
-	sliceLine:DockPadding(8, 2, 8, 2)
-	sliceLine.Paint = function(_, w, h)
-		surface.SetDrawColor(32, 34, 40, 255)
-		surface.DrawRect(0, 0, w, h)
-	end
-	if sliceLine.SetTooltip then sliceLine:SetTooltip(sliceTip) end
-
-	-- Set the cut (absolute Z), snapped to 8 units; the top end means no cut.
-	local function setSlice(z)
-		z = D.SliceSnap(z, sliceBottom, sliceTop)
-		if not z then return end
-		sliceZ = z
-		applySliceSlider()
-	end
-
-	local tools = vgui.Create("DPanel", sliceLine)
-	tools:Dock(BOTTOM)
-	tools:SetTall(24)
-	tools.Paint = function() end
-	local function toolButton(text, wide, fn)
-		local b = vgui.Create("DButton", tools)
-		b:Dock(LEFT)
-		b:SetWide(wide)
-		b:DockMargin(0, 0, 6, 0)
-		b:SetText(text)
-		b.DoClick = fn
-		return b
-	end
-	toolButton("Set from me", 90, function()
-		local ply = LocalPlayer and LocalPlayer()
-		if IsValid(ply) then setSlice(ply:EyePos().z + 32) end
-	end)
-	toolButton("No cut", 70, function() setSlice(sliceTop) end)
-	local box = vgui.Create("DTextEntry", tools)
-	box:Dock(LEFT)
-	box:SetWide(70)
-	if box.SetNumeric then
-		box:SetNumeric(true)
-	else
-		-- Digits, one leading minus, and a decimal. Anything else is rejected.
-		box.AllowInput = function(_, char)
-			if type(char) ~= "string" or #char ~= 1 then return true end
-			if char:match("%d") or char == "." or char == "-" then return false end
-			return true
-		end
-	end
-	if box.SetPlaceholderText then
-		box:SetPlaceholderText("No cut")
-		if box.SetPlaceholderColor then box:SetPlaceholderColor(Color(150, 150, 155, 160)) end
-	else
-		local paint = box.Paint
-		box.Paint = function(pnl, w, h)
-			if paint then paint(pnl, w, h) end
-			if tostring(pnl:GetValue() or "") ~= "" then return end
-			if pnl.HasFocus and pnl:HasFocus() then return end
-			if not draw or not draw.SimpleText then return end
-			local font = (pnl.GetFont and pnl:GetFont()) or "DermaDefault"
-			draw.SimpleText("No cut", font, 4, h * 0.5, Color(160, 160, 160, 150), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
-		end
-	end
-	if box.SetTooltip then box:SetTooltip("Exact height relative to the floor, e.g. +128 or -64. Enter to apply.") end
-	-- Paste skips SetNumeric. Keep the field numeric and never keep "No cut" as text.
-	box.OnChange = function(pnl)
-		if muteSlice then return end
-		local raw = tostring(pnl:GetValue() or "")
-		local body = raw:gsub("%s", "")
-		if body == "No cut" then body = "" end
-		local sign = ""
-		if body:sub(1, 1) == "+" or body:sub(1, 1) == "-" then
-			sign = body:sub(1, 1)
-			body = body:sub(2)
-		end
-		local out, dot = {}, false
-		for i = 1, #body do
-			local ch = body:sub(i, i)
-			if ch:match("%d") then
-				out[#out + 1] = ch
-			elseif ch == "." and not dot then
-				dot = true
-				out[#out + 1] = ch
-			end
-		end
-		local cleaned = sign .. table.concat(out)
-		if cleaned == raw then return end
-		muteSlice = true
-		pnl:SetText(cleaned)
-		if pnl.SetCaretPos then pnl:SetCaretPos(#cleaned) end
-		muteSlice = false
-	end
-	box.OnEnter = function(pnl)
-		local txt = tostring(pnl:GetValue() or ""):gsub("%s", "")
-		local rel = tonumber(txt)
-		if txt == "" or txt == "No cut" or not rel then
-			applySliceSlider()
-			return
-		end
-		setSlice(sliceGround + rel)
-	end
-	box.OnLoseFocus = function(pnl) pnl:OnEnter() end
-	toolbar.balSliceBox = box
-
-	local slice = vgui.Create("DNumSlider", sliceLine)
-	slice:Dock(FILL)
-	slice:SetText("Slice height")
-	if slice.SetDark then slice:SetDark(false) end
-	if slice.SetDecimals then slice:SetDecimals(0) end
-	if slice.SetTooltip then slice:SetTooltip(sliceTip) end
-	if slice.Label and slice.Label.SetTextColor then
-		slice.Label:SetTextColor(Color(230, 230, 230))
-	end
-	toolbar.balSlice = slice
-	applySliceSlider()
-	slice.OnValueChanged = function(_, val)
-		if muteSlice or editing ~= true then return end
-		local z = D.SliceSnap(sliceGround + (tonumber(val) or 0), sliceBottom, sliceTop)
-		if not z then return end
-		sliceZ = z
-		writeSliceBox(box, z)
-	end
-	-- Wheel over any part of the slider nudges by 16 and does not zoom the map.
-	local function wheel(_, delta)
-		if editing ~= true then return true end
-		setSlice((sliceZ or sliceTop) + (delta > 0 and 16 or -16))
-		return true
-	end
-	local function hookWheel(pnl)
-		if not IsValid(pnl) then return end
-		pnl.OnMouseWheeled = wheel
-		for _, c in ipairs(pnl:GetChildren() or {}) do hookWheel(c) end
-	end
-	hookWheel(slice)
 
 	local bar = vgui.Create("DPanel", toolbar)
 	bar:Dock(BOTTOM)
@@ -957,19 +661,31 @@ end
 function BALLISTICS.Spawns.EndEdit(reopen)
 	if toolbar and toolbar.balClosing then return end
 	editing = false
-	sliceZ = sliceTop
-	applySliceSlider()
-	popClip()
+	swivel = nil
+	aimHit = nil
 	if IsValid(toolbar) then
 		toolbar.balClosing = true
 		toolbar:SetVisible(false)
 		toolbar.balClosing = false
 	end
 	if BALLISTICS.UI then BALLISTICS.UI.Mark("spawns", toolbar) end
+	if gui and gui.EnableScreenClicker then gui.EnableScreenClicker(false) end
 	syncCursor()
 	if reopen and BALLISTICS.Admin and BALLISTICS.Admin.Open then
 		BALLISTICS.Admin.Open()
 	end
+end
+
+local function startCam()
+	local ply = LocalPlayer and LocalPlayer()
+	local x, y, z, pitch, yaw = 0, 0, 128, 0, 0
+	if IsValid(ply) then
+		local eye = ply:EyePos()
+		local ang = ply:EyeAngles()
+		x, y, z = eye.x, eye.y, eye.z
+		pitch, yaw = ang.p, ang.y
+	end
+	return { x = x, y = y, z = z, pitch = pitch, yaw = yaw }
 end
 
 function BALLISTICS.Spawns.BeginEdit()
@@ -983,15 +699,15 @@ function BALLISTICS.Spawns.BeginEdit()
 	if not allowed then return end
 	if BALLISTICS.Lobby and BALLISTICS.Lobby.Close then BALLISTICS.Lobby.Close() end
 	if BALLISTICS.Admin and BALLISTICS.Admin.Close then BALLISTICS.Admin.Close() end
-	local fresh = not editing
-	cam = frameMap()
-	if fresh then measureSlice() end
+	cam = startCam()
 	editing = true
+	swivel = nil
 	local pnl = ensureToolbar()
-	applySliceSlider()
 	if IsValid(pnl) then
 		pnl:SetVisible(true)
 		pnl:MakePopup()
+		pnl:SetKeyboardInputEnabled(false)
+		pnl:SetMouseInputEnabled(true)
 		if BALLISTICS.UI then BALLISTICS.UI.Mark("spawns", pnl) end
 		refreshToolbar()
 	end
