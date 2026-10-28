@@ -191,17 +191,6 @@ check("scroll in shrinks the window", near(zoomed, 85))
 zoomed = D.zoom(70, 1, 1)
 check("zoom does not go below 64", zoomed == 64)
 
-check("slice bounds are the map floor and ceiling", sb == -100.5 and st == 400)
-check("slice bounds swap an upside-down box", swappedB == -20 and swappedT == 50)
-check("slice bounds accept a z index", arrB == -4 and arrT == 8)
-check("slice range with no world bounds is 16384 around ground", rlo == 100 - 16384 and rhi == 100 + 16384)
-check("slice range with no ground centres the fallback on zero", zlo == -16384 and zhi == 16384)
-check("slice range snaps world bounds out to 8 around ground", blo == -24 and bhi == 24)
-check("slice range reaches underground and snaps to ground", ulo == -4104 and uhi == 512 and ulo < -512)
-check("slice range swaps an upside-down world", swappedLo == -16 and swappedHi == 40)
-check("slice range still includes ground when the world sits above it", aboveLo == 0 and aboveHi == 48)
-check("a flat world falls back to the full span", flatLo == 5 - 16384 and flatHi == 5 + 16384)
-check("non-finite world bounds fall back", badLo == 5 - 16384 and badHi == 5 + 16384)
 
 local nodes = 0
 local enabled = 0

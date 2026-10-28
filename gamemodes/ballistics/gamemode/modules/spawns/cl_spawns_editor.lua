@@ -1,5 +1,5 @@
 -- Free-cam spawn editor. Fly through walls, aim a crosshair, place/swivel items.
--- Scroll cycles type. Existing save/reset/net stay. No slice cut.
+-- Scroll cycles type. Compact HUD; Enter saves+exits. No Derma toolbar.
 
 if not CLIENT then return end
 
@@ -17,12 +17,13 @@ local boxDraft = { yaw = 0, sx = D.BOX_LENGTH or 768, sy = D.BOX_WIDTH or 384 }
 local editing = false
 local send
 local cam = nil -- { x, y, z, pitch, yaw }
-local toolbar = nil
 local wheelAt = 0
 local types = { GOOD, BAD, "box" }
-local swivel = nil -- { op, team, pos, sx, sy } while LMB held after place
-local aimHit = nil -- last aim hit for ghost
+local swivel = nil -- while LMB held after place
+local aimHit = nil
 local aimNormal = nil
+local lmbWas = false
+local keyLatch = {}
 
 local function emit()
 	for i = 1, #listeners do
@@ -111,23 +112,8 @@ local function cycleType(dir)
 end
 
 local function syncCursor()
-	-- Free-cam uses mouse look; Alt holds the cursor for the toolbar.
-	local want = false
-	if editing and input and input.IsKeyDown and KEY_LALT then
-		want = input.IsKeyDown(KEY_LALT) or (KEY_RALT and input.IsKeyDown(KEY_RALT))
-	end
-	if not editing and IsValid(toolbar) and toolbar:IsVisible() then
-		want = true
-	end
-	if BALLISTICS.UI and BALLISTICS.UI.SyncCursor then
-		-- Prefer explicit clicker so freelook works when Alt is up.
-		if gui and gui.EnableScreenClicker then
-			gui.EnableScreenClicker(want)
-		end
-		return
-	end
 	if gui and gui.EnableScreenClicker then
-		gui.EnableScreenClicker(want)
+		gui.EnableScreenClicker(false)
 	end
 end
 
@@ -228,11 +214,6 @@ end
 local function ctrlDown()
 	if not input or not input.IsKeyDown then return false end
 	return (KEY_LCONTROL and input.IsKeyDown(KEY_LCONTROL)) or (KEY_RCONTROL and input.IsKeyDown(KEY_RCONTROL))
-end
-
-local function altDown()
-	if not input or not input.IsKeyDown then return false end
-	return (KEY_LALT and input.IsKeyDown(KEY_LALT)) or (KEY_RALT and input.IsKeyDown(KEY_RALT))
 end
 
 local function overUI()
@@ -354,9 +335,8 @@ end)
 
 hook.Add("InputMouseApply", "Ballistics_SpawnEditor", function(cmd, x, y, ang)
 	if not editing or not cam then return end
-	if altDown() or overUI() then return end
+	if overUI() then return end
 	if swivel then
-		-- While swiveling, mouse X only turns the placed item.
 		local sens = 0.12
 		local dyaw = -(tonumber(x) or 0) * sens
 		if side == "box" then
@@ -376,7 +356,6 @@ end)
 
 local function moveCam(dt)
 	if not cam or not input or not input.IsKeyDown or not KEY_W then return end
-	if altDown() then return end
 	local typing = vgui and vgui.GetKeyboardFocus and IsValid and IsValid(vgui.GetKeyboardFocus())
 	if typing then return end
 	local speed = 600
@@ -386,7 +365,6 @@ local function moveCam(dt)
 	local ang = camAngles()
 	local forward = ang:Forward()
 	local right = ang:Right()
-	local up = Vector(0, 0, 1)
 	local dx, dy, dz = 0, 0, 0
 	if input.IsKeyDown(KEY_W) then
 		dx = dx + forward.x * speed
@@ -417,7 +395,7 @@ local function moveCam(dt)
 end
 
 local function placeAtAim()
-	if not editing or not cam or overUI() or altDown() then return end
+	if not editing or not cam then return end
 	local hit = aimHit
 	if not hit then
 		hit = select(1, aimTrace())
@@ -440,16 +418,17 @@ local function placeAtAim()
 	swivel = { op = D.OP_PLACE, team = side, pos = pos, yaw = yaw }
 end
 
-local lmbWas = false
+local function keyPressed(key)
+	if not input or not input.IsKeyDown or not key then return false end
+	local down = input.IsKeyDown(key)
+	local was = keyLatch[key] == true
+	keyLatch[key] = down
+	return down and not was
+end
 
 hook.Add("Think", "Ballistics_SpawnEditor", function()
 	if not editing or not cam then return end
-	local alt = altDown()
 	syncCursor()
-	if IsValid(toolbar) then
-		toolbar:SetMouseInputEnabled(alt == true)
-		toolbar:SetKeyboardInputEnabled(false)
-	end
 	moveCam((FrameTime and FrameTime()) or 0.015)
 	local hit, nrm = aimTrace()
 	aimHit, aimNormal = hit, nrm
@@ -470,8 +449,24 @@ hook.Add("Think", "Ballistics_SpawnEditor", function()
 		end
 	end
 
+	local typing = vgui and vgui.GetKeyboardFocus and IsValid and IsValid(vgui.GetKeyboardFocus())
+	if not typing then
+		if keyPressed(KEY_ENTER) or (KEY_PAD_ENTER and keyPressed(KEY_PAD_ENTER)) then
+			BALLISTICS.Spawns.RequestSave()
+			BALLISTICS.Spawns.EndEdit(true)
+			return
+		end
+		if keyPressed(KEY_ESCAPE) or (KEY_BACKSPACE and keyPressed(KEY_BACKSPACE)) then
+			BALLISTICS.Spawns.EndEdit(true)
+			return
+		end
+		if KEY_R and keyPressed(KEY_R) then
+			BALLISTICS.Spawns.ConfirmReset()
+		end
+	end
+
 	local lmb = input and input.IsMouseDown and MOUSE_LEFT and input.IsMouseDown(MOUSE_LEFT)
-	if lmb and not lmbWas and not alt and not overUI() and not swivel then
+	if lmb and not lmbWas and not overUI() and not swivel then
 		placeAtAim()
 	end
 	if swivel and not lmb then
@@ -504,15 +499,6 @@ hook.Add("GUIMouseWheeled", "Ballistics_SpawnEditor", function(delta)
 	cycleType(delta)
 end)
 
-hook.Add("GUIMousePressed", "Ballistics_SpawnEditor", function(code)
-	if not editing then return end
-	if not altDown() then return end
-	-- With Alt (cursor on), left click on world still places.
-	if MOUSE_LEFT and code == MOUSE_LEFT and not overUI() then
-		placeAtAim()
-	end
-end)
-
 hook.Add("HUDPaint", "Ballistics_SpawnEditor", function()
 	if not editing then return end
 	local sw = (ScrW and ScrW()) or 1280
@@ -521,155 +507,30 @@ hook.Add("HUDPaint", "Ballistics_SpawnEditor", function()
 	surface.SetDrawColor(255, 255, 255, 200)
 	surface.DrawRect(cx - 8, cy - 1, 16, 2)
 	surface.DrawRect(cx - 1, cy - 8, 2, 16)
-	local label = typeLabel(side)
-	if swivel then label = label .. "  ·  swivel yaw" end
-	draw.SimpleText(label, "BallisticsSmall", cx, cy + 28, Color(240, 230, 180), TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
-	draw.SimpleText("WASD fly · mouse look · Shift fast · Ctrl slow · Space up · wheel type · LMB place/hold yaw · Alt UI", "BallisticsSmall", cx, sh - 36, Color(180, 180, 180), TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
+
+	local snap = BALLISTICS.Spawns.Snapshot()
+	local map = (snap.map ~= "" and snap.map) or "map"
+	local state = D.statusText(snap)
+	local typ = typeLabel(side)
+	if swivel then typ = typ .. " · swivel" end
+
+	local x, y = 12, 12
+	local w, h = 380, 70
+	surface.SetDrawColor(12, 14, 18, 200)
+	surface.DrawRect(x, y, w, h)
+	surface.SetDrawColor(80, 90, 100, 220)
+	surface.DrawOutlinedRect(x, y, w, h)
+	draw.SimpleText(typ, "BallisticsSmall", x + 10, y + 8, Color(240, 230, 180), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
+	draw.SimpleText(map .. "  ·  " .. state, "BallisticsSmall", x + 10, y + 28, Color(200, 200, 200), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
+	draw.SimpleText("WASD look · wheel type · LMB place/yaw · Enter save+exit · R reset · Esc exit", "BallisticsSmall", x + 10, y + 48, Color(160, 160, 160), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
 end)
 
-local function paintSide(self, w, h)
-	local on = side == self.balTeam
-	local col = (BALLISTICS.TeamColor and BALLISTICS.TeamColor[self.balTeam]) or Color(180, 180, 180)
-	if on then
-		surface.SetDrawColor(col.r, col.g, col.b, 255)
-	else
-		surface.SetDrawColor(36, 36, 42, 255)
-	end
-	surface.DrawRect(0, 0, w, h)
-	surface.SetDrawColor(col.r, col.g, col.b, 255)
-	surface.DrawOutlinedRect(0, 0, w, h)
-	local name = (BALLISTICS.TeamName and BALLISTICS.TeamName[self.balTeam]) or "Flag"
-	draw.SimpleText(name, "BallisticsSmall", w / 2, h / 2, Color(255, 255, 255), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-end
-
-local function refreshToolbar()
-	if not IsValid(toolbar) then return end
-	local snap = BALLISTICS.Spawns.Snapshot()
-	if IsValid(toolbar.balStatus) then
-		toolbar.balStatus:SetText(D.statusText(snap) .. "  ·  " .. (snap.map ~= "" and snap.map or "map"))
-	end
-	if IsValid(toolbar.balReady) then
-		toolbar.balReady:SetText(D.readiness(snap))
-	end
-	if IsValid(toolbar.balType) then
-		toolbar.balType:SetText("Type: " .. typeLabel(side) .. "  (scroll)")
-	end
-end
-
-local function ensureToolbar()
-	if IsValid(toolbar) then return toolbar end
-	if not vgui or not vgui.Create then return nil end
-	toolbar = vgui.Create("DFrame")
-	toolbar:SetTitle("Edit spawns")
-	toolbar:SetSize(480, 150)
-	toolbar:SetPos(12, 12)
-	toolbar:SetDeleteOnClose(false)
-	toolbar:SetSizable(false)
-	toolbar:DockPadding(8, 28, 8, 8)
-	function toolbar:OnClose()
-		BALLISTICS.Spawns.EndEdit(true)
-	end
-
-	local row = vgui.Create("DPanel", toolbar)
-	row:Dock(TOP)
-	row:SetTall(28)
-	row.Paint = function() end
-	for _, teamId in ipairs({ GOOD, BAD }) do
-		local btn = vgui.Create("DButton", row)
-		btn:Dock(LEFT)
-		btn:SetWide(100)
-		btn:DockMargin(0, 0, 8, 0)
-		btn:SetText("")
-		btn.balTeam = teamId
-		btn.Paint = paintSide
-		btn.DoClick = function()
-			BALLISTICS.Spawns.SetSide(teamId)
-		end
-	end
-
-	local squad = vgui.Create("DButton", row)
-	squad:Dock(LEFT)
-	squad:SetWide(110)
-	squad:DockMargin(0, 0, 8, 0)
-	squad:SetText("")
-	squad.Paint = function(_, w, h)
-		local on = side == "box"
-		if on then
-			surface.SetDrawColor(240, 200, 60, 255)
-		else
-			surface.SetDrawColor(36, 36, 42, 255)
-		end
-		surface.DrawRect(0, 0, w, h)
-		surface.SetDrawColor(240, 200, 60, 255)
-		surface.DrawOutlinedRect(0, 0, w, h)
-		draw.SimpleText("Squad", "BallisticsSmall", w / 2, h / 2, Color(255, 255, 255), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-	end
-	squad.DoClick = function()
-		BALLISTICS.Spawns.SetSide("box")
-	end
-	if squad.SetTooltip then
-		squad:SetTooltip("Place and resize the firing squad box. Hold LMB after place to swivel yaw.")
-	end
-
-	toolbar.balStatus = vgui.Create("DLabel", toolbar)
-	toolbar.balStatus:Dock(TOP)
-	toolbar.balStatus:SetTall(18)
-	toolbar.balStatus:SetText("")
-	if toolbar.balStatus.SetTextColor then toolbar.balStatus:SetTextColor(Color(220, 210, 160)) end
-
-	toolbar.balReady = vgui.Create("DLabel", toolbar)
-	toolbar.balReady:Dock(TOP)
-	toolbar.balReady:SetTall(18)
-	toolbar.balReady:SetText("")
-	if toolbar.balReady.SetTextColor then toolbar.balReady:SetTextColor(Color(200, 200, 200)) end
-
-	toolbar.balType = vgui.Create("DLabel", toolbar)
-	toolbar.balType:Dock(TOP)
-	toolbar.balType:SetTall(18)
-	toolbar.balType:SetText("")
-	if toolbar.balType.SetTextColor then toolbar.balType:SetTextColor(Color(200, 220, 240)) end
-
-	local hint = vgui.Create("DLabel", toolbar)
-	hint:Dock(TOP)
-	hint:SetTall(28)
-	hint:SetWrap(true)
-	hint:SetText("Hold Alt to use this panel. Scroll cycles type. LMB places; hold and move mouse to set yaw.")
-	if hint.SetTextColor then hint:SetTextColor(Color(170, 170, 170)) end
-
-	local bar = vgui.Create("DPanel", toolbar)
-	bar:Dock(BOTTOM)
-	bar:SetTall(28)
-	bar.Paint = function() end
-
-	local function barButton(text, fn)
-		local btn = vgui.Create("DButton", bar)
-		btn:Dock(LEFT)
-		btn:SetWide(100)
-		btn:DockMargin(0, 0, 8, 0)
-		btn:SetText(text)
-		btn.DoClick = fn
-		return btn
-	end
-	barButton("Save", function() BALLISTICS.Spawns.RequestSave() end)
-	barButton("Reset", function() BALLISTICS.Spawns.ConfirmReset() end)
-	barButton("Done", function() BALLISTICS.Spawns.EndEdit(true) end)
-
-	BALLISTICS.Spawns.Listen(refreshToolbar)
-	return toolbar
-end
-
 function BALLISTICS.Spawns.EndEdit(reopen)
-	if toolbar and toolbar.balClosing then return end
 	editing = false
 	swivel = nil
 	aimHit = nil
-	if IsValid(toolbar) then
-		toolbar.balClosing = true
-		toolbar:SetVisible(false)
-		toolbar.balClosing = false
-	end
-	if BALLISTICS.UI then BALLISTICS.UI.Mark("spawns", toolbar) end
-	if gui and gui.EnableScreenClicker then gui.EnableScreenClicker(false) end
+	keyLatch = {}
+	if BALLISTICS.UI then BALLISTICS.UI.Mark("spawns", nil) end
 	syncCursor()
 	if reopen and BALLISTICS.Admin and BALLISTICS.Admin.Open then
 		BALLISTICS.Admin.Open()
@@ -702,14 +563,6 @@ function BALLISTICS.Spawns.BeginEdit()
 	cam = startCam()
 	editing = true
 	swivel = nil
-	local pnl = ensureToolbar()
-	if IsValid(pnl) then
-		pnl:SetVisible(true)
-		pnl:MakePopup()
-		pnl:SetKeyboardInputEnabled(false)
-		pnl:SetMouseInputEnabled(true)
-		if BALLISTICS.UI then BALLISTICS.UI.Mark("spawns", pnl) end
-		refreshToolbar()
-	end
+	keyLatch = {}
 	syncCursor()
 end
