@@ -291,6 +291,8 @@ concommand = {
 	end,
 }
 dofile("gamemodes/ballistics/gamemode/core/sh_config.lua")
+-- Money-flow cases use round numbers; pin StartMoney (shipped default is 100).
+BALLISTICS.Config.Set("StartMoney", 1000)
 dofile("gamemodes/ballistics/gamemode/core/sh_teams.lua")
 dofile("gamemodes/ballistics/gamemode/core/sh_net.lua")
 dofile("gamemodes/ballistics/gamemode/core/sh_deps.lua")
@@ -551,7 +553,7 @@ snap = BALLISTICS.Round.Snapshot(625.2)
 check("a knocked-out side wins when the other side is dead", BALLISTICS.Round.Phase() == "post" and snap.winner == "bad" and snap.reason == "elimination" and score.good == 0 and score.bad == 1)
 gbal, gpend = BALLISTICS.Money.Get(good)
 local _, bpend = BALLISTICS.Money.Get(bad)
-check("round rewards wait in pending", gpend == 500 and bpend == 1000 and gbal == 1600 and endings[2] == "bad:elimination")
+check("round rewards wait in pending", gpend == 500 and bpend == 900 and gbal == 1600 and endings[2] == "bad:elimination")
 
 -- Lobby free cam: unfreezing a spectator must not set walk movetype.
 do

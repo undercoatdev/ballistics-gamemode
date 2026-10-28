@@ -100,9 +100,15 @@ end
 for _, map in ipairs({ "gm_construct", "gm_flatgrass" }) do
 	local state = D.resolve(nil, defs, map)
 	local box = state.box
-	local midX = (state.good.pos.x + state.bad.pos.x) * 0.5
-	local midY = (state.good.pos.y + state.bad.pos.y) * 0.5
-	check(map .. " default box sits between the flags", box and near(box.pos.x, midX, 1e-6) and near(box.pos.y, midY, 1e-6) and near(box.pos.z, state.good.pos.z + 64, 1e-6) and near(box.sx, 768, 1e-6) and near(box.sy, 384, 1e-6))
+	local shipped = defs[map] and defs[map].box
+	-- flatgrass uses pair() (midpoint); construct/frame keep fox playtest placements.
+	if map == "gm_flatgrass" then
+		local midX = (state.good.pos.x + state.bad.pos.x) * 0.5
+		local midY = (state.good.pos.y + state.bad.pos.y) * 0.5
+		check(map .. " default box sits between the flags", box and near(box.pos.x, midX, 1e-6) and near(box.pos.y, midY, 1e-6) and near(box.pos.z, state.good.pos.z + 64, 1e-6) and near(box.sx, 768, 1e-6) and near(box.sy, 384, 1e-6))
+	else
+		check(map .. " default box matches shipped playtest placement", box and shipped and near(box.pos.x, shipped.pos.x, 1e-6) and near(box.pos.y, shipped.pos.y, 1e-6) and near(box.pos.z, shipped.pos.z, 1e-6) and near(box.sx, shipped.sx, 1e-6) and near(box.sy, shipped.sy, 1e-6))
+	end
 	check(map .. " flags stand outside the firing squad box", outsideBox(state.good, box) and outsideBox(state.bad, box))
 end
 

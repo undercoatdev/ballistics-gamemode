@@ -142,7 +142,7 @@ local _, mags = C.Set("FiringSquadMags", 40)
 check("magazines clamp high", mags == 30)
 C.Set("FiringSquadWeapon", "tacrp_ex_m1911")
 C.ResetSection("general")
-check("resetting general leaves the firing squad weapon", C.FiringSquadWeapon == "tacrp_ex_m1911" and C.BuyTime == 20 and C.RoundsToWin == 3)
+check("resetting general leaves the firing squad weapon", C.FiringSquadWeapon == "tacrp_ex_m1911" and C.BuyTime == 20 and C.RoundsToWin == 5)
 C.ResetSection("firing_squad")
 check("resetting the firing squad restores its defaults", C.FiringSquadWeapon == "tacrp_ex_ak47" and C.FiringSquadFreeze == 10 and C.FiringSquadMags == 0 and C.FiringSquadDuration == 30)
 

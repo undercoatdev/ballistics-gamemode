@@ -154,6 +154,12 @@ dofile("gamemodes/ballistics/gamemode/core/sh_net.lua")
 dofile("gamemodes/ballistics/gamemode/core/sv_slots.lua")
 dofile("gamemodes/ballistics/gamemode/core/sv_money.lua")
 
+-- Facade cases below use round numbers; pin StartMoney/gains so they stay stable
+-- when shipped defaults change (playtest StartMoney is 100).
+BALLISTICS.Config.Set("StartMoney", 1000)
+BALLISTICS.Config.Set("Gains.round_win", 1000)
+BALLISTICS.Money.Reset()
+
 local ply = {
 	nw = {},
 	admin = true,
