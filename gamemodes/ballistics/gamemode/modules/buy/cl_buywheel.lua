@@ -640,12 +640,19 @@ local function paintItem(self, w, h)
 	local owned = copies > 0
 	local full = item.kind == "weapon" and slotsFull(item)
 	local action, have, cap = leftAction(item)
-	local selling = action == "sell"
-	local afford = type(price) == "number" and moneyOf() >= price and not selling and not full
+	local atCap = false
+	if (item.kind == "nade" or item.kind == "med") and BALLISTICS.Buy and type(BALLISTICS.Buy.AtCap) == "function" then
+		atCap = BALLISTICS.Buy.AtCap(have, cap) == true
+	elseif item.kind == "nade" or item.kind == "med" then
+		atCap = type(cap) == "number" and have >= cap
+	end
+	-- Sell label stays in the price slot when a stack is maxed (RMB still sells).
+	local showSell = atCap == true
+	local afford = type(price) == "number" and moneyOf() >= price and not atCap and not full
 	local hover = self.Hovered == true
 	if hover then
 		surface.SetDrawColor(52, 64, 82, 255)
-	elseif (owned and full) or not afford then
+	elseif (owned and full) or atCap or not afford then
 		surface.SetDrawColor(28, 28, 32, 255)
 	else
 		surface.SetDrawColor(36, 38, 46, 255)
@@ -673,12 +680,12 @@ local function paintItem(self, w, h)
 	end
 	local priceText = "—"
 	local priceCol = Color(190, 80, 80)
-	if selling then
+	if showSell then
 		local n = math.floor(tonumber(price) or 0)
 		if n < 0 then n = 0 end
 		priceText = "Sell  +$" .. tostring(n)
 		priceCol = Color(120, 210, 140)
-	elseif owned and (selling or full) then
+	elseif owned and full then
 		priceText = copies >= 2 and "Owned x2" or "Owned"
 	elseif full then
 		priceText = "Full"
@@ -711,13 +718,13 @@ local function refill()
 		btn.Paint = paintItem
 		if btn.SetKeyboardInputEnabled then btn:SetKeyboardInputEnabled(false) end
 		btn.DoClick = function()
-			local action = leftAction(item)
-			if action == "sell" then
-				if BALLISTICS.Sell and type(BALLISTICS.Sell.Send) == "function" then
-					BALLISTICS.Sell.Send(item)
-				end
-				return
+			-- Left click only buys. At a full stack or full gun slots, do nothing.
+			local _, have, cap = leftAction(item)
+			if item.kind == "nade" or item.kind == "med" then
+				local capped = BALLISTICS.Buy and type(BALLISTICS.Buy.AtCap) == "function" and BALLISTICS.Buy.AtCap(have, cap)
+				if capped then return end
 			end
+			if item.kind == "weapon" and slotsFull(item) and owns(item.class) then return end
 			tryBuy(item)
 		end
 		-- Right-click sells one any time (buy phase, server checks).
@@ -998,6 +1005,8 @@ function BALLISTICS.BuyWheel.Open()
 		return false
 	end
 	held = true
+	-- Every buy phase starts on Guns, not the last tab from a prior round.
+	tab = "weapon"
 	BALLISTICS.BuyWheel.HookWeaponPick(pnl)
 	pnl:SetVisible(true)
 	pnl:SetMouseInputEnabled(true)

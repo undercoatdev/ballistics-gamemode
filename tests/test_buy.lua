@@ -50,6 +50,7 @@ check("wheel exposes Open Hide IsOpen", buySrc:find("BuyWheel.Open", 1, true)
 check("weapon tab splits light and heavy columns by category", buySrc:find("WeaponColumns", 1, true) ~= nil)
 check("buy wheel does not switch weapons on the scroll wheel", buySrc:find("bal_slot", 1, true) ~= nil and not buySrc:find("OnMouseWheeled", 1, true))
 check("the wheel asks LeftAction", buySrc:find("LeftAction", 1, true) ~= nil)
+check("buy open resets to the Guns tab", buySrc:find('Open()', 1, true) ~= nil and buySrc:find('tab = "weapon"', buySrc:find("function BALLISTICS.BuyWheel.Open", 1, true) or 1, true) ~= nil)
 check("the wheel can show two copies owned", buySrc:find("Owned x2", 1, true) ~= nil)
 check("grenade and med rows show the stack", buySrc:find("StackCount", 1, true) ~= nil)
 
@@ -230,18 +231,20 @@ BALLISTICS.Config.GrenadesMax = 3
 
 local act = BALLISTICS.Buy.LeftAction
 check("a grenade under the cap buys", act("nade", 2, 3, 2, false) == "buy")
-check("a grenade at the cap with a fresh buy sells", act("nade", 3, 3, 1, false) == "sell")
+check("a grenade at the cap still left-buys (RMB sells)", act("nade", 3, 3, 1, false) == "buy")
 check("a grenade at the cap that was carried in stays a buy", act("nade", 3, 3, 0, false) == "buy")
-check("one over the grenade cap still sells when fresh", act("nade", 4, 3, 1, false) == "sell")
+check("one over the grenade cap left-buys", act("nade", 4, 3, 1, false) == "buy")
 check("a med under the cap buys", act("med", 0, 3, 0, false) == "buy")
-check("a med at the cap sells only when fresh", act("med", 3, 3, 2, false) == "sell" and act("med", 3, 3, 0, false) == "buy")
-check("a zero cap is already full", act("nade", 0, 0, 1, false) == "sell" and act("med", 0, 0, 0, false) == "buy")
+check("a med at the cap left-buys", act("med", 3, 3, 2, false) == "buy" and act("med", 3, 3, 0, false) == "buy")
+check("a zero cap left-buys", act("nade", 0, 0, 1, false) == "buy" and act("med", 0, 0, 0, false) == "buy")
 check("a missing cap stays a buy", act("nade", 3, nil, 3, false) == "buy")
-check("an owned fresh gun sells when slots are full", act("weapon", 1, 0, 1, true, true) == "sell")
+check("an owned fresh gun left-buys when slots are full", act("weapon", 1, 0, 1, true, true) == "buy")
 check("an owned fresh gun buys when a slot is free", act("weapon", 1, 0, 1, true, false) == "buy")
 check("an owned carried gun stays a buy", act("weapon", 1, 0, 0, true, true) == "buy")
 check("an unowned gun buys", act("weapon", 0, 0, 1, false) == "buy")
 check("an unknown kind buys", act("ammo", 9, 1, 9, true) == "buy")
+check("AtCap is true at and over max", BALLISTICS.Buy.AtCap(3, 3) == true and BALLISTICS.Buy.AtCap(4, 3) == true)
+check("AtCap is false under max or without max", BALLISTICS.Buy.AtCap(2, 3) == false and BALLISTICS.Buy.AtCap(3, nil) == false)
 check("the stack label is owned over the cap", BALLISTICS.Buy.StackCount(2, 3) == "2 / 3" and BALLISTICS.Buy.StackCount(0, 3) == "0 / 3")
 
 ok, err = BALLISTICS.Buy.Validate(ctx({

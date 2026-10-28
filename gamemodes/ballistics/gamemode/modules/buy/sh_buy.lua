@@ -52,25 +52,20 @@ function BALLISTICS.Buy.ReasonText(err)
 	return "Could not buy that."
 end
 
--- Left click on the buy wheel. Guns sell when you own one bought this phase
--- and both gun slots are full. A free slot keeps left click as buy, even for
--- a gun you already hold. Grenades and meds stay a buy until you hold the cap,
--- and sell only then if at least one was bought this phase (fresh > 0).
--- Right click is not this.
+-- Left click on the buy wheel only buys. Right click sells. At a full stack,
+-- left click is a no-op in the wheel (this still returns "buy").
 function BALLISTICS.Buy.LeftAction(kind, have, max, fresh, owned, slotsFull)
-	fresh = countOf(fresh)
-	if kind == "weapon" then
-		if owned == true and fresh > 0 and slotsFull == true then return "sell" end
-		return "buy"
-	end
-	if kind ~= "nade" and kind ~= "med" then return "buy" end
+	return "buy"
+end
+
+-- True when a stack item is at or over its carry cap.
+function BALLISTICS.Buy.AtCap(have, max)
 	have = countOf(have)
 	max = tonumber(max)
-	if max == nil or max ~= max or max == math.huge or max == -math.huge then return "buy" end
+	if max == nil or max ~= max or max == math.huge or max == -math.huge then return false end
 	max = math.floor(max)
 	if max < 0 then max = 0 end
-	if have >= max and fresh > 0 then return "sell" end
-	return "buy"
+	return have >= max
 end
 
 function BALLISTICS.Buy.StackCount(have, max)

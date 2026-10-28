@@ -513,16 +513,26 @@ hook.Add("HUDPaint", "Ballistics_SpawnEditor", function()
 	local state = D.statusText(snap)
 	local typ = typeLabel(side)
 	if swivel then typ = typ .. " · swivel" end
+	local line2 = map .. "  ·  " .. state
+	local line3 = "WASD look · wheel type · LMB place/yaw · Enter save+exit · R reset · Esc exit"
 
+	local padX, padY, gap = 10, 8, 6
+	surface.SetFont("BallisticsSmall")
+	local tw1 = select(1, surface.GetTextSize(typ)) or 0
+	local tw2 = select(1, surface.GetTextSize(line2)) or 0
+	local tw3 = select(1, surface.GetTextSize(line3)) or 0
+	local th = select(2, surface.GetTextSize("Ay")) or 14
+	local need = math.max(tw1, tw2, tw3)
 	local x, y = 12, 12
-	local w, h = 380, 70
+	local w = math.min(sw - x * 2, need + padX * 2)
+	local h = padY * 2 + th * 3 + gap * 2
 	surface.SetDrawColor(12, 14, 18, 200)
 	surface.DrawRect(x, y, w, h)
 	surface.SetDrawColor(80, 90, 100, 220)
 	surface.DrawOutlinedRect(x, y, w, h)
-	draw.SimpleText(typ, "BallisticsSmall", x + 10, y + 8, Color(240, 230, 180), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
-	draw.SimpleText(map .. "  ·  " .. state, "BallisticsSmall", x + 10, y + 28, Color(200, 200, 200), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
-	draw.SimpleText("WASD look · wheel type · LMB place/yaw · Enter save+exit · R reset · Esc exit", "BallisticsSmall", x + 10, y + 48, Color(160, 160, 160), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
+	draw.SimpleText(typ, "BallisticsSmall", x + padX, y + padY, Color(240, 230, 180), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
+	draw.SimpleText(line2, "BallisticsSmall", x + padX, y + padY + th + gap, Color(200, 200, 200), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
+	draw.SimpleText(line3, "BallisticsSmall", x + padX, y + padY + (th + gap) * 2, Color(160, 160, 160), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
 end)
 
 function BALLISTICS.Spawns.EndEdit(reopen)

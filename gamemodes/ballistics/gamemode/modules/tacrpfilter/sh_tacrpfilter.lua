@@ -1,12 +1,13 @@
 -- TacRP trims for this gamemode (no TacRP file edits):
 -- 1) The quick-grenade wheel only lists throwables sold in our buy menu.
--- 2) Shotgun roulette (ammo_buckshotroulette) and dragon's breath
---    (ammo_shotgun_dragon) rounds are hidden, refused and stripped.
+-- 2) Shotgun roulette (ammo_buckshotroulette), revolver roulette
+--    (ammo_roulette), and dragon's breath (ammo_shotgun_dragon) are
+--    hidden, refused and stripped.
 BALLISTICS = BALLISTICS or {}
 BALLISTICS.TacFilter = BALLISTICS.TacFilter or {}
 local F = BALLISTICS.TacFilter
 
-F.BLOCKED_ATTS = { ammo_buckshotroulette = true, ammo_shotgun_dragon = true }
+F.BLOCKED_ATTS = { ammo_buckshotroulette = true, ammo_shotgun_dragon = true, ammo_roulette = true }
 
 -- Ammo types of the buy-menu throwables (frag, flashbang, smoke, thermite).
 function F.AllowedNadeAmmo()
