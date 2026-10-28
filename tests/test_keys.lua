@@ -113,7 +113,7 @@ local rows = K.Rows({
 	teams = "F2",
 	med = "B",
 })
-check("numbers first, then letters", #rows == 14 and rows[1].key == "1 / 2" and rows[2].key == "3" and rows[3].sub and rows[4].sub and rows[5].key == "4" and rows[5].action == "Inventory" and rows[6].key == "C" and rows[6].gap == true and rows[7].key == "E" and rows[8].action == "Tap: safety / melee" and rows[9].action == "Double-tap: drag / drop body" and rows[10].action == "Hold: loot body" and rows[11].key == "V+LMB" and rows[11].action == "Hit with your weapon (melee bash)" and rows[12].key == "G" and rows[13].key == "MOUSE3" and rows[13].action == "Blindfire" and rows[14].key == "B" and rows[14].action == "Hold: medical wheel")
+check("numbers first, then letters", #rows == 14 and rows[1].key == "1 / 2" and rows[2].key == "3" and rows[3].sub and rows[4].sub and rows[5].key == "4" and rows[5].action == "Inventory" and rows[6].key == "C" and rows[6].gap == true and rows[7].key == "E" and rows[8].action == "Tap: safety / melee" and rows[9].action == "Double-tap: drag / drop body" and rows[10].action == "Hold: loot body" and rows[11].key == "V+LMB" and rows[11].action == "Melee bash" and rows[12].key == "G" and rows[13].key == "MOUSE3" and rows[13].action == "Blindfire" and rows[14].key == "B" and rows[14].action == "Hold: medical wheel")
 local noMed = K.Rows({ med = "" })
 check("a missing medical wheel is left off the list", #noMed == 13)
 check("gun keys share one line", noMed[1].key == "1 / 2" and noMed[1].action == "Guns (press again for knife)")

@@ -253,7 +253,7 @@ function K.Rows(binds)
 	sub("Tap: safety / melee")
 	sub("Double-tap: drag / drop body")
 	sub("Hold: loot body")
-	key("V+LMB", "Hit with your weapon (melee bash)")
+	key("V+LMB", "Melee bash")
 	key(binds.inspect or "G", "Check injuries (yours, or who you aim at)")
 	key(binds.blindfire or "H", "Blindfire")
 	if binds.med ~= "" then key(binds.med or "Z", "Hold: medical wheel") end
