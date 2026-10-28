@@ -247,6 +247,16 @@ check("an unowned gun buys", act("weapon", 0, 0, 1, false) == "buy")
 check("an unknown kind buys", act("ammo", 9, 1, 9, true) == "buy")
 check("AtCap is true at and over max", BALLISTICS.Buy.AtCap(3, 3) == true and BALLISTICS.Buy.AtCap(4, 3) == true)
 check("AtCap is false under max or without max", BALLISTICS.Buy.AtCap(2, 3) == false and BALLISTICS.Buy.AtCap(3, nil) == false)
+check("ShowSellLabel at cap", BALLISTICS.Buy.ShowSellLabel("med", true, 0) == true)
+check("ShowSellLabel med with fresh", BALLISTICS.Buy.ShowSellLabel("med", false, 1) == true)
+check("ShowSellLabel nade with fresh", BALLISTICS.Buy.ShowSellLabel("nade", false, 2) == true)
+check("ShowSellLabel med without fresh", BALLISTICS.Buy.ShowSellLabel("med", false, 0) == false)
+check("ShowSellLabel weapon with fresh", BALLISTICS.Buy.ShowSellLabel("weapon", false, 1) == true)
+check("ShowSellLabel weapon without fresh", BALLISTICS.Buy.ShowSellLabel("weapon", false, 0) == false)
+check("buywheel uses ShowSellLabel", (function()
+	local src = io.open("gamemodes/ballistics/gamemode/modules/buy/cl_buywheel.lua"):read("*a")
+	return src:find("ShowSellLabel", 1, true) ~= nil
+end)())
 check("the stack label is owned over the cap", BALLISTICS.Buy.StackCount(2, 3) == "2 / 3" and BALLISTICS.Buy.StackCount(0, 3) == "0 / 3")
 
 ok, err = BALLISTICS.Buy.Validate(ctx({

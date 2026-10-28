@@ -57,12 +57,18 @@ function S.ColumnName(teamId, printName)
 end
 
 -- roundsToWin 0 (and anything below 1) is an endless series.
+-- Cap is first-to-N wins, not a max round count — round number can exceed it.
 function S.Header(round, roundsToWin, scoreGood, scoreBad)
 	local cap = finite(roundsToWin)
-	local capText = "∞"
-	if cap ~= nil and cap >= 1 then capText = tostring(math.floor(cap)) end
+	local n = tostring(whole(round, 0))
+	local roundLine
+	if cap ~= nil and cap >= 1 then
+		roundLine = "Round " .. n .. " · first to " .. tostring(math.floor(cap))
+	else
+		roundLine = "Round " .. n .. " · endless"
+	end
 	return {
-		roundLine = "Round " .. tostring(whole(round, 0)) .. " / " .. capText,
+		roundLine = roundLine,
 		scoreLeft = whole(scoreGood, 0),
 		scoreRight = whole(scoreBad, 0),
 	}

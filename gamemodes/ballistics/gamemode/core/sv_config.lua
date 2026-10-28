@@ -52,10 +52,30 @@ applyHealthMode()
 -- exist yet at file load. Apply again once everything is up.
 if hook and hook.Add then
 	hook.Add("InitPostEntity", "Ballistics_HealthMode", function() applyHealthMode() end) -- never return a value: it would stop later hooks (TacRP indexes quick nades here)
-	-- Knife / gun-bash void: half the Body Damage default (8 → 4) for precision in this mode.
+	-- Knife / gun-bash void: way smaller than the Body Damage default (8 → 1.5).
+	-- BehaviourNumber reads placement meleeOrb first, so pin globals AND shipped layouts.
+	local function pinMeleeOrb()
+		if not BODY_DAMAGE then return end
+		local r = 1.5
+		BODY_DAMAGE.MeleeOrb = r
+		local placements = BODY_DAMAGE.Placements
+		if not istable(placements) then return end
+		for _, file in pairs(placements) do
+			if istable(file) then
+				file.behaviour = file.behaviour or {}
+				for _, mode in ipairs({ "arcade", "realistic" }) do
+					file.behaviour[mode] = file.behaviour[mode] or {}
+					file.behaviour[mode].meleeOrb = r
+				end
+			end
+		end
+	end
 	hook.Add("InitPostEntity", "Ballistics_MeleeOrb", function()
-		if BODY_DAMAGE then
-			BODY_DAMAGE.MeleeOrb = 4
+		pinMeleeOrb()
+		-- BD ApplyBehaviourGlobals can run around the same tick; re-pin after.
+		if timer and timer.Simple then
+			timer.Simple(0, pinMeleeOrb)
+			timer.Simple(1, pinMeleeOrb)
 		end
 	end)
 end

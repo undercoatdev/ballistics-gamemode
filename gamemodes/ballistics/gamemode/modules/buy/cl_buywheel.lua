@@ -646,8 +646,14 @@ local function paintItem(self, w, h)
 	elseif item.kind == "nade" or item.kind == "med" then
 		atCap = type(cap) == "number" and have >= cap
 	end
-	-- Sell label stays in the price slot when a stack is maxed (RMB still sells).
-	local showSell = atCap == true
+	-- Meds/nades: Sell +$ after any buy this phase (fresh), or at cap.
+	-- Fresh clears when the next buy phase starts. RMB still sells anytime.
+	local showSell = false
+	if BALLISTICS.Buy and type(BALLISTICS.Buy.ShowSellLabel) == "function" then
+		showSell = BALLISTICS.Buy.ShowSellLabel(item.kind, atCap, freshCount(item)) == true
+	elseif atCap == true then
+		showSell = true
+	end
 	local afford = type(price) == "number" and moneyOf() >= price and not atCap and not full
 	local hover = self.Hovered == true
 	if hover then

@@ -14,23 +14,23 @@ local S = BALLISTICS.Scoreboard
 local R = BALLISTICS.RoundHud
 
 local h = S.Header(2, 3, 1, 0)
-check("series header", h.roundLine == "Round 2 / 3" and h.scoreLeft == 1 and h.scoreRight == 0)
+check("series header", h.roundLine == "Round 2 · first to 3" and h.scoreLeft == 1 and h.scoreRight == 0)
 local endless = S.Header(4, 0, 2, 2)
-check("endless series", endless.roundLine == "Round 4 / ∞" and endless.scoreLeft == 2 and endless.scoreRight == 2)
+check("endless series", endless.roundLine == "Round 4 · endless" and endless.scoreLeft == 2 and endless.scoreRight == 2)
 local blank = S.Header(nil, nil, nil, nil)
-check("missing header is round zero endless", blank.roundLine == "Round 0 / ∞" and blank.scoreLeft == 0 and blank.scoreRight == 0)
+check("missing header is round zero endless", blank.roundLine == "Round 0 · endless" and blank.scoreLeft == 0 and blank.scoreRight == 0)
 local floored = S.Header(1.9, 3.2, -4, 8.8)
-check("header floors and clamps", floored.roundLine == "Round 1 / 3" and floored.scoreLeft == 0 and floored.scoreRight == 8)
+check("header floors and clamps", floored.roundLine == "Round 1 · first to 3" and floored.scoreLeft == 0 and floored.scoreRight == 8)
 
 R.Apply({ phase = "buy", endsAt = 20, round = 2, scoreGood = 1, scoreBad = 0 })
 local fromHud = S.MatchFrom(R.Snapshot(), 9, 9, 9, 3)
-check("round hud snapshot feeds the header", fromHud.roundLine == "Round 2 / 3" and fromHud.scoreLeft == 1 and fromHud.scoreRight == 0)
+check("round hud snapshot feeds the header", fromHud.roundLine == "Round 2 · first to 3" and fromHud.scoreLeft == 1 and fromHud.scoreRight == 0)
 R.Apply({ phase = "live", endsAt = 30 })
 check("partial round sync keeps the series score", R.Snapshot().scoreGood == 1 and R.Snapshot().scoreBad == 0 and R.Snapshot().round == 2)
 local phaseOnly = S.MatchFrom({ seen = true, round = 0, phase = "buy" }, 2, 1, 0, 3)
-check("phase-only snapshot keeps nw round and score", phaseOnly.roundLine == "Round 2 / 3" and phaseOnly.scoreLeft == 1 and phaseOnly.scoreRight == 0)
+check("phase-only snapshot keeps nw round and score", phaseOnly.roundLine == "Round 2 · first to 3" and phaseOnly.scoreLeft == 1 and phaseOnly.scoreRight == 0)
 local unseen = S.MatchFrom({ seen = false, round = 8, scoreGood = 5, scoreBad = 5 }, 1, 0, 0, 0)
-check("unseen snapshot falls back to nw and endless config", unseen.roundLine == "Round 1 / ∞" and unseen.scoreLeft == 0 and unseen.scoreRight == 0)
+check("unseen snapshot falls back to nw and endless config", unseen.roundLine == "Round 1 · endless" and unseen.scoreLeft == 0 and unseen.scoreRight == 0)
 
 local list = {
 	{ name = "b", frags = 1 },
