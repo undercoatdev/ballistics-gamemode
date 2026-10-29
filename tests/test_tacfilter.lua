@@ -34,4 +34,16 @@ check("frag allowed", F.NadeAllowed({ Ammo = "grenade" }))
 check("thermite allowed", F.NadeAllowed({ Ammo = "ti_thermite" }))
 check("gas not allowed", not F.NadeAllowed({ Ammo = "ti_gas" }))
 check("no-ammo nade not allowed", not F.NadeAllowed({}))
+check("SuppressNews exists", type(F.SuppressNews) == "function")
+SERVER, CLIENT = true, false
+local set = {n=0}
+GetConVar = function() return { SetInt = function(_, v) set.n = v end } end
+TacRP = TacRP or {}; TacRP.ConVars = { checknews = { SetInt = function(_, v) set.n = v end } }
+F.SuppressNews()
+check("server SuppressNews forces checknews 0", set.n == 0)
+SERVER, CLIENT = false, true
+TacRP.CreateNewsPanel = function() error("opened") end
+TacRP.NewsPanel = nil
+F.SuppressNews()
+check("client SuppressNews stubs CreateNewsPanel", TacRP.NewsPopup == true and pcall(TacRP.CreateNewsPanel) == true)
 if failed then os.exit(1) end

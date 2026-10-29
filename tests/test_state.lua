@@ -590,6 +590,8 @@ flush()
 check("EndMatch in lobby is a no-op", BALLISTICS.Round.EndMatch() == true and BALLISTICS.Round.Phase() == "lobby")
 
 check("noclip cannot be turned on", GM:PlayerNoClip(good, true) == false and GM:PlayerNoClip(good, false) == true)
+local spawnHooks = hook.GetTable().PlayerInitialSpawn or {}
+check("join does not auto-boot a singleplayer smoke round", spawnHooks.Ballistics_SinglePlayerBoot == nil)
 
 BALLISTICS.Spawns = { HasBoth = function() return true end, HasBox = function() return true end }
 local wasSingle = game.SinglePlayer
