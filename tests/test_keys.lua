@@ -193,7 +193,7 @@ function TacRP.GetBind(binding)
 end
 TacRP.GetBindKey = TacRP.GetBind
 convars.tacrp_hints = 1
-convars.playerballistics_key_inspect = 17
+convars.bodydamage_inspect_key = 17
 convars.playerballistics_med_key = 12
 hook.Add("CreateMove", "TacRP_CreateMove", function(c)
 	if input.IsKeyDown(K.KEY_G) and not binds["+grenade1"] and not typingNow then

@@ -352,7 +352,7 @@ end
 
 function BALLISTICS.Keys.HintRows()
 	local throw = BALLISTICS.Keys.ThrowKey()
-	local inspect = convarInt("playerballistics_key_inspect", K.KEY_G or 17)
+	local inspect = convarInt("bodydamage_inspect_key", K.KEY_G or 17)
 	local med = "Z"
 	if type(K.Rows) ~= "function" then return {} end
 	return K.Rows({
@@ -362,7 +362,7 @@ function BALLISTICS.Keys.HintRows()
 		inspect = keyLabel(inspect, "G"),
 		-- H, not +zoom. The other rows already match a handler: 1/2 loadout,
 		-- throw and inventory convars, C +menu_context, E +use, V+LMB bash,
-		-- G the inspect convar, Z the forced med key.
+		-- G bodydamage_inspect_key (Advanced Ballistics), Z the forced med key.
 		blindfire = "H",
 		safety = bindLabel("+use", "E"),
 		teams = bindLabel("gm_showteam", "F2"),
