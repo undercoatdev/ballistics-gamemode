@@ -205,6 +205,14 @@ local short = build({
 	sides = { [GOOD] = { [1] = { id = "a", name = "Ada" } }, [BAD] = {} },
 })
 check("admin without both teams cannot start", short.start.visible == true and short.start.enabled == false and short.start.reason == "min players")
+local soloStart = build({
+	isAdmin = true,
+	solo = true,
+	flags = true,
+	box = true,
+	sides = { [GOOD] = { [1] = { id = "a", name = "Ada" } }, [BAD] = {} },
+})
+check("singleplayer start is enabled with one team", soloStart.start.enabled == true and soloStart.start.reason == nil)
 check("min-player copy uses the singular", V.ReasonText("min players", 1) == "Need at least 1 player on each team.")
 check("min-player copy pluralises", V.ReasonText("min players", 2) == "Need at least 2 players on each team.")
 

@@ -520,6 +520,12 @@ function GM:PlayerDeathThink()
 	return false
 end
 
+-- Base turns noclip on in singleplayer while the player is alive. Leaving noclip still works.
+function GM:PlayerNoClip(_, on)
+	if on then return false end
+	return true
+end
+
 if hook and hook.Add then
 	hook.Add("PlayerDisconnected", "Ballistics_PlayerTrack", function(ply)
 		tracked[ply] = nil

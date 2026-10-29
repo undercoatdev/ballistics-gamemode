@@ -260,7 +260,11 @@ function BALLISTICS.LobbyView.Build(input)
 	else
 		start.visible = true
 		start.label = "Start"
-		if counts[GOOD] < minPer or counts[BAD] < minPer then
+		local enough = counts[GOOD] >= minPer and counts[BAD] >= minPer
+		if input.solo == true then
+			enough = counts[GOOD] >= 1 or counts[BAD] >= 1
+		end
+		if not enough then
 			start.enabled = false
 			start.reason = "min players"
 		elseif input.flags == false then

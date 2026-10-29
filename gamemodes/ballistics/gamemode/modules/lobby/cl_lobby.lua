@@ -170,6 +170,7 @@ function BALLISTICS.Lobby.View()
 		phase = state.phase,
 		isAdmin = isAdmin,
 		minPerTeam = configNumber("MinPerTeam", 1),
+		solo = game ~= nil and type(game.SinglePlayer) == "function" and game.SinglePlayer() == true,
 		alive = localAlive(),
 		players = players,
 		names = names,

@@ -11,6 +11,7 @@
 -- state:Tick(now) → events (one phase boundary per call; empty if nothing fired)
 -- evt is "start" / "end" or { type = "start"|"end", good, bad, flags, winner, reason }
 -- "start" needs ≥ MinPerTeam on both teams and flags == true.
+-- solo == true (singleplayer smoke test) needs one occupied side instead.
 -- A live clock expiry ends the round as TimeoutWinner (default "draw").
 
 BALLISTICS = BALLISTICS or {}
@@ -134,11 +135,16 @@ function State:SetReady(good, bad, flags)
 	}
 end
 
-function State:CanStart(good, bad, flags)
+function State:CanStart(good, bad, flags, solo)
 	if self.phase ~= PHASE_LOBBY then return false, "not lobby" end
 	local min = whole(self, "MinPerTeam", 1)
 	if min < 0 then min = 0 end
-	if (tonumber(good) or 0) < min or (tonumber(bad) or 0) < min then
+	good = tonumber(good) or 0
+	bad = tonumber(bad) or 0
+	-- solo: a singleplayer smoke test. One occupied side is enough.
+	if solo == true then
+		if good < 1 and bad < 1 then return false, "min players" end
+	elseif good < min or bad < min then
 		return false, "min players"
 	end
 	if flags ~= true then return false, "flags" end
@@ -325,7 +331,7 @@ end
 
 function State:_start(data, now)
 	local good, bad, flags = startFields(self, data)
-	local ok, err = self:CanStart(good, bad, flags)
+	local ok, err = self:CanStart(good, bad, flags, data.solo == true)
 	if not ok then return nil, err end
 	return self:_enterBuy(now, true)
 end

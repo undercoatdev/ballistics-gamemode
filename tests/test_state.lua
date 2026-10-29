@@ -45,6 +45,12 @@ check("start needs both teams", events == nil and err == "min players" and st:Ph
 events, err = st:Transition({ type = "start", good = 0, bad = 0, flags = true }, 0)
 check("start with nobody is min players", events == nil and err == "min players")
 
+local soloState = State.new(cfg())
+events, err = soloState:Transition({ type = "start", good = 1, bad = 0, flags = true, solo = true }, 0)
+check("singleplayer start allows one occupied team", events and events[1].new == "buy" and soloState:Phase() == "buy")
+events, err = State.new(cfg()):Transition({ type = "start", good = 0, bad = 0, flags = true, solo = true }, 0)
+check("singleplayer start with nobody is still min players", events == nil and err == "min players")
+
 events, err = st:Transition({ type = "start", good = 1, bad = 1, flags = false }, 0)
 check("start needs both flags", events == nil and err == "flags" and st:Phase() == "lobby")
 
@@ -582,5 +588,30 @@ check("EndMatch leaves money until the next start", BALLISTICS.Money.Get(good) =
 check("EndMatch spectates everyone", good.spec == (OBS_MODE_ROAMING or 6) and bad.spec == (OBS_MODE_ROAMING or 6))
 flush()
 check("EndMatch in lobby is a no-op", BALLISTICS.Round.EndMatch() == true and BALLISTICS.Round.Phase() == "lobby")
+
+check("noclip cannot be turned on", GM:PlayerNoClip(good, true) == false and GM:PlayerNoClip(good, false) == true)
+
+BALLISTICS.Spawns = { HasBoth = function() return true end, HasBox = function() return true end }
+local wasSingle = game.SinglePlayer
+function game.SinglePlayer() return false end
+BALLISTICS.Slots.ClearAll()
+BALLISTICS.Slots.Take(good, TEAM_GOOD, 1)
+good.alive = true
+local soloOk, soloWhy = BALLISTICS.StartMatch(nil)
+check("multiplayer still needs both teams", soloOk == false and soloWhy == "min players" and BALLISTICS.Round.Phase() == "lobby")
+function game.SinglePlayer() return true end
+BALLISTICS.Slots.ClearAll()
+soloOk, soloWhy = BALLISTICS.Round.BootSinglePlayer(good)
+check("singleplayer boot slots Good and starts", soloOk == true and soloWhy == nil and BALLISTICS.Round.Phase() == "buy" and BALLISTICS.Slots.TeamOf(good) == TEAM_GOOD)
+local againOk, againWhy = BALLISTICS.Round.BootSinglePlayer(good)
+check("singleplayer boot runs once", againOk == false and againWhy == "once" and BALLISTICS.Round.Phase() == "buy")
+BALLISTICS.Round.Tick(20)
+check("singleplayer buy still becomes live", BALLISTICS.Round.Phase() == "live")
+BALLISTICS.Round.Tick(20.1)
+check("an empty team does not end the singleplayer round", BALLISTICS.Round.Phase() == "live")
+function game.SinglePlayer() return false end
+BALLISTICS.Round.Tick(20.2)
+check("multiplayer still eliminates an empty side", BALLISTICS.Round.Phase() == "post")
+game.SinglePlayer = wasSingle
 
 if failed then os.exit(1) end
