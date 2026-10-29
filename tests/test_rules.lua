@@ -75,6 +75,7 @@ local generalPaths = {
 	"HealedUpOrgans",
 	"CaptureTimeOne", "CaptureTimeTwo", "CaptureDecay", "CaptureContestedFreeze",
 	"ObjectiveRadius", "CustomizeRadius", "BuyAmmoMags", "MedsMax", "GrenadesMax",
+	"BulletPushForce",
 }
 local generalOk = #general == #generalPaths
 for i = 1, #generalPaths do
@@ -94,8 +95,8 @@ local organBlurb = "At each new round every organ heals this many units (capped 
 check("healed organs row", generalMap.HealedUpOrgans.label == "Healed up organs" and generalMap.HealedUpOrgans.kind == "int" and generalMap.HealedUpOrgans.display == 10 and generalMap.HealedUpOrgans.min == 0 and generalMap.HealedUpOrgans.max == 100 and generalMap.HealedUpOrgans.blurb == organBlurb)
 
 local settingsMap, settings = rowMap("settings")
-check("Admin Settings holds rounds, health, bullet push", #settings == 3 and settings[1].path == "RoundsToWin" and settings[2].path == "HealthMode" and settings[3].path == "BulletPushForce")
-check("bullet push force sits in Admin Settings", settingsMap.BulletPushForce ~= nil and settingsMap.BulletPushForce.display == 0.2 and generalMap.BulletPushForce == nil)
+check("Admin Settings holds rounds and health", #settings == 2 and settings[1].path == "RoundsToWin" and settings[2].path == "HealthMode")
+check("bullet push force sits in General", generalMap.BulletPushForce ~= nil and generalMap.BulletPushForce.display == 0.2 and settingsMap.BulletPushForce == nil)
 check("rounds to win row", settingsMap.RoundsToWin.label == "Rounds to win (0 = endless)" and settingsMap.RoundsToWin.kind == "int" and settingsMap.RoundsToWin.display == 5 and settingsMap.RoundsToWin.min == 0 and settingsMap.RoundsToWin.max == 1000)
 check("health mode is a realistic/arcade switch", settingsMap.HealthMode.kind == "enum" and settingsMap.HealthMode.display == "arcade" and settingsMap.HealthMode.values[1].id == "realistic" and settingsMap.HealthMode.values[2].label == "Arcade")
 check("Admin Settings reset is its own section", V.ResetPayload("settings") and V.ResetPayload("settings").section == "settings")

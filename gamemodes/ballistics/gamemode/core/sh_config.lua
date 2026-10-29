@@ -135,7 +135,7 @@ local COST_GROUPS = {
 
 local SECTIONS = {
 	teams = { "SlotsPerTeam", "MinPerTeam" },
-	settings = { "RoundsToWin", "HealthMode", "BulletPushForce" },
+	settings = { "RoundsToWin", "HealthMode" },
 	general = {
 		"BuyTime", "RoundTime", "PostRoundTime", "TimeoutWinner",
 		"FreezeInBuy", "ModelGood", "ModelBad",
@@ -143,6 +143,7 @@ local SECTIONS = {
 		"CaptureTimeOne", "CaptureTimeTwo", "CaptureMaxCounted",
 		"CaptureDecay", "CaptureDecayRate", "CaptureContestedFreeze",
 		"TickRate", "BuyAmmoMags", "MedsMax", "GrenadesMax", "LootRange", "HealedUpOrgans", "StartMoney", "MaxMoney", "AdminSuperOnly",
+		"BulletPushForce",
 	},
 	costs = { "Costs" },
 	attachments = { "AttCosts", "AttRefundOnDetach" },
