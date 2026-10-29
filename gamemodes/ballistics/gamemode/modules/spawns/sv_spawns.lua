@@ -1,5 +1,6 @@
 -- Load, save, and replicate map flags. Clients only request; this file decides.
--- data/ballistics/spawns/<map>.json, else modules/spawns/defaults.lua, else none.
+-- data/ballistics/spawns/<map>.json, else data_static/.../<map>.json,
+-- else modules/spawns/defaults.lua, else none.
 
 if not SERVER then return end
 
@@ -245,14 +246,30 @@ function BALLISTICS.Spawns.PlayerSpawn(teamId, slot)
 	return Vector(x, y, z + 2), Angle(0, yaw, 0)
 end
 
+local function readData(path, pathid)
+	if not path or not file or not file.Exists or not file.Read then return nil end
+	if not file.Exists(path, pathid) then return nil end
+	local raw = file.Read(path, pathid)
+	if type(raw) ~= "string" or raw == "" then return nil end
+	return raw
+end
+
 function BALLISTICS.Spawns.Reload()
 	local map = mapName()
 	local saved = nil
+	local fromSave = false
 	local path = D.mapFile(map)
-	if path and file and file.Exists and file.Exists(path, "DATA") and file.Read then
-		saved = file.Read(path, "DATA")
+	saved = readData(path, "DATA")
+	if saved then
+		fromSave = true
+	else
+		-- Shipped layout for this map (addon data_static). Counts as built-in defaults.
+		saved = readData(D.staticFile(map), "GAME")
 	end
 	state = D.resolve(saved, BALLISTICS.SpawnDefaults, map)
+	if state.source == "file" and not fromSave then
+		state.source = "defaults"
+	end
 	state.good = snapFlag(state.good)
 	state.bad = snapFlag(state.bad)
 	state.box = snapBox(state.box)

@@ -91,6 +91,13 @@ function D.mapFile(map)
 	return "ballistics/spawns/" .. map .. ".json"
 end
 
+-- Shipped per-map layout (GMA-safe). Read with file.Read(path, "GAME").
+function D.staticFile(map)
+	local rel = D.mapFile(map)
+	if not rel then return nil end
+	return "data_static/" .. rel
+end
+
 local function cleanPos(p)
 	if type(p) ~= "table" then return nil end
 	local x = tonumber(p.x)
