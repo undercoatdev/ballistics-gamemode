@@ -268,7 +268,7 @@ local function useDown(ply)
 	return L.UseDown(cmd, useKeyDown())
 end
 
-local debugCv = CreateClientConVar and CreateClientConVar("bal_loot_debug", "1", false, false, "1 = print why the loot hold cancels") or nil
+local debugCv = CreateClientConVar and CreateClientConVar("bal_loot_debug", "0", false, false, "1 = print why the loot hold cancels") or nil
 local lastWhy
 local lastGate
 -- TEMP: always-on gate trace while hold-E is being debugged.
