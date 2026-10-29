@@ -340,3 +340,34 @@ function K.ToggleList(pinned, now, revealUntil)
 	end
 	return true, revealUntil
 end
+
+
+-- DBinder may store KEY_* or MOUSE_*. IsKeyDown only sees keys.
+function K.IsMouseCode(code)
+	code = math.floor(tonumber(code) or 0)
+	local first = MOUSE_FIRST or 107
+	local last = MOUSE_LAST or 113
+	return code >= first and code <= last
+end
+
+function K.IsBindDown(code)
+	code = math.floor(tonumber(code) or 0)
+	if code <= 0 then return false end
+	if not input then return false end
+	if input.IsButtonDown then
+		local ok, down = pcall(input.IsButtonDown, code)
+		if ok then return down and true or false end
+	end
+	if K.IsMouseCode(code) then
+		if input.IsMouseDown then
+			local ok, down = pcall(input.IsMouseDown, code)
+			return ok and down == true
+		end
+		return false
+	end
+	if input.IsKeyDown then
+		local ok, down = pcall(input.IsKeyDown, code)
+		return ok and down == true
+	end
+	return false
+end

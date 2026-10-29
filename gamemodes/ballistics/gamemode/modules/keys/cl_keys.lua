@@ -73,6 +73,7 @@ function BALLISTICS.Keys.InventoryKey()
 end
 
 local function keyDown(code)
+	if K.IsBindDown then return K.IsBindDown(code) end
 	if not input or type(input.IsKeyDown) ~= "function" then return false end
 	local ok, down = pcall(input.IsKeyDown, code)
 	return ok and down == true

@@ -247,8 +247,14 @@ local function useKeyDown()
 	local name = input.LookupBinding("+use", true) or "e"
 	local code = input.GetKeyCode(name)
 	if type(code) ~= "number" or code <= 0 then return false end
+	local Keys = BALLISTICS.Keys
+	if Keys and Keys.IsBindDown then return Keys.IsBindDown(code) end
 	if code >= (MOUSE_FIRST or 107) and code <= (MOUSE_LAST or 113) then
 		return type(input.IsMouseDown) == "function" and input.IsMouseDown(code) == true
+	end
+	if type(input.IsButtonDown) == "function" then
+		local ok, down = pcall(input.IsButtonDown, code)
+		if ok then return down == true end
 	end
 	return type(input.IsKeyDown) == "function" and input.IsKeyDown(code) == true
 end
@@ -909,6 +915,8 @@ local function inventoryKey()
 end
 
 local function keyDownCode(code)
+	local Keys = BALLISTICS.Keys
+	if Keys and Keys.IsBindDown then return Keys.IsBindDown(code) end
 	if not input or type(input.IsKeyDown) ~= "function" then return false end
 	local ok, down = pcall(input.IsKeyDown, code)
 	return ok and down == true

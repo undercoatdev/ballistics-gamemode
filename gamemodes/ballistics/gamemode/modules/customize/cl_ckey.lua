@@ -170,7 +170,14 @@ function BALLISTICS.CKeyClient.ContextDown()
 		local name = input.LookupBinding("+menu_context")
 		if type(name) == "string" and name ~= "" then
 			local code = input.GetKeyCode(name)
-			if code and input.IsKeyDown(code) == true then return true end
+			if code then
+				local Keys = BALLISTICS.Keys
+				if Keys and Keys.IsBindDown then
+					if Keys.IsBindDown(code) then return true end
+				elseif input.IsKeyDown(code) == true then
+					return true
+				end
+			end
 		end
 	end
 	if TacRP and TacRP.KeyPressed_Customize == true then return true end
