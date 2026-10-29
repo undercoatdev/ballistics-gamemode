@@ -38,6 +38,7 @@ check("the nearest flag is chosen by distance", D.nearestSide({ good = { pos = {
 check("a far point picks no flag", D.nearestSide({ good = { pos = { x = 0, y = 0, z = 0 } } }, { x = 500, y = 0, z = 0 }) == nil)
 check("map file is data/ballistics/spawns/<map>.json", D.mapFile("gm_construct") == "ballistics/spawns/gm_construct.json")
 check("map file rejects traversal and spaces", D.mapFile("../x") == nil and D.mapFile("gm construct") == nil and D.mapFile("") == nil and D.mapFile("gm_flatgrass") ~= nil)
+check("static file is data_static/ballistics/spawns/<map>.json", D.staticFile("gm_construct") == "data_static/ballistics/spawns/gm_construct.json")
 
 for _, map in ipairs({ "gm_construct", "gm_flatgrass" }) do
 	local state = D.resolve(nil, defs, map)
@@ -210,8 +211,14 @@ check("the Spawns tab is live and its reset is not a config section", spawns.imp
 
 -- Server: admin-only place/save/reset, file then defaults then none.
 local disk = {}
-function file.Exists(path) return disk[path] ~= nil end
-function file.Read(path) return disk[path] end
+function file.Exists(path, pathid)
+	if pathid == "GAME" then return disk["GAME:" .. path] ~= nil end
+	return disk[path] ~= nil
+end
+function file.Read(path, pathid)
+	if pathid == "GAME" then return disk["GAME:" .. path] end
+	return disk[path]
+end
 function file.Write(path, contents) disk[path] = contents end
 function file.Delete(path) disk[path] = nil end
 function file.CreateDir() end
@@ -262,6 +269,23 @@ end
 local loaded = snap()
 check("server loads construct defaults and snaps them to the ground", loaded.source == "defaults" and loaded.dirty == false and D.hasBoth(loaded) and loaded.good.pos.z == 7 and near(loaded.good.pos.x, defs.gm_construct.good.pos.x, 1e-6))
 check("the default box snaps to ground plus half its height", loaded.box and BALLISTICS.Spawns.HasBox() == true and near(loaded.box.pos.z, 71, 1e-6) and near(loaded.box.sx, 768, 1e-6))
+
+-- data_static wins over the Lua table when there is no DATA save.
+local foxStatic = assert(io.open("data_static/ballistics/spawns/gm_construct.json", "r")):read("*a")
+disk["GAME:data_static/ballistics/spawns/gm_construct.json"] = foxStatic
+-- Poison the Lua defaults so a static miss would fail the coordinate check.
+local oldConstruct = defs.gm_construct
+defs.gm_construct = { good = { pos = { x = 1, y = 2, z = 3 }, ang = { p = 0, y = 0, r = 0 } }, bad = { pos = { x = 900, y = 2, z = 3 }, ang = { p = 0, y = 180, r = 0 } }, box = { pos = { x = 450, y = 2, z = 67 }, yaw = 0, sx = 768, sy = 384 } }
+BALLISTICS.Spawns.Reload()
+check("data_static layout loads as built-in defaults", snap().source == "defaults" and near(snap().good.pos.x, -2056.827148, 1e-4) and near(snap().bad.pos.x, -5493.136719, 1e-4) and near(snap().box.pos.x, 1300.248535, 1e-4))
+disk[D.mapFile("gm_construct")] = "{\"good\":{\"pos\":{\"x\":111,\"y\":0,\"z\":0},\"ang\":{\"p\":0,\"y\":0,\"r\":0}},\"bad\":{\"pos\":{\"x\":999,\"y\":0,\"z\":0},\"ang\":{\"p\":0,\"y\":180,\"r\":0}},\"box\":{\"pos\":{\"x\":500,\"y\":0,\"z\":64},\"yaw\":0,\"sx\":768,\"sy\":384}}"
+BALLISTICS.Spawns.Reload()
+check("DATA save still wins over data_static", snap().source == "file" and near(snap().good.pos.x, 111, 1e-6))
+disk[D.mapFile("gm_construct")] = nil
+defs.gm_construct = oldConstruct
+BALLISTICS.Spawns.Reload()
+loaded = snap()
+check("after clearing DATA, construct defaults restore", loaded.source == "defaults" and near(loaded.good.pos.x, defs.gm_construct.good.pos.x, 1e-6))
 
 local pos, ang = BALLISTICS.Spawns.PlayerSpawn(TEAM_GOOD, 1)
 check("Good slot 1 stands 40 units east of its flag", pos and near(pos.x, loaded.good.pos.x + 40, 1e-4) and near(pos.y, loaded.good.pos.y, 1e-4) and near(pos.z, 9, 1e-6) and ang and ang.p == 0)

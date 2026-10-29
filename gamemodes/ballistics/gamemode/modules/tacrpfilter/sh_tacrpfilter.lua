@@ -4,6 +4,7 @@
 --    shotgun+revolver roulette, dragon's breath, surplus rounds (any id or
 --    display name containing "surplus", including bolt_surplus), and the
 --    Gun Bag (acc_duffelbag / category acc_duffle).
+-- 3) The Tactical RP Newsletter never opens (tacrp_checknews off + panel stub).
 BALLISTICS = BALLISTICS or {}
 BALLISTICS.TacFilter = BALLISTICS.TacFilter or {}
 local F = BALLISTICS.TacFilter
@@ -96,10 +97,46 @@ function F.Strip(wep)
 	end
 end
 
+-- TacRP opens the newsletter the first time a TacRP weapon deploys when
+-- tacrp_checknews is on (see TacRP sh_init Deploy + cl_news notifynews).
+-- Force that off for everyone in this gamemode, and stub the panel so a
+-- leftover tacrp_news / chat command also cannot open it here.
+function F.SuppressNews()
+	if SERVER then
+		local cv = GetConVar and GetConVar("tacrp_checknews")
+		if cv and cv.SetInt then cv:SetInt(0) end
+		if TacRP and type(TacRP.ConVars) == "table" then
+			local tcv = TacRP.ConVars["checknews"]
+			if tcv and tcv.SetInt then tcv:SetInt(0) end
+		end
+	end
+	if CLIENT then
+		if type(TacRP) ~= "table" then return end
+		TacRP.NewsPopup = true
+		TacRP.CreateNewsPanel = function() end
+		if TacRP.NewsPanel and TacRP.NewsPanel.Close then
+			pcall(function() TacRP.NewsPanel:Close() end)
+			TacRP.NewsPanel = nil
+		end
+	end
+end
+
 if hook and hook.Add then
 	F.HideAtts()
+	F.SuppressNews()
 	hook.Add("TacRP_LoadAtts", "Ballistics_TacFilter", function() F.HideAtts() end)
-	hook.Add("InitPostEntity", "Ballistics_TacFilter", function() F.HideAtts() end)
+	hook.Add("InitPostEntity", "Ballistics_TacFilter", function()
+		F.HideAtts()
+		F.SuppressNews()
+	end)
+	hook.Add("InitPostEntity", "Ballistics_TacFilterNews", function()
+		-- TacRP autorun often finishes after the gamemode; re-apply once more.
+		if timer and timer.Simple then
+			timer.Simple(1, function() F.SuppressNews() end)
+		else
+			F.SuppressNews()
+		end
+	end)
 	hook.Add("TacRP_CanCustomize", "Ballistics_TacFilter", function(_, _, att, _, detach)
 		if not detach and F.AttBlocked(att) then return false, "Not allowed" end
 	end)
@@ -109,6 +146,15 @@ if hook and hook.Add then
 	if SERVER then
 		hook.Add("WeaponEquip", "Ballistics_TacFilter", function(wep)
 			timer.Simple(0, function() wrapWeapon(wep) F.Strip(wep) end)
+		end)
+	end
+	if CLIENT then
+		hook.Add("InitPostEntity", "Ballistics_TacFilterNewsClient", function()
+			F.SuppressNews()
+			if timer and timer.Simple then
+				timer.Simple(1, function() F.SuppressNews() end)
+				timer.Simple(3, function() F.SuppressNews() end)
+			end
 		end)
 	end
 end

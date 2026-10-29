@@ -1,0 +1,16 @@
+{
+  "title": "Critical Shot",
+  "type": "gamemode",
+  "tags": ["roleplay", "realism"],
+  "ignore": [
+    ".git*",
+    "tests/*",
+    "docs/*",
+    "tools/*",
+    "*.md",
+    "*.sh",
+    "FILES_MATCH",
+    ".refresh-sha.txt",
+    ".patch*"
+  ]
+}

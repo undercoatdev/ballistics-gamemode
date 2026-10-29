@@ -441,22 +441,10 @@ function BALLISTICS.Round.BootSinglePlayer(ply)
 	return started, why
 end
 
+-- BootSinglePlayer stays for a manual / test smoke round. Do not auto-call it
+-- on join: the host expects the lobby (TEAMS / ADMIN / Test Bots) first.
 if hook and hook.Add then
 	hook.Add("PlayerInitialSpawn", "Ballistics_RoundSync", function(ply)
 		broadcast(ply)
-	end)
-	hook.Add("PlayerInitialSpawn", "Ballistics_SinglePlayerBoot", function(ply)
-		if not singlePlayer() then return end
-		local function boot()
-			if not isValid(ply) then return end
-			BALLISTICS.Round.BootSinglePlayer(ply)
-		end
-		-- The join path spectates on a 0-delay timer. Boot after that so the
-		-- buy spawn is the last spawn.
-		if timer and timer.Simple then
-			timer.Simple(0.2, boot)
-		else
-			boot()
-		end
 	end)
 end

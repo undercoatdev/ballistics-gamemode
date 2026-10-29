@@ -1,6 +1,8 @@
--- Built-in flags by map. Used when data/ballistics/spawns/<map>.json is absent.
--- Coordinates are walkable ground on the stock maps (info_node / info_player_start).
--- gm_construct / gm_frame: fox playtest placements (Oct 2026).
+-- Built-in flags by map (Lua fallback). Preferred source is
+-- data_static/ballistics/spawns/<map>.json when the player has no DATA save.
+-- Coordinates are walkable ground on the stock maps.
+-- gm_construct: fox placement from live editor save 2026-10-29 (also shipped as JSON).
+-- gm_frame: fox playtest placement (Oct 2026).
 
 BALLISTICS = BALLISTICS or {}
 
@@ -29,9 +31,9 @@ end
 -- gm_flatgrass: on the walkable pad around the player starts (feet near z -12280).
 BALLISTICS.SpawnDefaults = {
 	gm_construct = {
-		good = { pos = { x = -5499.148438, y = -3300.04126, z = 256.03125 }, ang = { p = 0.0, y = 31.379276, r = 0.0 } },
-		bad = { pos = { x = -4203.476563, y = -3397.376221, z = 250.0 }, ang = { p = 0.0, y = 175.703827, r = 0.0 } },
-		box = { pos = { x = -4144.935547, y = -2247.141113, z = 314.0 }, yaw = 162.304977, sx = 768.0, sy = 384.0 },
+		good = { pos = { x = -2056.827148, y = -1528.272949, z = -143.968750 }, ang = { p = 0.000000, y = 207.423233, r = 0.000000 } },
+		bad = { pos = { x = -5493.136719, y = -3311.254883, z = 256.031250 }, ang = { p = 0.000000, y = 5.220066, r = 0.000000 } },
+		box = { pos = { x = 1300.248535, y = -213.959290, z = 128.031250 }, yaw = 271.744995, sx = 768.000000, sy = 384.000000 },
 	},
 	gm_frame = {
 		good = { pos = { x = -2158.354004, y = -9.64475, z = -191.96875 }, ang = { p = 0.0, y = 118.373383, r = 0.0 } },
