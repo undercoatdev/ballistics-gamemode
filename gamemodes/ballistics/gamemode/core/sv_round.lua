@@ -142,6 +142,21 @@ local function aliveCount(teamId)
 	return n
 end
 
+local function singlePlayer()
+	return game ~= nil and type(game.SinglePlayer) == "function" and game.SinglePlayer() == true
+end
+
+-- Singleplayer cannot add the other team (the engine refuses bots). An empty
+-- side would end the round on the first live tick. Leave the occupied side
+-- in the round so a solo buy and walk still work.
+local function emptySideInSinglePlayer()
+	if not singlePlayer() then return false end
+	if not (BALLISTICS.Slots and BALLISTICS.Slots.Count) then return false end
+	local good = tonumber(BALLISTICS.Slots.Count(GOOD)) or 0
+	local bad = tonumber(BALLISTICS.Slots.Count(BAD)) or 0
+	return (good == 0 or bad == 0) and (good + bad > 0)
+end
+
 local function normalizeWinner(winner)
 	if winner == "good" or winner == GOOD then return "good" end
 	if winner == "bad" or winner == BAD then return "bad" end
@@ -206,6 +221,7 @@ end
 
 function BALLISTICS.Round.CheckElimination()
 	if state:Phase() ~= "live" then return nil end
+	if emptySideInSinglePlayer() then return nil end
 	local winner, reason = BALLISTICS.State.Elimination(aliveCount(GOOD), aliveCount(BAD))
 	if not winner then return nil end
 	local ok, err = BALLISTICS.Round.End(winner, reason)
@@ -231,7 +247,7 @@ end
 
 function BALLISTICS.Round.Tick(now)
 	if now == nil then now = (CurTime and CurTime()) or 0 end
-	if state:Phase() == "live" then
+	if state:Phase() == "live" and not emptySideInSinglePlayer() then
 		local winner, reason = BALLISTICS.State.Elimination(aliveCount(GOOD), aliveCount(BAD))
 		if winner then
 			local events = state:Transition({ type = "end", winner = winner, reason = reason }, now)
@@ -270,7 +286,7 @@ end
 function BALLISTICS.Round.CanStart(ply)
 	if ply ~= nil and not BALLISTICS.IsAdmin(ply) then return false, "admin" end
 	local good, bad = sideCounts()
-	local ok, err = state:CanStart(good, bad, BALLISTICS.HasBothFlags())
+	local ok, err = state:CanStart(good, bad, BALLISTICS.HasBothFlags(), singlePlayer())
 	if not ok then return false, err end
 	if not BALLISTICS.HasSquadBox() then return false, "box" end
 	return true
@@ -287,6 +303,7 @@ function BALLISTICS.StartMatch(ply)
 		good = good,
 		bad = bad,
 		flags = BALLISTICS.HasBothFlags(),
+		solo = singlePlayer(),
 	}, now)
 	if not events then return false, err end
 	handle(events)
@@ -387,8 +404,59 @@ if BALLISTICS.Net and BALLISTICS.Net.Register then
 	})
 end
 
+-- Once per load. Map change reloads the gamemode, so the next map boots again.
+local soloBooted = false
+
+function BALLISTICS.Round.BootSinglePlayer(ply)
+	if not singlePlayer() then return false, "multiplayer" end
+	if soloBooted then return false, "once" end
+	if not isValid(ply) then return false, "player" end
+	if state:Phase() ~= "lobby" then return false, "not lobby" end
+	soloBooted = true
+	local teamId = nil
+	if BALLISTICS.Slots and BALLISTICS.Slots.TeamOf then
+		teamId = BALLISTICS.Slots.TeamOf(ply)
+	end
+	if teamId ~= GOOD and teamId ~= BAD and BALLISTICS.Slots and BALLISTICS.Slots.Request then
+		local took, why = BALLISTICS.Slots.Request(ply, GOOD, 1)
+		if not took then
+			tell(ply, "Ballistics: singleplayer could not take Good slot 1 (" .. tostring(why) .. "). Open TEAMS with F2.")
+			return false, why
+		end
+	end
+	if not BALLISTICS.HasBothFlags() then
+		tell(ply, "Ballistics: singleplayer put you on Good. This map has no flags, so the round stays in the lobby. gm_construct, gm_flatgrass, and gm_frame have built-in flags.")
+		return false, "flags"
+	end
+	if not BALLISTICS.HasSquadBox() then
+		tell(ply, "Ballistics: singleplayer put you on Good. Place the firing squad box in Admin, then press Start.")
+		return false, "box"
+	end
+	local started, why = BALLISTICS.StartMatch(nil)
+	if started then
+		tell(ply, "Ballistics: singleplayer smoke round started on Good. The other team is empty, so this is not a match. Bots need a listen server with 2 or more player slots.")
+	else
+		tell(ply, "Ballistics: singleplayer could not start (" .. startReason(why) .. ").")
+	end
+	return started, why
+end
+
 if hook and hook.Add then
 	hook.Add("PlayerInitialSpawn", "Ballistics_RoundSync", function(ply)
 		broadcast(ply)
+	end)
+	hook.Add("PlayerInitialSpawn", "Ballistics_SinglePlayerBoot", function(ply)
+		if not singlePlayer() then return end
+		local function boot()
+			if not isValid(ply) then return end
+			BALLISTICS.Round.BootSinglePlayer(ply)
+		end
+		-- The join path spectates on a 0-delay timer. Boot after that so the
+		-- buy spawn is the last spawn.
+		if timer and timer.Simple then
+			timer.Simple(0.2, boot)
+		else
+			boot()
+		end
 	end)
 end
